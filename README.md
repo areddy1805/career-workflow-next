@@ -565,7 +565,7 @@ flowchart TD
 ├── monitor_applications.py         # External lifecycle reconciliation script
 ├── pyproject.toml
 ├── requirements.txt
-├── run_pipeline.py                 # Main execution entrypoint
+├── run_pipeline.py                 # Internal execution entrypoint
 ├── run_scheduler.py                # Daemon mode execution
 ├── src/
 │   ├── acquisition/                # JobSpy & provider integrations
@@ -597,7 +597,7 @@ cd career-workflow
 python -m venv .venv
 source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Configure environment variables
@@ -666,40 +666,38 @@ These values are operational policy, not universal recommendations. The reposito
 ### Common Commands
 
 ```bash
-# Backend
+# Backend API
 uvicorn api.main:app --reload
 
-# Frontend
+# Frontend UI
 npm run dev
 
 # Dry Run
-python run_pipeline.py
+cw run
 
-# Live
-python run_pipeline.py \
+# Live Run
+cw run \
   --live \
   --confirm-live APPLY_LIVE
 
 # Scheduler
-python run_scheduler.py --interactive
+cw schedule --interactive
+
+# Diagnostics & Inspection
+cw doctor
+cw inspect latest
 
 # Tests
 pytest
-
-# Monitor
-python monitor_applications.py
-
-# Analytics
-python application_report.py
 ```
 
 
 ### Main Commands
 
-`run_pipeline.py` is the staged orchestration entry point.
+`cw run` is the unified staged orchestration entry point.
 
 ```bash
-run_pipeline.py
+cw run
 
 --live
     Enables real application submission.
@@ -727,127 +725,44 @@ run_pipeline.py
 
 **Full Live Run / Production Execution**
 ```bash
-python run_pipeline.py   --live   --confirm-live APPLY_LIVE   --acquisition-mode full   --provider all   --force-live
+cw run --live --confirm-live APPLY_LIVE --acquisition-mode full --provider all --force-live
 ```
 
 **Broad validation dry run**
 ```bash
-python run_pipeline.py --max-applications 50
+cw run --max-applications 50
 ```
 
 **Small live canary**
 ```bash
-python run_pipeline.py --live --confirm-live APPLY_LIVE --max-applications 3
+cw run --live --confirm-live APPLY_LIVE --max-applications 3
 ```
 
 **Controlled live run**
 ```bash
-python run_pipeline.py --live --confirm-live APPLY_LIVE --max-applications 15
+cw run --live --confirm-live APPLY_LIVE --max-applications 15
 ```
 
 ---
 
 ## Run Capture & Debugging
 
-Career Workflow is designed as an operational platform with immutable run artifacts. While every execution already produces structured artifacts under `artifacts/runs/<run_id>/`, capturing the terminal output provides valuable context when debugging failures, reporting issues, or reviewing historical executions.
+Career Workflow is designed as an operational platform with immutable run artifacts. Every execution via the `cw` CLI automatically captures its entire context for "Execution Replay" and debugging.
 
-### Recommended Log Directory
+You do NOT need to manually pipe logs or track versions. When you run `cw run` or `cw schedule`, the CLI automatically generates an artifact bundle under `artifacts/runs/<run_id>/` containing:
 
-Create a directory for terminal captures:
+- `pipeline.log`: The complete, live-streamed terminal output of the run.
+- `execution_manifest.json`: Structured metadata mapping inputs, duration, and exit codes.
+- `version.json`: Hashes of critical configurations to ensure the run is reproducible.
+- `command.txt`: The exact `cw` invocation arguments used.
+- `environment.txt`: Python version and safe environment variables.
+- `git.txt`: Current branch, commit hash, and dirty tree state.
 
-```bash
-mkdir -p logs
-```
-
----
-
-### Production Dry Run
-
-Capture the complete pipeline output to a timestamped log while still streaming it to the terminal.
+To inspect the results of a run, use the React Operations Console or the CLI inspector:
 
 ```bash
-mkdir -p logs
-
-python run_pipeline.py \
-  --acquisition-mode full \
-  2>&1 | tee logs/run_$(date +%Y%m%d_%H%M%S).log
+cw inspect latest
 ```
-
----
-
-### Production Live Run
-
-```bash
-mkdir -p logs
-
-python run_pipeline.py \
-  --live \
-  --confirm-live APPLY_LIVE \
-  --provider all \
-  --acquisition-mode full \
-  2>&1 | tee logs/live_$(date +%Y%m%d_%H%M%S).log
-```
-
----
-
-### Test Mode
-
-```bash
-mkdir -p logs
-
-python run_pipeline.py \
-  --test \
-  2>&1 | tee logs/test_$(date +%Y%m%d_%H%M%S).log
-```
-
----
-
-### Capture Environment Information
-
-For difficult-to-reproduce bugs it is useful to capture execution metadata alongside the pipeline output.
-
-```bash
-mkdir -p logs
-
-{
-    echo "========== DATE =========="
-    date
-
-    echo
-    echo "========== GIT =========="
-    git rev-parse HEAD
-    git status --short
-
-    echo
-    echo "========== PYTHON =========="
-    python --version
-
-    echo
-    echo "========== PIPELINE =========="
-    python run_pipeline.py --acquisition-mode full
-
-} 2>&1 | tee logs/debug_$(date +%Y%m%d_%H%M%S).log
-```
-
----
-
-### Record an Entire Terminal Session
-
-When investigating complex failures it can be useful to capture every terminal command and its output.
-
-```bash
-mkdir -p logs
-
-script logs/session_$(date +%Y%m%d_%H%M%S).txt
-```
-
-Exit the recording with:
-
-```bash
-exit
-```
-
----
 
 ### Useful Investigation Commands
 
@@ -890,9 +805,14 @@ For normal development:
 ```bash
 mkdir -p logs
 
-python run_pipeline.py \
-  --acquisition-mode full \
-  2>&1 | tee logs/run_$(date +%Y%m%d_%H%M%S).log
+# View the pipeline log for the latest run
+cat artifacts/runs/latest/pipeline.log
+
+# View the execution manifest
+cat artifacts/runs/latest/execution_manifest.json
+
+# Check current pipeline locks
+cw doctor
 ```
 
 When reporting bugs or debugging pipeline failures, include:
@@ -1075,13 +995,11 @@ The pipeline supports multi-provider execution, allowing you to run Naukri and J
 
 ```bash
 # Run both providers (default if enabled in config)
-python run_pipeline.py --acquisition-mode full --provider all
+cw run --acquisition-mode full --provider all
 
-# Run only Naukri
-python run_pipeline.py --provider naukri
+cw run --provider naukri
 
-# Run only JobSpy
-python run_pipeline.py --provider jobspy
+cw run --provider jobspy
 ```
 
 ### Provider Health & Degradation Safeguards

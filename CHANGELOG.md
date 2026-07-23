@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.0.0-RC2] - 2026-07-23
+
+### Unified CLI, Packaging Overhaul & Production Diagnostics
+
+#### Added
+- **Unified `cw` CLI**: Introduced a comprehensive Typer-based CLI (`cw`) wrapping all control plane operations (`run`, `schedule`, `doctor`, `inspect`, `report`, `monitor`).
+- **Execution Replay**: Automated run capture preserving `pipeline.log`, `execution_manifest.json`, `environment.txt`, and `git.txt` within a unified artifact directory (`artifacts/runs/<run_id>/`).
+- **Production Packaging**: Upgraded to PEP 517/518 build system via `pyproject.toml` and `setuptools.build_meta`, enabling seamless global installations (`pip install -e .`).
+- **Production Diagnostics**: Upgraded `cw doctor` to serve as a robust CI pre-flight check, complete with proper exit codes, health summaries, and resolution of false-positive warnings.
+
+#### Fixed
+- **Duplicate Accounting Bug**: Fixed a persistent terminal state duplicate tracking bug in the ledger.
+- **Packaging Import Hacks**: Removed all CWD-dependent `sys.path.insert()` hacks across the codebase through dynamic package discovery.
+- **Stale Recovery Warnings**: Improved `cw doctor` logic to correctly recognize successful pipeline recoveries as healthy rather than degraded.
+
 ## [1.0.0-RC1] - 2026-07-19
 
 ### Release Candidate Audit, Repository Cleanup & Documentation Freeze
