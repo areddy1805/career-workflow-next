@@ -1,7 +1,7 @@
 strategy:
   spray_and_pray: true
-  summary_fetch_budget: 500
-  detail_fetch_budget: 500
+  summary_fetch_budget: 100
+  detail_fetch_budget: 100
   application_budget: 500
   rank_before_fetch: true
   ai_is_ranking_only: true

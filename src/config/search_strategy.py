@@ -13,9 +13,6 @@ class SummaryScoringConfig:
 @dataclass
 class SearchStrategyConfig:
     spray_and_pray: bool = True
-    summary_fetch_budget: int = 500
-    detail_fetch_budget: int = 500
-    application_budget: int = 500
     rank_before_fetch: bool = True
     ai_is_ranking_only: bool = True
     reject_non_engineering: bool = True

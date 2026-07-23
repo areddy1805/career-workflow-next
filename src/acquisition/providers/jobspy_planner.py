@@ -116,19 +116,14 @@ class JobSpySearchPlanner:
             else:
                 track = "TIER_C"
 
-            max_queries = profile_data.get("max_queries", 250)
-            max_titles = profile_data.get("max_titles", 15)
-            max_frameworks = profile_data.get("max_frameworks", 8)
-
             layers = profile_data.get("layers", {})
-            roles = layers.get("roles", [])[:max_titles]
-            frameworks = layers.get("frameworks", [])[:max_frameworks]
+            roles = layers.get("roles", [])
+            frameworks = layers.get("frameworks", [])
             platforms = layers.get("platforms", [])
             negative_keywords = profile_data.get("negative_keywords", [])
 
             for provider in providers:
                 strategy = self.strategies.get(provider, GoogleStrategy())
-                provider_query_count = 0
 
                 # Combine layers logically but independently (Layered approach)
                 layer_terms = [
@@ -139,9 +134,6 @@ class JobSpySearchPlanner:
 
                 for layer_name, terms in layer_terms:
                     for term in terms:
-                        if provider_query_count >= max_queries:
-                            break
-
                         fmt_keyword = strategy.format_query(term, negative_keywords)
                         for loc in locations:
                             all_queries.append(
@@ -154,8 +146,5 @@ class JobSpySearchPlanner:
                                     layer=layer_name,
                                 )
                             )
-
-                        # Count the base term as 1 against the budget
-                        provider_query_count += 1
 
         return all_queries

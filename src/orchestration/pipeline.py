@@ -24,12 +24,10 @@ from src.application.adaptive_strategy import (
     AdaptiveStrategyConfig,
     build_adaptive_strategy,
     rank_candidates_adaptively,
-    select_candidates_with_exploration,
     strategy_audit_payload,
 )
 from src.application.diversity import (
     DiversityPolicy,
-    allocate_detail_budget,
     deduplicate_enriched_jobs,
     diversify_jobs,
     exclude_job_ids,
@@ -42,6 +40,7 @@ from src.application.ledger import ApplicationLedger
 from src.application.policy import ApplicationPolicy
 from src.config.search_strategy import load_search_strategy
 from src.client.job_classifier import JobFilterPipeline2
+from src.client.inference_service import InferenceService
 from src.client.job_client import NaukriJobClient
 from src.orchestration.provider_factory import initialize_providers
 
@@ -526,16 +525,18 @@ class CareerWorkflowPipeline:
         jobs = self.context.acquired_jobs
         self.exec_context.start_stage("Classification", jobs)
 
+        self.inference_service = InferenceService(cache_manager=self.context.cache_manager)
+        
         classifier = JobFilterPipeline2(
             metrics=self.context.metrics,
             exec_context=self.exec_context,
-            cache_manager=self.context.cache_manager,
             test_mode=self.context.test_mode,
+            inference_service=self.inference_service,
         )
 
         jobs = classifier.normalize_jobs(jobs)
         jobs = classifier.dedup(jobs)
-        jobs = classifier.hard_veto(jobs)
+        jobs = classifier.impossible_filter(jobs)
         jobs = classifier.experience_filter(jobs)
         jobs = classifier.desc_red_flag_check(jobs)
         jobs = classifier.title_filter(jobs)
@@ -564,33 +565,9 @@ class CareerWorkflowPipeline:
             ),
         )
 
-        strategy = load_search_strategy()
-
-        detail_fetch_budget = strategy.detail_fetch_budget
-        if detail_fetch_budget < 1:
-            detail_fetch_budget = 150  # Safe default
-
-        # Adaptive Budgeting
-        if len(jobs) <= detail_fetch_budget:
-            candidates = jobs
-        else:
-            candidates = jobs[:detail_fetch_budget]
-            for j in jobs[detail_fetch_budget:]:
-                classifier.record_decision(
-                    j,
-                    "Detail Fetch Cutoff",
-                    "BUDGET_EXCEEDED",
-                    "Job fell below summary rank cutoff for detail fetching",
-                )
-
+        # Fetch Details for ALL survivors of the Impossible Filter
+        candidates = jobs
         candidates_before_suppression = len(candidates)
-
-        candidates = allocate_detail_budget(
-            candidates,
-            budget=detail_fetch_budget,
-            max_per_company=int(os.getenv("DETAIL_BUDGET_MAX_PER_COMPANY", "8")),
-            max_per_family=int(os.getenv("DETAIL_BUDGET_MAX_PER_FAMILY", "2")),
-        )
 
         enriched_candidates = enrich_jobs_with_details(
             providers=self.context.providers,
@@ -661,14 +638,13 @@ class CareerWorkflowPipeline:
             rejection_summary[code] = rejection_summary.get(code, 0) + 1
 
         self.context.stage_results["classification"] = {
-            "prefiltered": candidates_before_suppression,
-            "detail_fetch_budget": detail_fetch_budget,
-            "detail_candidates": len(candidates),
+            "impossible_filter_survivors": candidates_before_suppression,
+            "detail_pages_fetched": len(candidates),
             "enriched_before_description_dedup": enriched_before_dedup,
             "description_duplicates_removed": enriched_before_dedup
             - len(enriched_candidates),
             "detail_cache_entries": len(self.context.detail_cache),
-            "classified": len(final_jobs),
+            "llm_reviewed": len(final_jobs),
         }
 
         self._write_artifact(
@@ -833,8 +809,8 @@ class CareerWorkflowPipeline:
 
         print(f"RANKED CANDIDATES: {len(ranked_jobs)}")
 
-        # Compatibility/audit value only. Eligibility is deliberately score-agnostic.
-        auto_apply_min_score = int(os.getenv("AUTO_APPLY_MIN_SCORE", "0"))
+        # Spray & Pray: Everything 20+ flows to apply. 
+        auto_apply_min_score = int(os.getenv("AUTO_APPLY_MIN_SCORE", "20"))
 
         eligible_jobs, eligibility_decisions = annotate_auto_apply_eligibility(
             ranked_jobs,
@@ -848,15 +824,15 @@ class CareerWorkflowPipeline:
 
         rejection_summary = eligibility_rejection_summary(eligibility_decisions)
 
-        print(f"HARD-GATE ELIGIBLE: {len(eligible_jobs)}")
+        print(f"APPLY CONFIDENCE ELIGIBLE: {len(eligible_jobs)}")
 
-        print(f"HARD-GATE REJECTED: {len(rejected_decisions)}")
+        print(f"APPLY CONFIDENCE REJECTED: {len(rejected_decisions)}")
 
         for decision in rejected_decisions:
             reasons = ",".join(decision["reasons"])
 
             print(
-                "  [HARD-GATE REJECT] "
+                "  [LOW CONFIDENCE REJECT] "
                 f"{decision['title']} "
                 f"@ {decision['company']} "
                 f"| score={decision['score']} "
@@ -882,7 +858,7 @@ class CareerWorkflowPipeline:
                 )
 
         if rejection_summary:
-            print("HARD-GATE REJECTION SUMMARY:")
+            print("LOW CONFIDENCE REJECTION SUMMARY:")
 
             for (
                 reason,
@@ -933,51 +909,8 @@ class CareerWorkflowPipeline:
                     j, "Failed diversity constraints", "DIVERSITY_POLICY"
                 )
 
-        attempt_budget = effective_limit(
-            strategy.max_applications_per_run,
-            self.context.max_applications,
-        )
-
-        scan_multiplier = max(
-            1,
-            int(
-                os.getenv(
-                    "APPLICATION_SCAN_MULTIPLIER",
-                    "5",
-                )
-            ),
-        )
-
-        candidate_scan_budget = (
-            len(diversified_jobs)
-            if attempt_budget is None
-            else min(len(diversified_jobs), attempt_budget * scan_multiplier)
-        )
-
-        selected_jobs = select_candidates_with_exploration(
-            diversified_jobs,
-            score_map=self.context.score_map,
-            strategy=strategy,
-            limit=candidate_scan_budget,
-        )
-
-        selected_ids = {str(j.job_id) for j in selected_jobs}
-        for j in diversified_jobs:
-            if str(j.job_id) not in selected_ids:
-                self.context.rejected_jobs.append(
-                    {
-                        "job_id": str(j.job_id),
-                        "title": str(getattr(j, "title", "Unknown")),
-                        "company": str(getattr(j, "company", "Unknown")),
-                        "stage": "Selection Limit",
-                        "code": "ATTEMPT_BUDGET",
-                        "reason": "Exceeded attempt budget / strategy limits",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
-                self.exec_context.reject(
-                    j, "Exceeded attempt budget / strategy limits", "ATTEMPT_BUDGET"
-                )
+        # No more arbitrary attempt budgets or selection exploration
+        selected_jobs = diversified_jobs
 
         self.context.selected_jobs = selected_jobs
 
@@ -987,7 +920,6 @@ class CareerWorkflowPipeline:
                     {"stage": "Selection", "decision": "SELECTED"}
                 )
 
-        print(f"CANDIDATE SCAN BUDGET: {candidate_scan_budget}")
         print(f"FINAL APPLICATION QUEUE: {len(selected_jobs)}")
 
         strategy_payload = strategy_audit_payload(strategy)
@@ -995,32 +927,23 @@ class CareerWorkflowPipeline:
         # Explainability for selected jobs
         for job in selected_jobs:
             self.exec_context.select(
-                job, {"cause": "Eligible and within selection bounds"}
+                job, {"cause": "Eligible and passed policy constraints"}
             )
             self.exec_context.complete(job)
 
         self.exec_context.finish_stage(selected_jobs)
 
         self.context.stage_results["selection"] = {
-            "classified": len(self.context.classified_jobs),
+            "llm_reviewed": len(self.context.classified_jobs),
             "ranked": len(ranked_jobs),
-            "score_floor_for_audit_only": auto_apply_min_score,
-            "hard_gate_eligible": len(eligible_jobs),
-            "hard_gate_rejected": len(rejected_decisions),
+            "apply_confidence_threshold": auto_apply_min_score,
+            "apply_confidence_eligible": len(eligible_jobs),
+            "apply_confidence_rejected": len(rejected_decisions),
             "rejection_summary": (rejection_summary),
-            "eligibility_decisions": (eligibility_decisions),
-            "diversified": len(diversified_jobs),
+            "policy_accepted": len(diversified_jobs),
             "diversity_rejected": len(eligible_jobs) - len(diversified_jobs),
-            "selection_not_scanned": len(diversified_jobs) - len(selected_jobs),
-            "accounted_classified": len(rejected_decisions)
-            + len(diversified_jobs)
-            + (len(eligible_jobs) - len(diversified_jobs)),
-            "selected": len(selected_jobs),
-            "attempt_budget": (attempt_budget),
-            "candidate_scan_budget": (candidate_scan_budget),
-            "scan_multiplier": (scan_multiplier),
+            "selected_for_application": len(selected_jobs),
             "metadata_quality": (metadata_quality),
-            "minimum_metadata_coverage": (minimum_coverage),
             "strategy": strategy_payload,
         }
 
@@ -1103,11 +1026,7 @@ class CareerWorkflowPipeline:
 
         effective_run_limit = effective_limit(
             self.context.adaptive_strategy.max_applications_per_run,
-            (
-                self.context.max_applications
-                if self.context.max_applications is not None
-                else strategy.application_budget
-            ),
+            self.context.max_applications,
         )
 
         policy = ApplicationPolicy(
@@ -1605,3 +1524,6 @@ class CareerWorkflowPipeline:
             print(f"Network: {net_pct:.1f}%")
             print(f"Applying: {app_pct:.1f}%")
         print("═" * 50 + "\n")
+        
+        if hasattr(self, "inference_service"):
+            self.inference_service.print_summary()

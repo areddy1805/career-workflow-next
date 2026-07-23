@@ -1,10 +1,8 @@
 import json
 import os
 import re
-import requests
-import time
-import psutil
-
+import hashlib
+from src.client.inference_service import InferenceService
 from src.orchestration.metrics import PipelineRunMetrics
 from src.cache.cache_manager import CacheManager
 from src.cache.fingerprint import compute_llm_fingerprint
@@ -149,20 +147,17 @@ class JobFilterPipeline2:
         },
     }
 
-    # ── hard veto BEFORE ai — title only, zero ambiguity ────────────────────
-    # Hard veto only unmistakably non-target employment formats / non-engineering roles.
-    # AI/ML/Data Science/CV/model-training titles are deliberately NOT vetoed.
-    VETO_TITLES = [
-        "walk-in",
-        "walkin",
-        "walk in",
-        "tutor",
-        "trainer",
-        "sales executive",
-        "business development executive",
-        "recruiter",
-        "talent acquisition",
-    ]
+    # ── IMPOSSIBLE FILTER (Data-Driven Domain Exclusions) ───────────────────
+    # Reject ONLY things that are objectively impossible. Borderline/adjacent roles survive.
+    IMPOSSIBLE_DOMAINS = {
+        "Healthcare": [r"\bdentist\b", r"\bdoctor\b", r"\bnurse\b", r"\bphysician\b", r"\bmedical officer\b", r"\bpharmacist\b"],
+        "Non-Software Engineering": [r"\bcivil\b", r"\bmechanical\b", r"\belectrical\b", r"\bchemical\b", r"\bstructural\b"],
+        "Finance/Accounting": [r"\baccountant\b", r"\bchartered accountant\b", r"\bca\b", r"\btax consultant\b", r"\bauditor\b"],
+        "Sales/Marketing": [r"\bsales executive\b", r"\bbusiness development executive\b", r"\breal estate sales\b", r"\btelecaller\b", r"\bbde\b", r"\bsales manager\b"],
+        "Legal/HR": [r"\blawyer\b", r"\battorney\b", r"\blegal counsel\b", r"\bhr recruiter\b", r"\btalent acquisition\b"],
+        "Legacy Systems": [r"\bsap payroll\b", r"\bmainframe cobol\b", r"\bpeoplesoft hcm\b"],
+        "Training/Entry": [r"\btutor\b", r"\btrainer\b", r"\bwalk-in\b", r"\bwalkin\b", r"\bwalk in\b"]
+    }
 
     # Broad-coverage policy: company name never decides AI eligibility.
     VETO_COMPANIES = set()
@@ -337,46 +332,24 @@ class JobFilterPipeline2:
 
     def __init__(
         self,
-        api_key: str | None = None,
-        base_url: str | None = None,
-        model: str | None = None,
-        cache_file: str = "data/score_cache.json",
         daily_apply_limit: int = 500,
         min_apply_score: int = 50,
         ai_score_limit: int = 300,
         batch_size: int = 5,
         metrics: PipelineRunMetrics | None = None,
         exec_context=None,
-        cache_manager: CacheManager | None = None,
         test_mode: bool = False,
+        inference_service: InferenceService | None = None,
     ):
         self.metrics = metrics
         self.exec_context = exec_context
-        self.cache_manager = cache_manager
-        self.api_key = api_key or os.getenv("OMLX_API_KEY")
-        
-        self.session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=100)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+        self.inference_service = inference_service or InferenceService()
 
-        if not test_mode and not self.api_key:
-            raise ValueError("OMLX_API_KEY is not configured")
-
-        self.base_url = (
-            base_url or os.getenv("OMLX_BASE_URL") or "http://127.0.0.1:8000/v1"
-        ).rstrip("/")
-
-        self.model = model or os.getenv("OMLX_MODEL") or "qwen3.5-4b"
-
-        self.url = f"{self.base_url}/chat/completions"
-
-        self.cache_file = cache_file
         self.daily_apply_limit = daily_apply_limit
         self.min_apply_score = min_apply_score
         self.ai_score_limit = ai_score_limit
         self.batch_size = batch_size
-        self.cache = self._load_cache()
+
         self.rejected_jobs: list[dict] = []
 
     # =========================================================
@@ -385,15 +358,15 @@ class JobFilterPipeline2:
 
     def record_decision(self, job: dict, stage: str, code: str, reason: str) -> None:
 
-        job_copy = job.copy()
-        job_copy["rejection_stage"] = stage
-        job_copy["rejection_code"] = code
-        job_copy["rejection_reason"] = reason
+        if not job.get("_rejection_recorded"):
+            job["rejection_stage"] = stage
+            job["rejection_code"] = code
+            job["rejection_reason"] = reason
+            self.rejected_jobs.append(job)
+            job["_rejection_recorded"] = True
 
         if self.exec_context:
             self.exec_context.reject(job, reason=reason, code=code)
-
-        self.rejected_jobs.append(job_copy)
 
         decisions = job.setdefault("decisions", [])
         decisions.append(
@@ -412,10 +385,6 @@ class JobFilterPipeline2:
                 "reason": reason,
             }
         )
-
-        if not job.get("_rejection_recorded"):
-            self.rejected_jobs.append(job)
-            job["_rejection_recorded"] = True
 
     # =========================================================
     # MAIN
@@ -604,20 +573,25 @@ class JobFilterPipeline2:
         return result
 
     # =========================================================
-    # HARD VETO  — title only, no ambiguity allowed
+    # IMPOSSIBLE FILTER  — domain exclusions only
     # =========================================================
-    def hard_veto(self, jobs):
+    def impossible_filter(self, jobs):
         clean = []
         for j in jobs:
             title = (j.get("title") or "").lower()
-            if any(kw in title for kw in self.VETO_TITLES):
-                self.record_decision(
-                    j, "Hard Veto", "WALK_IN_RECRUITMENT", f"Title matched veto pattern"
-                )
-                if self.metrics:
-                    self.metrics.record_rejection("Hard Veto (Title)")
-                continue
-            clean.append(j)
+            rejected = False
+            for domain, patterns in self.IMPOSSIBLE_DOMAINS.items():
+                if any(re.search(pattern, title) for pattern in patterns):
+                    self.record_decision(
+                        j, "Impossible Filter", "OBJECTIVELY_INCOMPATIBLE", f"Title matched impossible domain: {domain}"
+                    )
+                    if self.metrics:
+                        self.metrics.record_rejection("Impossible Filter")
+                    rejected = True
+                    break
+            
+            if not rejected:
+                clean.append(j)
         return clean
 
     # =========================================================
@@ -1116,35 +1090,33 @@ class JobFilterPipeline2:
             ),
         }
 
-    def _calibrate_score(self, job, raw_score):
+    class EvidenceConfidenceEngine:
         """
-        Bound model variance with deterministic evidence bands.
-
-        The LLM judges semantic fit inside a band; deterministic evidence
-        prevents generic AI mentions from outranking direct Applied-AI roles.
+        Generic evaluator that bypasses LLM reasoning when structured evidence
+        provides high confidence of a positive match.
         """
-        score = max(0, min(100, int(raw_score)))
-        f = self._fit_features(job)
-
-        if f["research_hits"] >= 2 and f["ai_hits"] == 0:
-            return min(score, 25)
-
-        if f["ml_core_hits"] >= 3 and f["ai_hits"] <= 1:
-            return min(score, 39)
-
-        if f["ai_hits"] >= 4 and (f["backend_hits"] >= 2 or f["ai_title"]):
-            return max(score, 78)
-
-        if f["ai_hits"] >= 2 and f["backend_hits"] >= 2:
-            return max(score, 72)
-
-        if f["ai_hits"] >= 2 and (f["backend_hits"] >= 1 or f["frontend_hits"] >= 1):
-            return max(score, 65)
-
-        if f["ai_hits"] == 1 and not f["ai_title"]:
-            return min(score, 59)
-
-        return score
+        @staticmethod
+        def evaluate(features: dict, title: str) -> dict:
+            # We aggregate signal strength across all extracted domains.
+            signal_strength = features.get("ai_hits", 0) * 1.5
+            signal_strength += features.get("backend_hits", 0) * 1.0
+            signal_strength += features.get("frontend_hits", 0) * 0.5
+            signal_strength += features.get("ml_core_hits", 0) * 1.2
+            
+            # Very strong single signals
+            if features.get("ai_title"):
+                signal_strength += 5.0
+            if features.get("fullstack_title"):
+                signal_strength += 3.0
+                
+            if signal_strength >= 4.0:
+                return {
+                    "status": "OBVIOUS_APPLY",
+                    "decision": "APPLY",
+                    "score": min(100, int(70 + signal_strength * 2)),
+                    "reason": f"High confidence deterministic match (signal strength: {signal_strength:.1f})"
+                }
+            return {"status": "NEEDS_REASONING"}
 
     # =========================================================
     # AI SCORING  — tags go in, score + reason come out
@@ -1152,478 +1124,91 @@ class JobFilterPipeline2:
     def ai_score_batch(self, jobs):
         result = []
 
-        # Adaptive concurrency
-        try:
-            cpu_usage = psutil.cpu_percent(interval=0.1)
-            if cpu_usage > 85.0:
-                self.batch_size = max(1, self.batch_size // 2)
-            elif cpu_usage < 40.0:
-                self.batch_size = min(10, self.batch_size + 1)
-        except Exception:
-            pass
-
-        for i in range(
-            0,
-            len(jobs),
-            self.batch_size,
-        ):
-            batch = jobs[i : i + self.batch_size]
-
-            uncached_jobs = []
-
-            for job in batch:
-                jid = str(job.get("job_id") or "").strip()
-
-                cached_data = None
-                
-                # Check CacheManager
-                if self.cache_manager and jid:
-                    provider = job.get("provider_id", "naukri")
-                    title = job.get("title", "")
-                    company = job.get("company", "")
-                    desc = job.get("description", "")
-                    
-                    fingerprint = compute_llm_fingerprint(
-                        provider=provider,
-                        job_id=jid,
-                        title=title,
-                        company=company,
-                        normalized_description=desc,
-                        model_name=self.model,
-                        prompt_version="1",
-                        classifier_version="1",
-                        pipeline_version="1",
-                        search_strategy_version="1",
-                        ranking_version="1"
-                    )
-                    job["_llm_fingerprint"] = fingerprint
-                    
-                    start_lookup = time.perf_counter()
-                    llm_record = self.cache_manager.llm.get(fingerprint)
-                    self.cache_manager.track_lookup((time.perf_counter() - start_lookup) * 1000)
-                    
-                    if llm_record:
-                        self.cache_manager.metrics["llm_hits"] += 1
-                        self.cache_manager.metrics["llm_tokens_saved"] += llm_record.get("tokens", 0)
-                        self.cache_manager.metrics["llm_time_saved_ms"] += llm_record.get("latency_ms", 0)
-                        
-                        try:
-                            parsed = json.loads(llm_record["parsed_response"])
-                            if isinstance(parsed, dict) and "score" in parsed:
-                                cached_data = parsed
-                        except Exception:
-                            pass
-                    else:
-                        self.cache_manager.metrics["llm_misses"] += 1
-
-                if not cached_data and jid and jid in self.cache:
-                    cached_data = self.cache[jid]
-
-                if cached_data:
-                    job["ai_score"] = cached_data.get("score", 0)
-                    job["ai_reason"] = cached_data.get("reason", "cached")
-                    result.append(job)
-                else:
-                    uncached_jobs.append(job)
-
-            if not uncached_jobs:
-                continue
-
-            scores = self._call_ai(uncached_jobs)
-            
-            raw_response = ""
-            duration_ms = 0
-            tokens = 0
-            if isinstance(scores, tuple) and len(scores) == 4:
-                scores, raw_response, duration_ms, tokens = scores
-
-            submitted_ids = {
-                str(job.get("job_id") or "").strip()
-                for job in uncached_jobs
-                if str(job.get("job_id") or "").strip()
-            }
-
-            valid_scores = {}
-
-            if isinstance(scores, list):
-                for item in scores:
-                    if not isinstance(item, dict):
-                        continue
-
-                    jid = str(item.get("job_id") or "").strip()
-
-                    score = item.get("score")
-
-                    if (
-                        jid in submitted_ids
-                        and jid not in valid_scores
-                        and isinstance(score, int)
-                    ):
-                        valid_scores[jid] = item
-
-            missing_jobs = []
-
-            for job in uncached_jobs:
-                jid = str(job.get("job_id") or "").strip()
-
-                data = valid_scores.get(jid)
-
-                if data is None:
-                    missing_jobs.append(job)
-                    continue
-
-                normalized_data = {
-                    "score": self._calibrate_score(
-                        job,
-                        data["score"],
-                    ),
-                    "reason": str(data.get("reason") or "").strip(),
-                }
-
-                job["ai_score"] = normalized_data["score"]
-                job["ai_reason"] = normalized_data["reason"]
-
-                if jid:
-                    self.cache[jid] = normalized_data
-                    if self.cache_manager and "_llm_fingerprint" in job:
-                        start_save = time.perf_counter()
-                        self.cache_manager.llm.set(
-                            fingerprint=job["_llm_fingerprint"],
-                            provider=job.get("provider_id", "naukri"),
-                            job_id=jid,
-                            raw_response=raw_response,
-                            parsed_response=json.dumps(normalized_data),
-                            model=self.model,
-                            latency_ms=duration_ms,
-                            tokens=tokens
-                        )
-                        self.cache_manager.track_save((time.perf_counter() - start_save) * 1000)
-
-                result.append(job)
-
-            # Retry malformed or missing jobs individually.
-            for job in missing_jobs:
-                jid = str(job.get("job_id") or "").strip()
-
-                print(
-                    f"  [AI RETRY SINGLE] "
-                    f"{job.get('title')} @ "
-                    f"{job.get('company')}"
-                )
-
-                retry_data = self._call_ai([job])
-
-                matched = None
-
-                if isinstance(retry_data, list):
-                    for item in retry_data:
-                        if not isinstance(item, dict):
-                            continue
-
-                        if str(item.get("job_id") or "").strip() == jid and isinstance(
-                            item.get("score"), int
-                        ):
-                            matched = item
-                            break
-
-                if matched is None:
-                    print(
-                        f"AI score unavailable after retry "
-                        f"for job_id={jid or '<unknown>'}"
-                    )
-
-                    job["ai_score"] = 0
-                    job["ai_reason"] = "AI scoring unavailable after retry"
-
-                    result.append(job)
-                    continue
-
-                normalized_data = {
-                    "score": self._calibrate_score(
-                        job,
-                        matched["score"],
-                    ),
-                    "reason": str(matched.get("reason") or "").strip(),
-                }
-
-                job["ai_score"] = normalized_data["score"]
-                job["ai_reason"] = normalized_data["reason"]
-
-                if jid:
-                    self.cache[jid] = normalized_data
-
-                result.append(job)
-
-            self._save_cache()
-
-        for job in result:
-            job.setdefault("decision_history", []).append(
-                {"stage": "AI Score", "score": job.get("ai_score")}
-            )
-
-        return result
-
-    def _call_ai(self, jobs):
-        job_block = ""
-        for j in jobs:
-            mandatory = ", ".join(j.get("mandatory_tags", [])) or "none"
-            optional = ", ".join(j.get("optional_tags", [])) or "none"
-            exp = f"{j.get('experience_min', 0)}-{j.get('experience_max', 10)} yrs"
-            description = (j.get("description") or "").strip()
-
-            description = description[:6000]
-
-            job_block += (
-                f"Job ID:      {j.get('job_id')}\n"
-                f"  Title:       {j.get('title')}\n"
-                f"  Company:     {j.get('company')}\n"
-                f"  Mandatory:   {mandatory}\n"
-                f"  Optional:    {optional}\n"
-                f"  Exp:         {exp}\n"
-                f"  Days old:    {j.get('days_old', 7)}\n"
-                f"  Search track:{j.get('search_track', 'UNKNOWN')}\n"
-                f"  AI evidence: {j.get('ai_relevance_reason', '')}\n"
-                f"  Full JD:\n{description}\n"
-                f"---\n"
-            )
-
-        prompt2 = f"""
-You rank genuine AI jobs for this candidate. Eligibility is broad; ranking is preference.
-
-Candidate ground-truth profile for matching:
-- Senior software engineer with production full-stack/backend experience.
-- Angular/TypeScript, Node.js/Express, REST APIs, MongoDB, service integration.
-- Production AI engineering experience represented by Python/FastAPI AI services,
-  RAG, hybrid retrieval, reranking, embeddings, vector search, LangChain/LangGraph,
-  agents, tool calling, LLM evaluation, local model serving, Azure OpenAI,
-  Azure AI Foundry, and Azure AI Search.
-
-POLICY:
-- Any genuinely AI-related engineering role is eligible.
-- Do NOT reject or heavily punish a role merely because its primary stack is
-  Java, C++, .NET, TensorFlow, PyTorch, computer vision, NLP, traditional ML,
-  data science, model training, MLOps, or another AI sub-discipline.
-- Stack and sub-discipline mismatch affect ranking only.
-- Generic software jobs with only incidental AI wording should score below 50.
-- Explicit AI roles should normally score at least 50.
-- Prefer GenAI/LLM/RAG/Agentic roles, then Applied AI/NLP/Prompt/AI Full Stack,
-  then ML/CV/DL/Data Science + AI, then ambiguous AI-adjacent roles.
-- Evaluate against the stated candidate profile; do not describe the candidate
-  as transitioning into AI or lacking production AI experience.
-
-SCORING:
-90-100: direct GenAI/LLM/RAG/agentic fit with strong stack overlap.
-80-89: strong applied-AI fit.
-70-79: genuine AI role with good transferable overlap.
-60-69: genuine AI role with meaningful stack/sub-discipline gaps.
-50-59: genuine AI role with substantial gaps but still worth applying.
-0-49: not genuinely AI work, or AI is merely incidental.
-
-OUTPUT CONTRACT:
-Return exactly one result for every supplied Job ID. Copy IDs exactly.
-No markdown or extra text. Integer score 0-100.
-
-Return ONLY:
-{{
-  "results": [
-    {{
-      "job_id": "exact supplied id",
-      "score": 82,
-      "reason": "Specific evidence-based fit explanation."
-    }}
-  ]
-}}
-
-Jobs:
-{job_block}
-"""
-
-        try:
-            start_time = time.perf_counter()
-            res = self.session.post(
-                self.url,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt2,
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 2000,
-                    "response_format": {
-                        "type": "json_object",
-                    },
-                    "chat_template_kwargs": {
-                        "enable_thinking": False,
-                    },
-                },
-                timeout=300,
-            )
-            duration = time.perf_counter() - start_time
-            if self.metrics:
-                self.metrics.add_llm_time(duration)
-
-            if res.status_code != 200:
-                print("AI HTTP ERROR:", res.status_code, res.text[:200])
-                return []
-
-            response_json = res.json()
-
-            message = response_json["choices"][0]["message"]
-
-            content = message.get("content") or ""
-
-            content = re.sub(
-                r"```json|```",
-                "",
-                content,
-            ).strip()
-
-            match = re.search(
-                r"\{.*\}",
-                content,
-                re.S,
-            )
-
-            if not match:
-                print(
-                    "AI PARSE ERROR — no JSON object found\n"
-                    f"finish_reason={response_json['choices'][0].get('finish_reason')}\n"
-                    f"content={content[:1000]}"
-                )
-
-                return []
-
-            json_text = match.group(0)
-
-            try:
-                data = json.loads(json_text)
-
-            except json.JSONDecodeError as exc:
-                print(
-                    "AI JSON ERROR\n"
-                    f"error={exc}\n"
-                    f"finish_reason={response_json['choices'][0].get('finish_reason')}\n"
-                    f"content={content[:1500]}"
-                )
-
-                return []
-
-            if not isinstance(data, dict):
-                return []
-
-            results = data.get("results")
-
-            if not isinstance(results, list):
-                print("AI CONTRACT ERROR — " "'results' must be a list")
-                return ([], "", 0, 0)
-
-            tokens = response_json.get("usage", {}).get("total_tokens", 0)
-            return (results, content, duration * 1000, tokens)
-
-        except Exception as e:
-            print("AI call error:", e)
-            return ([], "", 0, 0)
-
-    def post_score_guard(self, jobs):
-        """
-        Enforce deterministic consistency between job evidence and score.
-
-        The model may refine ordering inside evidence bands, but it cannot:
-        - promote incidental-AI generic software above direct AI work;
-        - keep obvious VBA/content roles because the title contains AI;
-        - leave concrete LLM/RAG/agentic backend roles below their evidence floor.
-        """
-        clean = []
+        system_prompt = (
+            "You are the evaluator for an autonomous job acquisition engine.\n"
+            "This platform intentionally optimizes for high recall (Spray & Pray), NOT maximum precision.\n"
+            "The objective is to maximize interview opportunities, NOT to identify only perfect matches.\n"
+            "Assume that spending one application is inexpensive compared to missing a potential interview.\n\n"
+            "Primary Objective:\n"
+            "Would applying to this job be a reasonable use of an application, given the user's profile and stated strategy? \n"
+            "Prefer applying unless there is a strong reason not to.\n"
+            "Evaluate whether the candidate could plausibly succeed in the hiring process—not whether they are the perfect match.\n\n"
+            "Candidate ground-truth profile:\n"
+            "- Senior software engineer with production full-stack/backend experience.\n"
+            "- Angular/TypeScript, Node.js/Express, REST APIs, MongoDB, service integration.\n"
+            "- Production AI engineering experience represented by Python/FastAPI AI services,\n"
+            "  RAG, hybrid retrieval, embeddings, LangChain/LangGraph, agents, tool calling, Azure OpenAI.\n\n"
+            "POLICY:\n"
+            "- NEVER reject a job solely because it is not a perfect match.\n"
+            "- Borderline software engineering roles (Backend, Full Stack, Platform, Cloud, Python, Node.js, DevOps, AI-adjacent) should continue through evaluation.\n"
+            "- Only REJECT jobs that are objectively incompatible with the candidate's background.\n"
+            "- Stack mismatch or missing sub-disciplines affects ranking, but should NOT usually result in rejection.\n"
+            "- Absence of evidence is not evidence of incompatibility. Missing AI keywords, incomplete descriptions, or poorly written JDs must not be interpreted as negative evidence. Penalize explicit mismatches, not missing information.\n"
+            "- If confidence is uncertain but the role is technically adjacent, default to APPLY.\n\n"
+            "OUTPUT CONTRACT:\n"
+            "Return JSON containing 'decision' ('APPLY' or 'REJECT'), 'score' (0-100 integer representing Apply Confidence), and 'reason'.\n"
+            "No markdown or extra text.\n"
+        )
 
         for job in jobs:
-            features = self._fit_features(job)
-            text = self._job_text(job)
+            jid = str(job.get("job_id") or "").strip()
+            
+            # 1. Evidence Extraction
+            f = self._fit_features(job)
             title = (job.get("title") or "").lower()
-            score = int(job.get("ai_score", 0) or 0)
-
-            vba_automation_hits = sum(
-                term in text
-                for term in (
-                    "vba",
-                    "excel macros",
-                    "advanced excel",
-                    "power query",
-                    "macro automation",
+            
+            # 2. Evidence Confidence Engine
+            eval_result = self.EvidenceConfidenceEngine.evaluate(f, title)
+            
+            if eval_result["status"] == "OBVIOUS_APPLY":
+                job["ai_decision"] = eval_result["decision"]
+                job["ai_score"] = eval_result["score"]
+                job["ai_reason"] = eval_result["reason"]
+                job["structured_evidence"] = f
+                
+                job.setdefault("decision_history", []).append(
+                    {"stage": "AI Score", "score": job["ai_score"]}
                 )
-            )
-            content_role_hits = sum(
-                term in text
-                for term in (
-                    "copywriter",
-                    "copywriting",
-                    "brand copy",
-                    "marketing copy",
-                    "content writer",
-                    "social media content",
-                )
-            )
-            engineering_hits = features["backend_hits"] + features["ai_hits"]
-
-            # Misleading AI titles: the actual work is office automation or content.
-            if vba_automation_hits >= 2 and features["ai_hits"] <= 1:
-                print(
-                    f"  [POST-SCORE REJECT - INCIDENTAL AUTOMATION] "
-                    f"{job.get('title')} @ {job.get('company')}"
-                )
-                self.record_decision(
-                    job,
-                    "Post Score Guard",
-                    "NON_SOFTWARE_ROLE",
-                    "Role is incidental automation (VBA/macros) rather than engineering",
-                )
+                result.append(job)
                 continue
+                
+            # 3. Needs Reasoning -> Inference Service
+            mandatory = ", ".join(job.get("mandatory_tags", [])) or "none"
+            optional = ", ".join(job.get("optional_tags", [])) or "none"
+            exp = f"{job.get('experience_min', 0)}-{job.get('experience_max', 10)} yrs"
+            description = (job.get("description") or "").strip()[:6000]
+            
+            prompt = (
+                f"Job ID:      {job.get('job_id')}\n"
+                f"Title:       {job.get('title')}\n"
+                f"Company:     {job.get('company')}\n"
+                f"Mandatory:   {mandatory}\n"
+                f"Optional:    {optional}\n"
+                f"Exp:         {exp}\n"
+                f"Full JD:\n{description}\n"
+            )
+            
+            context_hash = hashlib.md5(f"{job.get('provider_id', '')}:{jid}:{title}:{description}".encode('utf-8')).hexdigest()
+            
+            # Delegate to InferenceService
+            parsed = self.inference_service.classify_job(
+                evidence=f,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                context_hash=context_hash
+            )
+            
+            job["ai_decision"] = parsed.get("decision", "APPLY")
+            job["ai_score"] = parsed.get("score", 50)
+            job["ai_reason"] = parsed.get("reason", "Inference response missing reason")
+            job["structured_evidence"] = f
+            
+            job.setdefault("decision_history", []).append(
+                {"stage": "AI Score", "score": job["ai_score"]}
+            )
+            result.append(job)
 
-            if content_role_hits >= 2 and engineering_hits <= 2:
-                print(
-                    f"  [POST-SCORE REJECT - NON-ENGINEERING AI] "
-                    f"{job.get('title')} @ {job.get('company')}"
-                )
-                self.record_decision(
-                    job,
-                    "Post Score Guard",
-                    "NON_SOFTWARE_ROLE",
-                    "Role is content creation rather than software engineering",
-                )
-                continue
-
-            # Generic software with one weak AI mention stays below application floor.
-            if features["ai_hits"] <= 1 and not features["ai_title"]:
-                score = min(score, 49)
-
-            # Concrete applied-AI backend work gets deterministic floors even when
-            # the title is generic (for example an agentic manufacturing platform).
-            if features["ai_hits"] >= 4 and (
-                features["backend_hits"] >= 2 or features["ai_title"]
-            ):
-                score = max(score, 78)
-            elif features["ai_hits"] >= 2 and features["backend_hits"] >= 2:
-                score = max(score, 72)
-            elif features["ai_hits"] >= 2 and (
-                features["backend_hits"] >= 1 or features["frontend_hits"] >= 1
-            ):
-                score = max(score, 65)
-
-            # Explicit AI engineering titles remain eligible, but only after the
-            # misleading-title rejection rules above have run.
-            if features["ai_title"]:
-                score = max(score, self.min_apply_score)
-
-            job["ai_score"] = max(0, min(100, score))
-            clean.append(job)
-
-        return clean
+        return result
 
     # =========================================================
     # RANK  — ai score + small recency bump

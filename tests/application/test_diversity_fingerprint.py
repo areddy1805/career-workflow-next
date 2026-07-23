@@ -38,27 +38,10 @@ def test_duplicate_vacancy_is_suppressed():
 
 
 from src.application.diversity import (
-    allocate_detail_budget,
     deduplicate_enriched_jobs,
     exclude_job_ids,
 )
 
-
-def test_detail_budget_round_robins_companies_and_caps_family_duplicates():
-    jobs = [
-        {"job_id": "a1", "title": "LLM Engineer", "company": "A", "location": "Pune"},
-        {
-            "job_id": "a2",
-            "title": "Senior LLM Engineer",
-            "company": "A",
-            "location": "Bengaluru",
-        },
-        {"job_id": "a3", "title": "LLM Engineer", "company": "A", "location": "Mumbai"},
-        {"job_id": "b1", "title": "RAG Engineer", "company": "B", "location": "Pune"},
-        {"job_id": "c1", "title": "AI Engineer", "company": "C", "location": "Pune"},
-    ]
-    result = allocate_detail_budget(jobs, budget=4, max_per_company=3, max_per_family=2)
-    assert [job["job_id"] for job in result] == ["a1", "b1", "c1", "a2"]
 
 
 def test_post_detail_description_dedup_removes_requisition_clones():
@@ -93,48 +76,6 @@ def test_exclude_job_ids_before_detail_fetch():
     jobs = [{"job_id": "1"}, {"job_id": "2"}, {"job_id": "3"}]
     assert [j["job_id"] for j in exclude_job_ids(jobs, {"2"})] == ["1", "3"]
 
-
-def test_detail_budget_family_cap_is_diversity_first_not_destructive():
-    jobs = [
-        {
-            "job_id": "a1",
-            "title": "LLM Engineer",
-            "company": "A",
-            "location": "Pune",
-        },
-        {
-            "job_id": "a2",
-            "title": "Senior LLM Engineer",
-            "company": "A",
-            "location": "Bengaluru",
-        },
-        {
-            "job_id": "a3",
-            "title": "LLM Engineer",
-            "company": "A",
-            "location": "Mumbai",
-        },
-        {
-            "job_id": "b1",
-            "title": "RAG Engineer",
-            "company": "B",
-            "location": "Pune",
-        },
-    ]
-
-    result = allocate_detail_budget(
-        jobs,
-        budget=4,
-        max_per_company=3,
-        max_per_family=2,
-    )
-
-    assert [job["job_id"] for job in result] == [
-        "a1",
-        "b1",
-        "a2",
-        "a3",
-    ]
 
 
 def test_vacancy_fingerprint_distinguishes_materially_different_search_metadata():

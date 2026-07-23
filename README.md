@@ -49,6 +49,7 @@
 - [Quick Start & Installation](#quick-start)
 - [Configuration Surface](#configuration-surface)
 - [Command Line Reference & Usage](#command-line-reference)
+- [Run Capture & Debugging](#run-capture--debugging)
 - [Scheduler](#scheduler)
 - [Operational Data Model](#operational-data-model)
 - [Runtime Artifacts](#runtime-artifacts)
@@ -746,6 +747,171 @@ python run_pipeline.py --live --confirm-live APPLY_LIVE --max-applications 15
 
 ---
 
+## Run Capture & Debugging
+
+Career Workflow is designed as an operational platform with immutable run artifacts. While every execution already produces structured artifacts under `artifacts/runs/<run_id>/`, capturing the terminal output provides valuable context when debugging failures, reporting issues, or reviewing historical executions.
+
+### Recommended Log Directory
+
+Create a directory for terminal captures:
+
+```bash
+mkdir -p logs
+```
+
+---
+
+### Production Dry Run
+
+Capture the complete pipeline output to a timestamped log while still streaming it to the terminal.
+
+```bash
+mkdir -p logs
+
+python run_pipeline.py \
+  --acquisition-mode full \
+  2>&1 | tee logs/run_$(date +%Y%m%d_%H%M%S).log
+```
+
+---
+
+### Production Live Run
+
+```bash
+mkdir -p logs
+
+python run_pipeline.py \
+  --live \
+  --confirm-live APPLY_LIVE \
+  --provider all \
+  --acquisition-mode full \
+  2>&1 | tee logs/live_$(date +%Y%m%d_%H%M%S).log
+```
+
+---
+
+### Test Mode
+
+```bash
+mkdir -p logs
+
+python run_pipeline.py \
+  --test \
+  2>&1 | tee logs/test_$(date +%Y%m%d_%H%M%S).log
+```
+
+---
+
+### Capture Environment Information
+
+For difficult-to-reproduce bugs it is useful to capture execution metadata alongside the pipeline output.
+
+```bash
+mkdir -p logs
+
+{
+    echo "========== DATE =========="
+    date
+
+    echo
+    echo "========== GIT =========="
+    git rev-parse HEAD
+    git status --short
+
+    echo
+    echo "========== PYTHON =========="
+    python --version
+
+    echo
+    echo "========== PIPELINE =========="
+    python run_pipeline.py --acquisition-mode full
+
+} 2>&1 | tee logs/debug_$(date +%Y%m%d_%H%M%S).log
+```
+
+---
+
+### Record an Entire Terminal Session
+
+When investigating complex failures it can be useful to capture every terminal command and its output.
+
+```bash
+mkdir -p logs
+
+script logs/session_$(date +%Y%m%d_%H%M%S).txt
+```
+
+Exit the recording with:
+
+```bash
+exit
+```
+
+---
+
+### Useful Investigation Commands
+
+Inspect the latest pipeline run:
+
+```bash
+ls -lt artifacts/runs | head
+```
+
+Locate the latest captured log:
+
+```bash
+ls -lt logs | head
+```
+
+Locate the latest diagnostics:
+
+```bash
+find artifacts/runs -name diagnostics.json | tail -1
+```
+
+Locate the latest execution timeline:
+
+```bash
+find artifacts/runs -name timeline.json | tail -1
+```
+
+Locate the latest run manifest:
+
+```bash
+find artifacts/runs -name manifest.json | tail -1
+```
+
+---
+
+### Recommended Workflow
+
+For normal development:
+
+```bash
+mkdir -p logs
+
+python run_pipeline.py \
+  --acquisition-mode full \
+  2>&1 | tee logs/run_$(date +%Y%m%d_%H%M%S).log
+```
+
+When reporting bugs or debugging pipeline failures, include:
+
+- terminal log (`logs/*.log`)
+- run artifact directory (`artifacts/runs/<run_id>/`)
+- diagnostics (`diagnostics.json`)
+- execution timeline (`timeline.json`)
+- manifest (`manifest.json`)
+
+Together these provide a complete execution record that can usually reproduce and diagnose a pipeline failure without rerunning the workflow.
+
+> **Future Direction**
+>
+> The long-term goal is for every pipeline execution to automatically persist its terminal output alongside the immutable run artifacts (`artifacts/runs/<run_id>/pipeline.log`). At that point manual `tee` commands will no longer be necessary, but they remain the recommended approach until native log capture is implemented.
+
+
+---
+
 ## Scheduler
 
 Career Workflow supports two execution models via `run_scheduler.py`.
@@ -831,19 +997,20 @@ Typical local runtime state:
 
 | Artifact | Purpose |
 |---|---|
-| `manifest.json` | Run metadata, timestamp, and status |
-| `timeline.json` | Execution stage durations |
-| `environment.json` | Execution context and policies |
-| `diagnostics.json` | System state and health |
-| `classification.json` | Core classification stage summary |
-| `selection.json` | Selection stage summary |
-| `application.json` | Application stage summary |
-| `selected_jobs.json` | Jobs selected for application with decision history |
-| `rejected_jobs.json` | All rejected jobs with rejection stage, code, and reason |
-| `applied_jobs.json` | Successfully applied jobs for this run |
-| `already_applied.json` | Jobs skipped due to duplicate application state |
-| `external_apply.json` | Jobs requiring external application |
-| `manual_review.json` | Jobs flagged for human review |
+| `manifest.json` | Run metadata, identifiers, timestamps, execution mode, and overall status |
+| `timeline.json` | Stage execution timeline, durations, and performance metrics |
+| `environment.json` | Effective runtime configuration, policies, providers, and execution context |
+| `diagnostics.json` | Preflight checks, runtime diagnostics, validation results, and system health |
+| `pipeline.log` *(planned)* | Complete terminal output for the run, captured alongside the run artifacts for forensic debugging |
+| `classification.json` | Classification stage metrics, AI evaluation summary, and rejection breakdown |
+| `selection.json` | Selection stage metrics, policy decisions, and application eligibility summary |
+| `application.json` | Application execution metrics, routing decisions, submission results, and failures |
+| `selected_jobs.json` | Jobs selected for application, including complete decision history and scoring evidence |
+| `rejected_jobs.json` | Jobs rejected during the pipeline, including rejection stage, reason codes, and supporting evidence |
+| `applied_jobs.json` | Successfully submitted applications with provider-specific execution details |
+| `already_applied.json` | Jobs skipped because an existing application was detected |
+| `external_apply.json` | Jobs requiring external or manual application outside native automation |
+| `manual_review.json` | Jobs requiring human intervention because automated resolution was not possible |
 
 ---
 

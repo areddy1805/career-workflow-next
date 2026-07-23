@@ -5,8 +5,7 @@ Pipeline = module.JobFilterPipeline2
 
 def pipeline(tmp_path, min_apply_score=50):
     return Pipeline(
-        api_key="test",
-        cache_file=str(tmp_path / "cache.json"),
+        test_mode=True,
         min_apply_score=min_apply_score,
     )
 
@@ -42,13 +41,13 @@ def norm(p, raw):
 def test_ai_ml_title_not_hard_vetoed(tmp_path):
     p = pipeline(tmp_path)
     raw = job("1", "AI/ML Engineer", ["python", "pytorch"], "Build ML systems")
-    assert p.hard_veto(p.normalize_jobs([raw]))
+    assert p.impossible_filter(p.normalize_jobs([raw]))
 
 
 def test_data_scientist_ai_role_not_hard_vetoed(tmp_path):
     p = pipeline(tmp_path)
     raw = job("2", "Data Scientist - Generative AI", ["llm"], "Build AI systems")
-    assert p.hard_veto(p.normalize_jobs([raw]))
+    assert p.impossible_filter(p.normalize_jobs([raw]))
 
 
 def test_stack_conflict_is_never_eligibility_veto(tmp_path):
@@ -108,22 +107,6 @@ def test_non_pune_office_rejected(tmp_path):
     p = pipeline(tmp_path)
     raw = norm(p, job("7", "AI Engineer", ["ai"], "Work from office", "Hyderabad"))
     assert p.location_work_mode_gate([raw])[0]["location_preference"] == "Preferred"
-
-
-def test_explicit_ai_title_gets_apply_floor(tmp_path):
-    p = pipeline(tmp_path, min_apply_score=50)
-    raw = norm(p, job("8", "Machine Learning Engineer", ["pytorch"], "Train models"))
-    raw["ai_score"] = 31
-    guarded = p.post_score_guard([raw])
-    assert guarded[0]["ai_score"] == 50
-
-
-def test_incidental_ai_generic_job_is_capped(tmp_path):
-    p = pipeline(tmp_path)
-    raw = norm(p, job("9", "Backend Developer", ["node.js"], "Integrate one AI API"))
-    raw["ai_score"] = 80
-    guarded = p.post_score_guard([raw])
-    assert guarded[0]["ai_score"] <= 49
 
 
 def test_rank_prefers_fit_score(tmp_path):

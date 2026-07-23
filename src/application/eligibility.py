@@ -40,6 +40,22 @@ def _score_for_job(
         return 0
 
 
+def _decision_for_job(
+    job: Any,
+    score_map: dict[str, dict],
+) -> str:
+    result = score_map.get(_job_id(job), {})
+    try:
+        return str(
+            result.get(
+                "decision",
+                result.get("ai_decision", "APPLY"),
+            )
+        )
+    except (TypeError, ValueError):
+        return "APPLY"
+
+
 def evaluate_auto_apply_eligibility(
     job: Any,
     *,
@@ -60,16 +76,22 @@ def evaluate_auto_apply_eligibility(
     if minimum_score is None:
         minimum_score = int(os.getenv("AUTO_APPLY_MIN_SCORE", "0"))
 
+    decision_val = _decision_for_job(job, score_map)
+    is_eligible = (decision_val.upper() == "APPLY")
+    reasons = []
+    
+    if not is_eligible:
+        reasons.append(f"AI Decision was {decision_val}")
+        
     return {
         "job_id": _job_id(job),
         "title": _job_title(job),
         "company": _job_company(job),
         "score": _score_for_job(job, score_map),
-        "minimum_score": minimum_score,
-        "score_is_ranking_only": True,
-        "eligible": True,
-        "reasons": [],
-        "primary_reason": None,
+        "decision": decision_val,
+        "eligible": is_eligible,
+        "reasons": reasons,
+        "primary_reason": reasons[0] if reasons else None,
     }
 
 
