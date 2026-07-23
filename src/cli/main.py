@@ -128,6 +128,22 @@ def doctor():
     console.print("[bold blue]Gathering System Health & Capabilities...[/bold blue]")
     checks = collect_health_checks()
     
+    pass_count = sum(1 for c in checks if str(c.get("status")) == "PASS")
+    warn_count = sum(1 for c in checks if str(c.get("status")) == "WARN")
+    fail_count = sum(1 for c in checks if str(c.get("status")) == "FAIL")
+    
+    overall_health = "[bold green]Healthy[/bold green]"
+    if fail_count > 0:
+        overall_health = "[bold red]Failed[/bold red]"
+    elif warn_count > 0:
+        overall_health = "[bold yellow]Degraded[/bold yellow]"
+        
+    summary_panel = Panel.fit(
+        f"PASS: {pass_count} | WARN: {warn_count} | FAIL: {fail_count}",
+        title=f"Overall Health: {overall_health}"
+    )
+    console.print(summary_panel)
+    
     table = Table(title="Diagnostic Checks")
     table.add_column("Component", style="cyan")
     table.add_column("Status", style="magenta")
@@ -140,6 +156,9 @@ def doctor():
         table.add_row(check.get("check", "Unknown"), f"[{color}]{status.upper()}[/{color}]", details)
             
     console.print(table)
+    
+    if fail_count > 0:
+        raise typer.Exit(1)
     
 @app.command()
 def inspect(run_id: str = typer.Argument("latest", help="Run ID to inspect (or 'latest')")):

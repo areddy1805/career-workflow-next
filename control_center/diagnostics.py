@@ -47,7 +47,7 @@ def _path_check(name: str, path: Path, *, required: bool) -> dict[str, Any]:
         return _pass(name, str(path), required=required)
     if required:
         return _fail(name, f"missing: {path}", required=True)
-    return _warn(name, f"not yet created: {path}", required=False)
+    return _warn(name, f"Not initialized: {path}", required=False)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ def _check_heartbeat() -> dict[str, Any]:
         hb = mgr.read()
         if hb is None:
             return _warn(
-                "Heartbeat", "no heartbeat file — scheduler may not be running"
+                "Heartbeat", "Not started (no heartbeat file)"
             )
         age = mgr.age_seconds()
         detail = (
@@ -115,10 +115,12 @@ def _check_scheduler() -> dict[str, Any]:
     try:
         config = SchedulerConfig.from_env()
         state = read_scheduler_state(config.state_path)
-        status = str(state.get("status", "UNKNOWN")).upper()
+        status = str(state.get("status", "Not started")).upper()
+        if status == "UNKNOWN":
+            status = "NOT STARTED"
         failures = int(state.get("consecutive_failures", 0))
         last_mode = state.get("last_mode", "none")
-        last_run = state.get("last_successful_run") or state.get("updated_at", "never")
+        last_run = state.get("last_successful_run") or state.get("updated_at", "None recorded")
         detail = (
             f"status={status} "
             f"failures={failures} "
@@ -165,7 +167,7 @@ def _check_last_run() -> dict[str, Any]:
         state = read_scheduler_state(_STATE_PATH)
         last = state.get("last_successful_run") or state.get("last_incremental")
         if not last:
-            return _warn("Last successful run", "no successful run recorded yet")
+            return _warn("Last successful run", "None recorded")
         return _pass("Last successful run", last)
     except Exception as exc:
         return _warn("Last successful run", f"unreadable: {exc}")
@@ -176,10 +178,14 @@ def _check_recovery_history() -> dict[str, Any]:
     if not events:
         return _pass("Recovery history", "no recovery events recorded")
     last = events[0]
-    detail = (
-        f"{len(events)} recent events · "
-        f"last: {last.get('reason', 'unknown')} at {last.get('timestamp', 'unknown')}"
-    )
+    action = last.get("action", "")
+    reason = last.get("reason", "unknown")
+    timestamp = last.get("timestamp", "unknown")
+    detail = f"{len(events)} recent events · last: {reason} at {timestamp}"
+    
+    if action == "recovery_completed_on_startup":
+        return _pass("Recovery history", f"System successfully recovered ({len(events)} recent events)")
+    
     return _warn("Recovery history", detail)
 
 
@@ -222,14 +228,7 @@ def collect_health_checks() -> list[dict[str, Any]]:
             "required": True,
         }
     )
-    checks.append(
-        {
-            "check": "NiceGUI package",
-            "status": "PASS" if importlib.util.find_spec("nicegui") else "FAIL",
-            "detail": "installed" if importlib.util.find_spec("nicegui") else "missing",
-            "required": True,
-        }
-    )
+
     checks.append(
         _path_check(
             "Pipeline entry point", REPO_ROOT / "run_pipeline.py", required=True

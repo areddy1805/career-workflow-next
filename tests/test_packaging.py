@@ -44,7 +44,9 @@ def test_packaging_doctor_works():
     """Test that a basic CLI command (doctor) works successfully."""
     cw = get_cw_executable()
     result = subprocess.run([cw, "doctor"], capture_output=True, text=True)
+    # The exit code should be 0 since our mocked/test environment only has WARN/PASS
     assert result.returncode == 0
+    assert "Overall Health" in result.stdout
     assert "Diagnostic Checks" in result.stdout
 
 def test_packaging_cache_stats_works():
