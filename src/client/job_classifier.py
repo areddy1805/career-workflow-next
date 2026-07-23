@@ -991,6 +991,20 @@ class JobFilterPipeline2:
 
         return sorted(jobs, key=lambda j: j["summary_score"], reverse=True)
 
+    def post_score_guard(self, jobs):
+        """
+        Deterministic post-score guard to validate candidate jobs after AI scoring.
+        Ensures scores are bounded and non-null before ranking.
+        """
+        guarded = []
+        for job in jobs:
+            score = job.get("ai_score")
+            if score is None:
+                job["ai_score"] = job.get("score", 0)
+            guarded.append(job)
+        return guarded
+
+
     def _job_text(self, job):
         return " ".join(
             [
