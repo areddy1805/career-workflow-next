@@ -1,0 +1,27 @@
+# Core & HTTP
+requests
+urllib3
+httpcloak
+python-dotenv
+httpx>=0.27,<1.0
+pydantic>=2.0,<3.0
+pyyaml
+psutil
+pytest
+pytest-cov
+pytest-mock
+ruff
+black
+mypy
+
+# Scraping & Automation
+selenium
+pycryptodome
+colorama
+
+# API Control Plane
+fastapi
+uvicorn
+
+# JobSpy — unauthenticated scraping for Google Jobs, Indeed, LinkedIn.
+python-jobspy>=1.1.82,<2.0

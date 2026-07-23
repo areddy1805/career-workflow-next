@@ -1,0 +1,195 @@
+# ==============================================================================
+# Environment and secrets
+# ==============================================================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+secrets/
+credentials/
+
+
+# ==============================================================================
+# Python cache and compiled files
+# ==============================================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+.pytest_cache/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+
+# ==============================================================================
+# Virtual environments
+# ==============================================================================
+
+venv/
+.venv/
+venv2/
+env/
+ENV/
+
+
+# ==============================================================================
+# Node & Frontend build outputs
+# ==============================================================================
+
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+tsconfig.tsbuildinfo
+
+
+# ==============================================================================
+# Python build and packaging
+# ==============================================================================
+
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+
+*.egg
+*.egg-info/
+.installed.cfg
+MANIFEST
+
+
+# ==============================================================================
+# Test and coverage output
+# ==============================================================================
+
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage.json
+
+.tox/
+.nox/
+
+pytestdebug.log
+
+
+# ==============================================================================
+# Runtime logs
+# ==============================================================================
+
+*.log
+logs/
+scheduler_logs/
+frontend/frontend.log
+
+
+# ==============================================================================
+# Generated application pipeline data & databases
+# ==============================================================================
+
+data/*
+!data/.gitkeep
+
+*.db
+*.sqlite
+*.sqlite3
+
+
+# ==============================================================================
+# Application runtime state & caches
+# ==============================================================================
+
+score_cache.json
+applied_jobs.csv
+nkPool.txt
+
+
+# ==============================================================================
+# Runtime orchestration artifacts
+# ==============================================================================
+
+artifacts/runs/*
+artifacts/dry_runs/*
+artifacts/live_runs/*
+artifacts/cli_logs/*
+artifacts/performance/*
+artifacts/provider_logs/*
+artifacts/stacktraces/*
+artifacts/network/*
+artifacts/screenshots/*
+artifacts/videos/*
+!artifacts/.gitkeep
+!artifacts/runs/.gitkeep
+
+
+# ==============================================================================
+# Temporary files & Dev agent metadata
+# ==============================================================================
+
+*.tmp
+*.temp
+*.bak
+
+scratch/
+tmp/
+temp/
+
+.kilo/
+.playwright-mcp/
+review_bundle/
+
+
+# ==============================================================================
+# Jupyter
+# ==============================================================================
+
+.ipynb_checkpoints/
+
+
+# ==============================================================================
+# IDE and editor files
+# ==============================================================================
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+*~
+
+.history/
+
+
+# ==============================================================================
+# OS-generated files
+# ==============================================================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd

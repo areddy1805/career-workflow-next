@@ -1,0 +1,33 @@
+active_profiles:
+  - applied_ai_engineer
+  - forward_deployed_engineer
+  - ai_solutions_engineer
+  - genai_engineer
+  - llm_engineer
+  - ai_platform_engineer
+  - ai_applications_engineer
+  - ai_systems_engineer
+  - enterprise_ai_engineer
+  - agentic_ai_engineer
+  - ai_automation_engineer
+  - ai_workflow_engineer
+  - prompt_engineer
+  - rag_engineer
+  - knowledge_engineer
+  - retrieval_engineer
+  - context_engineer
+  - customer_engineer_ai
+  - technical_solutions_engineer
+  - solution_architect_ai
+  - implementation_engineer
+  - deployment_engineer
+  - technical_consultant_ai
+  - ai_consultant
+preferred_locations:
+  - Pune
+remote: true
+salary_target: 3000000
+work_modes:
+  - Office
+  - Hybrid
+  - Remote

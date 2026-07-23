@@ -1,0 +1,125 @@
+strategy:
+  spray_and_pray: true
+  summary_fetch_budget: 500
+  detail_fetch_budget: 500
+  application_budget: 500
+  rank_before_fetch: true
+  ai_is_ranking_only: true
+  reject_non_engineering: true
+  reject_walkins: true
+  reject_duplicates: true
+  summary_scoring:
+    mandatory_weight: 3
+    skills_weight: 1
+    recency_weight: 2
+
+# -----------------------------------------------------------------------
+# Acquisition configuration
+#
+# provider_priority controls which provider's metadata wins when the same
+# job is found on multiple sources. Higher position = higher priority.
+# Naukri is always first — it has authenticated sessions, richer metadata,
+# and direct apply support.
+# -----------------------------------------------------------------------
+acquisition:
+  provider_priority:
+    - naukri
+    - indeed
+    - linkedin
+    - google
+
+  providers:
+    naukri:
+      # Naukri uses the existing NaukriJobClient (authenticated session).
+      # All Naukri search parameters are controlled via env vars and
+      # SearchPlanner config. Nothing here changes Naukri behaviour.
+      enabled: true
+
+    jobspy:
+      # Set enabled: false to bypass JobSpy entirely. When disabled the
+      # acquisition phase behaves exactly as before this integration.
+      enabled: true
+
+      # Which JobSpy sites to query. Supported: google, indeed, linkedin.
+      # Naukri/Glassdoor/Bayt are explicitly excluded (out of scope).
+      sites:
+        - google
+        - indeed
+        - linkedin
+
+      # Low count avoids pagination and bot-detection triggers.
+      # SearchPlanner already generates many narrow queries, so we rely
+      # on breadth across queries rather than depth per query.
+      results_wanted: 20
+
+      # 72 hours matches the existing Naukri job-age filter (SEARCH_JOB_AGE_DAYS=3).
+      hours_old: 72
+
+      # Keep LinkedIn acquisition fast. Description enrichment for promising
+      # candidates can be added as a later lazy-fetch stage.
+      linkedin_fetch_description: false
+
+      # Per-query network timeout in seconds.
+      timeout_seconds: 15
+
+      # Delay between consecutive JobSpy queries to reduce ban risk.
+      cooldown_seconds: 2
+
+      # Proxy list. Empty means direct requests. Populate with residential
+      # proxies for production use (e.g. from JOBSPY_PROXIES env var).
+      proxies: []
+
+      # Benchmarking mode runs a small representative sample
+      benchmarking_mode: false
+
+      adaptive_acquisition:
+        rolling_window_size: 25
+        min_yield_percent: 3.0
+
+      profiles:
+        aggressive:
+          priority: 100
+          providers: ["indeed", "linkedin", "google"]
+          max_queries: 250
+          max_titles: 10
+          max_frameworks: 8
+          layers:
+            roles:
+              - "AI Engineer"
+              - "GenAI Engineer"
+              - "Machine Learning Engineer"
+              - "LLM Engineer"
+              - "Applied AI Engineer"
+              - "Prompt Engineer"
+              - "RAG Engineer"
+              - "Forward Deployed Engineer"
+              - "AI Consultant"
+              - "AI Solutions Engineer"
+            frameworks:
+              - "LangChain"
+              - "LangGraph"
+              - "OpenAI"
+              - "Anthropic"
+              - "Azure OpenAI"
+              - "CrewAI"
+              - "LlamaIndex"
+              - "Semantic Kernel"
+            platforms:
+              - "Azure AI"
+              - "AWS Bedrock"
+              - "Vertex AI"
+              - "Hugging Face"
+              - "Databricks AI"
+              - "Snowflake Cortex"
+          negative_keywords: ["SAP", "Salesforce", "BPO"]
+        focused:
+          priority: 80
+          providers: ["linkedin", "indeed"]
+          max_queries: 45
+          max_titles: 15
+          max_frameworks: 8
+          layers:
+            roles:
+              - "AI Engineer"
+              - "Applied AI"
+          negative_keywords: []

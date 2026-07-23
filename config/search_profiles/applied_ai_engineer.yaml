@@ -1,0 +1,14 @@
+titles:
+- Applied AI Engineer
+- AI Application Engineer
+preferred_technologies:
+- llm
+- agentic_ai
+- rag
+- frameworks
+- vector_databases
+- cloud
+- backend
+negative_groups:
+- legacy_it
+weight: 1.1
