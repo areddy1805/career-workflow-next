@@ -23,5 +23,9 @@ colorama
 fastapi
 uvicorn
 
+# CLI
+typer[all]
+rich
+
 # JobSpy — unauthenticated scraping for Google Jobs, Indeed, LinkedIn.
 python-jobspy>=1.1.82,<2.0

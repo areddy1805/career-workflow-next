@@ -129,6 +129,8 @@ class CareerWorkflowPipeline:
 
     @staticmethod
     def _generate_run_id() -> str:
+        if env_id := os.getenv("CW_RUN_ID"):
+            return env_id
         return datetime.now(
             timezone.utc,
         ).strftime("%Y%m%dT%H%M%S%fZ")

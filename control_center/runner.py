@@ -25,22 +25,37 @@ def _ensure_runtime_dir() -> None:
 
 
 def build_pipeline_command(
-    *, live: bool, max_applications: int, canary: bool = False, force_live: bool = False
+    *, 
+    live: bool, 
+    max_applications: int | None = None, 
+    canary: bool = False, 
+    force_live: bool = False,
+    provider: str = "all",
+    acquisition_mode: str = "full",
+    test: bool = False,
 ) -> list[str]:
-    if max_applications <= 0:
-        raise ValueError("max_applications must be greater than zero")
     command = [
         sys.executable,
         str(REPO_ROOT / "run_pipeline.py"),
-        "--max-applications",
-        str(max_applications),
     ]
+    if max_applications is not None:
+        if max_applications <= 0 and not test:
+            raise ValueError("max_applications must be greater than zero")
+        command.extend(["--max-applications", str(max_applications)])
+        
     if live:
         command.extend(["--live", "--confirm-live", LIVE_CONFIRMATION])
-    if live and canary:
+    if canary:
         command.append("--canary")
     if force_live:
         command.append("--force-live")
+    if provider != "all":
+        command.extend(["--provider", provider])
+    if acquisition_mode != "full":
+        command.extend(["--acquisition-mode", acquisition_mode])
+    if test:
+        command.append("--test")
+        
     return command
 
 
@@ -147,7 +162,14 @@ def pipeline_is_running() -> bool:
 
 
 def launch_pipeline(
-    *, live: bool, max_applications: int, canary: bool = False, force_live: bool = False
+    *, 
+    live: bool, 
+    max_applications: int | None = None, 
+    canary: bool = False, 
+    force_live: bool = False,
+    provider: str = "all",
+    acquisition_mode: str = "full",
+    test: bool = False,
 ) -> dict[str, Any]:
     if pipeline_is_running():
         raise RuntimeError("A pipeline process is already running.")
@@ -157,6 +179,9 @@ def launch_pipeline(
         max_applications=max_applications,
         canary=canary,
         force_live=force_live,
+        provider=provider,
+        acquisition_mode=acquisition_mode,
+        test=test,
     )
     _ensure_runtime_dir()
     EXIT_PATH.unlink(missing_ok=True)
