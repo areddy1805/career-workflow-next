@@ -12,7 +12,11 @@ from rich.panel import Panel
 from src.cli.capture import ExecutionCapture
 from control_center.runner import build_pipeline_command, REPO_ROOT
 
+sys.path.insert(0, str(REPO_ROOT))
+from src.cli.audit import audit_app
+
 app = typer.Typer(help="Unified Operations CLI for Career Workflow")
+app.add_typer(audit_app, name="audit", help="Pipeline Intelligence & Explainability Framework")
 console = Console()
 
 def _stream_process(command: list[str]):
