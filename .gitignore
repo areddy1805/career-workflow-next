@@ -194,3 +194,5 @@ Desktop.ini
 .Spotlight-V100
 .Trashes
 .fseventsd
+
+docs/audits/*
