@@ -348,6 +348,7 @@ class JobFilterPipeline2:
         metrics: PipelineRunMetrics | None = None,
         exec_context=None,
         cache_manager: CacheManager | None = None,
+        test_mode: bool = False,
     ):
         self.metrics = metrics
         self.exec_context = exec_context
@@ -359,7 +360,7 @@ class JobFilterPipeline2:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
-        if not self.api_key:
+        if not test_mode and not self.api_key:
             raise ValueError("OMLX_API_KEY is not configured")
 
         self.base_url = (

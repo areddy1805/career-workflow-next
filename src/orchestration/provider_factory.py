@@ -6,11 +6,19 @@ from src.acquisition.providers.jobspy_provider import JobSpyProvider, JobSpyConf
 from src.acquisition.config import load_acquisition_config
 
 
-def initialize_providers(provider_mode: str = "all") -> dict:
+def initialize_providers(provider_mode: str = "all", test_mode: bool = False) -> dict:
     """
     Initializes and returns a dictionary of active JobProviders based on configuration
     and the requested provider_mode.
     """
+    if test_mode:
+        print("\n" + "=" * 58)
+        print("ACQUISITION PROVIDER MODE [TEST]")
+        print("=" * 58)
+        print("\nSkipping provider initialization in TEST mode.\n")
+        print("=" * 58 + "\n")
+        return {}
+
     acq_config = load_acquisition_config()
     jobspy_raw = acq_config.get("providers", {}).get("jobspy", {})
     naukri_raw = acq_config.get("providers", {}).get("naukri", {})

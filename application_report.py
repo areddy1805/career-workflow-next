@@ -254,7 +254,43 @@ def build_report_snapshot(
             rows,
             dimension="score_band",
         ),
+        "resume_routing": breakdown(
+            rows,
+            dimension="resume_type",
+        )
     }
+
+def print_resume_routing(rows: list[dict]) -> None:
+    section("RESUME ROUTING SUMMARY")
+
+    ai_count = 0
+    fde_count = 0
+    ai_score_sum = 0
+    fde_score_sum = 0
+    ambiguous_count = 0
+
+    for row in rows:
+        rtype = str(row.get("resume_type", ""))
+        ai_score = float(row.get("resume_score_ai") or 0)
+        fde_score = float(row.get("resume_score_fde") or 0)
+
+        if rtype == "AI":
+            ai_count += 1
+        elif rtype == "FDE":
+            fde_count += 1
+        else:
+            ambiguous_count += 1
+            continue
+
+        ai_score_sum += ai_score
+        fde_score_sum += fde_score
+
+    print(f"  AI Resume                {ai_count:>6}")
+    print(f"  FDE Resume               {fde_count:>6}")
+    print(f"  Average AI Score         {int(ai_score_sum/ai_count) if ai_count > 0 else 0:>6}")
+    print(f"  Average FDE Score        {int(fde_score_sum/fde_count) if fde_count > 0 else 0:>6}")
+    print(f"  Ambiguous                {ambiguous_count:>6}")
+
 
 
 def main() -> None:
@@ -300,6 +336,10 @@ def main() -> None:
         rows,
         dimension="score_band",
         title="PERFORMANCE BY SCORE BAND",
+    )
+
+    print_resume_routing(
+        rows,
     )
 
 

@@ -15,6 +15,7 @@ class PipelineContext:
     run_id: str
     dry_run: bool
     max_applications: int | None
+    test_mode: bool = False
 
     started_at: datetime = field(default_factory=utc_now)
 

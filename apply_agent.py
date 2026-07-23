@@ -13,6 +13,7 @@ from typing import Any, Protocol
 from colorama import Fore, Style, init
 from dotenv import load_dotenv
 
+from src.application.resume_router import ResumeRouter
 from config.candidate_profile import CANDIDATE_PROFILE
 from src.application.router import ApplicationRouter
 from src.application.capability import ProviderCapabilities
@@ -698,8 +699,8 @@ def fetch_all_jobs(
 
                         setattr(
                             job,
-                            "search_profile",
-                            query.get("search_profile", "unknown"),
+                            "search_strategy",
+                            query.get("search_strategy", "unknown"),
                         )
 
                         setattr(
@@ -1245,6 +1246,7 @@ def process_job_application(
     job: Any,
     meta: dict,
     questionnaire_resolver: QuestionnaireResolver,
+    resume_path: str | None = None,
 ) -> ApplicationOutcome:
     """
     Execute the complete application workflow for one job.
@@ -1268,6 +1270,15 @@ def process_job_application(
 
     mandatory = job.tags[:2] if job.tags else []
     optional = job.tags[2:] if len(job.tags) > 2 else []
+
+    if resume_path and hasattr(jc, "update_resume"):
+        try:
+            execute_with_safe_retry(
+                lambda: jc.update_resume(resume_path)
+            )
+        except Exception as e:
+            # We don't fail the application if resume upload fails, but we log it.
+            pass
 
     initial_response = execute_with_safe_retry(
         lambda: jc.apply_job(
@@ -1622,6 +1633,8 @@ def run_application_batch(
 
     print(f"\n--- Starting application batch ({len(jobs)} jobs) ---")
 
+    resume_router = ResumeRouter()
+
     for index, job in enumerate(
         jobs,
         start=1,
@@ -1749,6 +1762,16 @@ def run_application_batch(
             continue
 
         # ----------------------------------------------------------
+        # Resume Routing Engine
+        # ----------------------------------------------------------
+        resume_routing = resume_router.route(job.to_dict() if hasattr(job, "to_dict") else vars(job))
+        meta["resume_type"] = resume_routing["resume_type"]
+        meta["resume_reason"] = resume_routing["resume_reason"]
+        meta["resume_score_ai"] = resume_routing["resume_score_ai"]
+        meta["resume_score_fde"] = resume_routing["resume_score_fde"]
+        meta["resume_path"] = resume_routing["resume_path"]
+
+        # ----------------------------------------------------------
         # Application Routing Engine
         # ----------------------------------------------------------
 
@@ -1845,6 +1868,7 @@ def run_application_batch(
                 job=job,
                 meta=meta,
                 questionnaire_resolver=questionnaire_resolver,
+                resume_path=meta.get("resume_path"),
             )
             duration = time.perf_counter() - start_time
             if metrics:

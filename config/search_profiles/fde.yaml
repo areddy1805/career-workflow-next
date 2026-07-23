@@ -1,0 +1,60 @@
+exclude_companies:
+- TCS
+exclude_titles:
+- Support
+- Helpdesk
+- Technician
+experience: 5+ years
+keywords:
+- Solutions Engineer
+- cloud
+- Founding Forward Deployed Engineer
+- vector_databases
+- frameworks
+- Consultant AI
+- AI Technical Consultant
+- Technical Solutions Engineer
+- Technical Consultant
+- Customer Engineer
+- AI Implementation Engineer
+- rag
+- AI Customer Engineer
+- Forward Deployed
+- Field Engineer
+- backend
+- llm
+- AI Solutions Engineer
+- Solutions Engineer (AI)
+- Implementation Consultant
+- AI Forward Deployed Engineer
+- AI Consultant
+- Forward Deployed Engineer
+- agentic_ai
+- Implementation Engineer
+locations:
+- Remote
+- Pune
+- Bengaluru
+provider_specific_search_settings:
+  jobspy:
+    limit: 100
+  naukri:
+    freshness: 7
+    limit: 50
+remote_preference: true
+salary: 20LPA+
+titles:
+- AI Solutions Engineer
+- Customer Engineer
+- Technical Consultant
+- AI Implementation Engineer
+- Founding Forward Deployed Engineer
+- Solutions Engineer (AI)
+- AI Customer Engineer
+- AI Forward Deployed Engineer
+- AI Consultant
+- Forward Deployed Engineer
+- Technical Solutions Engineer
+- Consultant AI
+- AI Technical Consultant
+- Implementation Engineer

@@ -1,0 +1,102 @@
+exclude_companies:
+- Revature
+- TCS
+exclude_titles:
+- Analyst
+- Tester
+- Intern
+experience: 5+ years
+keywords:
+- Agentic AI
+- cloud
+- AI Automation Engineer
+- AI Engineer
+- vector_databases
+- AI Agent Engineer
+- Enterprise AI Engineer
+- Machine Learning Engineer
+- AI Deployment Engineer
+- AI ML Engineer
+- Machine Learning
+- frameworks
+- Retrieval Engineer
+- Large Language Model Engineer
+- RAG
+- Retrieval Augmented Generation Engineer
+- AI Application Engineer
+- Context Engineer
+- AI Application Developer
+- AI Applications Engineer
+- GenAI Engineer
+- Applied AI Engineer
+- RAG Engineer
+- rag
+- AI Platform Engineer
+- AI Solution Architect
+- Generative AI Engineer
+- AI Developer
+- Deep Learning
+- Full Stack AI Engineer
+- GenAI
+- Deployment Engineer
+- Platform Engineer (AI)
+- backend
+- LLM Engineer
+- NLP
+- llm
+- AI Workflow Engineer
+- Agentic AI Engineer
+- Solution Architect
+- AI
+- Prompt Engineer
+- LLM
+- Python AI Developer
+- Knowledge Engineer
+- agentic_ai
+- ML
+- AI Systems Engineer
+locations:
+- Remote
+- Pune
+- Bengaluru
+provider_specific_search_settings:
+  jobspy:
+    limit: 100
+  naukri:
+    freshness: 7
+    limit: 50
+remote_preference: true
+salary: 20LPA+
+titles:
+- AI Automation Engineer
+- AI Engineer
+- Enterprise AI Engineer
+- AI Agent Engineer
+- Machine Learning Engineer
+- AI Deployment Engineer
+- AI ML Engineer
+- Retrieval Engineer
+- Large Language Model Engineer
+- Retrieval Augmented Generation Engineer
+- AI Application Engineer
+- Context Engineer
+- AI Application Developer
+- AI Applications Engineer
+- GenAI Engineer
+- Applied AI Engineer
+- RAG Engineer
+- AI Solution Architect
+- AI Platform Engineer
+- Generative AI Engineer
+- AI Developer
+- Full Stack AI Engineer
+- Deployment Engineer
+- Platform Engineer (AI)
+- LLM Engineer
+- AI Workflow Engineer
+- Agentic AI Engineer
+- Solution Architect
+- Prompt Engineer
+- Python AI Developer
+- Knowledge Engineer
+- AI Systems Engineer

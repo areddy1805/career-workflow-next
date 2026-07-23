@@ -260,6 +260,7 @@ def breakdown(
         "subtrack",
         "company",
         "score_band",
+        "resume_type",
     }
 
     if dimension not in allowed:

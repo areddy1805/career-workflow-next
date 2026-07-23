@@ -19,6 +19,11 @@ def parse_args():
         help="Enable live application submission. Default is dry-run.",
     )
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Run in test mode (fast, deterministic, minimal acquisition).",
+    )
+    parser.add_argument(
         "--max-applications",
         type=int,
         default=None,
@@ -67,14 +72,37 @@ def main() -> None:
     if args.live and args.canary:
         max_applications = 1
 
+    if args.test:
+        os.environ["MAX_KEYWORDS"] = "3"
+        os.environ["MAX_PAGES"] = "1"
+        os.environ["MAX_EXPERIENCE_COMBINATIONS"] = "1"
+        os.environ["BROWSER_DISABLED"] = "1"
+        os.environ["RECONCILIATION_DISABLED"] = "1"
+        os.environ["SCHEDULER_DISABLED"] = "1"
+        os.environ["TELEMETRY_OPTIONAL"] = "1"
+        os.environ["DETERMINISTIC_SEED"] = "42"
+        max_applications = 0
+        args.acquisition_mode = "incremental"
+        args.live = False
+
     pipeline = CareerWorkflowPipeline(
         dry_run=not args.live,
         max_applications=max_applications,
         acquisition_mode=args.acquisition_mode,
         force_live=args.force_live,
         acquisition_provider=args.provider,
+        test_mode=args.test,
     )
+    
+    import time
+    start_time = time.time()
+    
     result = pipeline.run()
+    
+    end_time = time.time()
+    if args.test and (end_time - start_time) > 60:
+        print(f"\nWARNING: Test mode exceeded 60 seconds (took {end_time - start_time:.1f}s)")
+        
     print()
     print(json.dumps(result.to_dict(), indent=2))
 

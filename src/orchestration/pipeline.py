@@ -74,6 +74,7 @@ class CareerWorkflowPipeline:
         force_live: bool = False,
         acquisition_provider: str = "all",
         artifacts_root: str | Path = "artifacts/runs",
+        test_mode: bool = False,
     ) -> None:
         if max_applications is not None and max_applications < 0:
             raise ValueError("max_applications must be greater than or equal to zero")
@@ -85,6 +86,7 @@ class CareerWorkflowPipeline:
             acquisition_mode=acquisition_mode,
             force_live=force_live,
             acquisition_provider=acquisition_provider,
+            test_mode=test_mode,
         )
 
         self.artifacts_root = Path(
@@ -344,15 +346,15 @@ class CareerWorkflowPipeline:
     # ------------------------------------------------------------------
 
     def preflight(self) -> None:
-        username = os.getenv("NAUKRI_USERNAME")
+        if not self.context.test_mode:
+            username = os.getenv("NAUKRI_USERNAME")
+            password = os.getenv("NAUKRI_PASSWORD")
 
-        password = os.getenv("NAUKRI_PASSWORD")
+            if not username:
+                raise RuntimeError("NAUKRI_USERNAME environment variable is not set")
 
-        if not username:
-            raise RuntimeError("NAUKRI_USERNAME environment variable is not set")
-
-        if not password:
-            raise RuntimeError("NAUKRI_PASSWORD environment variable is not set")
+            if not password:
+                raise RuntimeError("NAUKRI_PASSWORD environment variable is not set")
 
         ledger_path = os.getenv(
             "APPLICATION_LEDGER_PATH",
@@ -472,7 +474,10 @@ class CareerWorkflowPipeline:
             ),
         )
 
-        self.context.providers = initialize_providers(self.context.acquisition_provider)
+        self.context.providers = initialize_providers(
+            self.context.acquisition_provider,
+            test_mode=self.context.test_mode,
+        )
 
         jobs, fetch_result = acquire_jobs(
             providers=self.context.providers,
@@ -525,6 +530,7 @@ class CareerWorkflowPipeline:
             metrics=self.context.metrics,
             exec_context=self.exec_context,
             cache_manager=self.context.cache_manager,
+            test_mode=self.context.test_mode,
         )
 
         jobs = classifier.normalize_jobs(jobs)
