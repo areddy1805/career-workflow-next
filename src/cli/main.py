@@ -9,10 +9,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-# Ensure project root is in path
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root))
-
 from src.cli.capture import ExecutionCapture
 from control_center.runner import build_pipeline_command, REPO_ROOT
 

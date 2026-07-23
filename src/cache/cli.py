@@ -2,8 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Fix python path for direct CLI execution
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
 
 from src.cache.cache_manager import CacheManager
 
