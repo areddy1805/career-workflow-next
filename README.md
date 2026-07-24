@@ -17,13 +17,13 @@
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white">
   <img alt="AI" src="https://img.shields.io/badge/AI-Gemini%20%7C%20Ollama-orange">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-AI%20Job%20Operations-blueviolet">
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-480%2B%20Passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-500%2B%20Passing-brightgreen">
 </p>
 
 <p align="center">
   <img src="assets/screenshot_overview.png" alt="Career Workflow Operations Console - Overview" width="100%" />
   <br>
-  <em>The Career Workflow React Operations Console.</em>
+  <em>The Career Workflow Operations Console.</em>
 </p>
 
 <p align="center">
@@ -42,7 +42,6 @@
 - [Closed-Loop Strategy](#closed-loop-strategy)
 - [Why This Is Different](#why-this-is-different-from-a-basic-auto-apply-bot)
 - [Core Capabilities](#core-capabilities)
-- [Operations Control Plane](#operations-control-plane)
 - [Safety and Control Model](#safety-and-control-model)
 - [Technology Stack](#technology-stack)
 - [Repository Structure](#repository-structure)
@@ -51,7 +50,6 @@
 - [Command Line Reference & Usage](#command-line-reference)
 - [Run Capture & Debugging](#run-capture--debugging)
 - [Scheduler](#scheduler)
-- [Operational Data Model](#operational-data-model)
 - [Runtime Artifacts](#runtime-artifacts)
 - [Testing](#test-coverage-by-domain)
 - [Performance & Cost Control](#progressive-cost-control)
@@ -76,98 +74,116 @@
 
 ## Key Features
 
-- **AI Job Discovery:** Broad, resilient search matrix capturing roles from Naukri, Indeed, LinkedIn, and Google (via JobSpy).
-- **Multi-stage Classification:** Cascading filters that drop bad fits early (deterministic rejections) before utilizing LLMs for deep scoring.
-- **AI Ranking:** Candidate-grounded fit scoring assessing stack overlap, transition-role viability, and seniority constraints.
+- **AI Job Discovery & Providers:** Broad, resilient search matrix capturing roles from Naukri and JobSpy (Indeed, LinkedIn, Google) with provider health safeguards.
+- **Multi-stage Classification:** Cascading filters that drop bad fits early (deterministic rejections) before utilizing LLMs for deep scoring (`LLM Reviewed`).
+- **AI Ranking & Post-Score Guard:** Candidate-grounded fit scoring assessing stack overlap, transition-role viability, seniority constraints, score normalization, and Posting Age Policy filtering.
+- **Decision Ledger:** SQLite WAL-backed authoritative decision ledger tracking candidate qualification, job lifecycle, terminal state accounting, and full audit trails.
 - **Application Routing:** Intelligent dispatch of jobs to the correct engine (Naukri Native, ATS handler, or External Fallback).
-- **Provider Abstraction:** Unified interface supporting multiple job boards seamlessly.
+- **Provider Architecture:** Unified interface supporting multiple job board providers seamlessly.
 - **Manual Review Queue:** Intercepts ambiguous roles or complex applications for human review.
 - **ATS Detection:** Prevents dead-ends by detecting and routing specific Applicant Tracking Systems.
-- **Live Pipeline:** Real-time execution with lock management, crash recovery, and dry-run safety modes.
-- **Event-driven Architecture:** Decoupled execution model utilizing a robust internal Event Bus.
-- **React Operations Console:** A unified command center to control pipelines, review jobs, and analyze funnels.
-- **Analytics:** Granular funnel conversion tracking, response velocity, and subtrack performance reporting.
-- **Search Intelligence:** Cache visualization and provider acquisition breakdowns.
-- **Pipeline Explorer:** Deep dive into the decision history and state of specific runs.
-- **Job Trace:** End-to-end debugging of a single job's lifecycle from discovery to application outcome.
-- **SQLite Cache:** Persistent job ledger and search caching to avoid redundant operations and network bans.
-- **Resume Profiles:** Configurable candidate profile injection for hybrid questionnaire resolution.
-- **Multi-provider Ready:** Extensible backend designed to support additional boards.
-- **Rich Observability:** Comprehensive logging, run artifacts, diagnostics, and metric aggregation.
+- **Live Pipeline & Intelligence:** Real-time execution with lock management, crash recovery, dry-run safety modes, and thread-safe telemetry projections.
+- **Event-driven Architecture & Observability:** Decoupled execution model utilizing a robust internal Event Bus and immutable JSON run artifacts.
+- **Career Workflow Operations Console:** A unified 16-surface React command center to control pipelines, inspect the Decision Ledger, explore runs, and audit system components.
+- **Pipeline Intelligence:** Granular funnel conversion tracking, response velocity, LLM cost analysis, and subtrack performance reporting.
+- **Pipeline Explorer:** Interactive deep dive into decision trees, stage timelines, execution manifests, and state histories of specific runs.
+- **Audit System:** Automated multi-phase diagnostic framework generating markdown reports for components, AI integration, and application policies.
+- **SQLite Cache & Deduplication:** Persistent job ledger, vacancy fingerprinting, and search caching to avoid redundant operations and network bans.
+- **Resume Profiles & Candidate Architecture:** Single candidate profile injection for automated resume routing and hybrid questionnaire resolution.
+- **InferenceRouter & Cost Control:** Dynamic LLM token budget management and provider inference routing.
 
 ---
 
 ## Screenshots
 
-<p align="center">
-  <img src="assets/screenshot_jobs.png" alt="Jobs Workspace" width="48%" />
-  <img src="assets/screenshot_inbox.png" alt="Inbox" width="48%" />
-</p>
-<p align="center">
-  <em>Left: <strong>Jobs Workspace</strong> showing classified inventory. Right: <strong>Inbox</strong> for lifecycle tracking.</em>
-</p>
-
-<p align="center">
-  <img src="assets/screenshot_pipeline.png" alt="Pipeline Control" width="48%" />
-  <img src="assets/screenshot_health.png" alt="Pipeline Health" width="48%" />
-</p>
-<p align="center">
-  <em>Left: <strong>Pipeline Control</strong> for live/dry-run execution. Right: <strong>Pipeline Health</strong> and diagnostics.</em>
-</p>
-
-<p align="center">
-  <img src="assets/screenshot_analytics.png" alt="Analytics" width="48%" />
-  <img src="assets/screenshot_search_intel.png" alt="Search Intelligence" width="48%" />
-</p>
-<p align="center">
-  <em>Left: <strong>Analytics</strong> covering funnel conversion. Right: <strong>Search Intelligence</strong> showing acquisition sources.</em>
-</p>
-
-<p align="center">
-  <img src="assets/screenshot_runs.png" alt="Runs" width="48%" />
-  <img src="assets/screenshot_dark_mode.png" alt="Dark Mode" width="48%" />
-</p>
-<p align="center">
-  <em>Left: <strong>Run Inspector</strong> for artifact history. Right: Native <strong>Dark Mode</strong> support.</em>
-</p>
+<details>
+  <summary><strong>📷 Click to expand the Career Workflow Operations Console Screenshot Gallery</strong></summary>
+  <br>
+  <p align="center">
+    <img src="assets/screenshot_overview.png" alt="Career Workflow Operations Console - Overview" width="95%" />
+    <br>
+    <em><strong>Overview Dashboard</strong>: High-level operational metrics, active pipeline execution, and portfolio conversion.</em>
+  </p>
+  <hr>
+  <p align="center">
+    <img src="assets/screenshot_jobs.png" alt="Jobs Workspace" width="48%" />
+    <img src="assets/screenshot_inbox.png" alt="Inbox" width="48%" />
+  </p>
+  <p align="center">
+    <em>Left: <strong>Jobs Workspace</strong> showing classified inventory and score tiers. Right: <strong>Inbox / Manual Review</strong> for tracking lifecycle & manual actions.</em>
+  </p>
+  <hr>
+  <p align="center">
+    <img src="assets/screenshot_pipeline.png" alt="Pipeline Control" width="48%" />
+    <img src="assets/screenshot_health.png" alt="Pipeline Health" width="48%" />
+  </p>
+  <p align="center">
+    <em>Left: <strong>Pipeline Control</strong> for launching live or dry-run executions. Right: <strong>System Health</strong> and preflight diagnostics.</em>
+  </p>
+  <hr>
+  <p align="center">
+    <img src="assets/screenshot_analytics.png" alt="Pipeline Intelligence" width="48%" />
+    <img src="assets/screenshot_search_intel.png" alt="Providers & Search Intelligence" width="48%" />
+  </p>
+  <p align="center">
+    <em>Left: <strong>Pipeline Intelligence & Analytics</strong> covering funnel conversion. Right: <strong>Providers & Search Intelligence</strong> showing source acquisition breakdowns.</em>
+  </p>
+  <hr>
+  <p align="center">
+    <img src="assets/screenshot_runs.png" alt="Pipeline Explorer & Runs" width="48%" />
+    <img src="assets/screenshot_dark_mode.png" alt="Dark Mode" width="48%" />
+  </p>
+  <p align="center">
+    <em>Left: <strong>Pipeline Explorer & Run Inspector</strong> for deep artifact inspection. Right: Native <strong>Dark Mode</strong> theme across all pages.</em>
+  </p>
+</details>
 
 ---
 
 ## System Overview
 
-Career Workflow is a closed-loop job application orchestration system that combines resilient job discovery, candidate-aware qualification, policy-controlled selection, application execution, questionnaire resolution, lifecycle tracking, funnel analytics, and evidence-gated strategy adaptation.
+Career Workflow is a closed-loop job application orchestration system that combines resilient job discovery across multiple **Providers**, candidate-aware qualification (`LLM Reviewed`), policy-controlled selection, application execution, questionnaire resolution, lifecycle tracking, funnel analytics, and evidence-gated strategy adaptation.
 
-A React-based enterprise operations console sits above these systems, providing one interface for pipeline execution, application operations, run inspection, lifecycle analytics, and runtime diagnostics without replacing the underlying ledger, artifact, or policy layers.
+The **Career Workflow Operations Console** (a modern 16-surface React application) sits above these core systems, providing a single operational control plane for pipeline execution, **Decision Ledger** inspection, **Pipeline Explorer** run debugging, system auditing, and runtime diagnostics without compromising underlying ledger integrity or policy boundaries.
 
 ```mermaid
 flowchart TB
 
-UI["React Operations Console"]
-API["FastAPI Control Plane"]
+UI["Career Workflow Operations Console"]
+API["FastAPI Control Plane & Routers"]
 PIPE["Pipeline Orchestrator"]
 
-SEARCH["Job Acquisition"]
-CLASS["Classification & Ranking"]
-APPLY["Application Engine"]
-RESOLVE["Questionnaire Resolution"]
+PROVIDERS["Job Providers (Naukri, JobSpy)"]
+SEARCH["Acquisition Orchestrator"]
+CLASS["Classification & LLM Reviewed Scoring"]
+PSG["Post-Score Guard & Posting Age Policy"]
+SELECT["Selection & Diversity Engine"]
+APPLY["Application Engine & Router"]
+RESOLVE["Questionnaire Resolver"]
 
-LEDGER[("SQLite Ledger")]
-ANALYTICS["Analytics & Reporting"]
+LEDGER[("Decision Ledger (SQLite WAL)")]
+INTEL["Pipeline Intelligence & Analytics"]
+EXPLORE["Pipeline Explorer & Audit"]
 
 UI --> API
 API --> PIPE
 
-PIPE --> SEARCH
-PIPE --> CLASS
-PIPE --> APPLY
-PIPE --> RESOLVE
+PIPE --> PROVIDERS
+PROVIDERS --> SEARCH
+SEARCH --> CLASS
+CLASS --> PSG
+PSG --> SELECT
+SELECT --> APPLY
+APPLY --> RESOLVE
 
 SEARCH --> LEDGER
 CLASS --> LEDGER
+SELECT --> LEDGER
 APPLY --> LEDGER
 RESOLVE --> LEDGER
 
-LEDGER --> ANALYTICS
+LEDGER --> INTEL
+LEDGER --> EXPLORE
 ```
 
 ### Daily Operations
@@ -178,10 +194,12 @@ flowchart LR
 
 Overview["Overview Dashboard"]
 --> Jobs["Jobs Workspace"]
---> Inbox["Inbox"]
+--> Ledger["Decision Ledger"]
+--> Applications["Applications Inbox"]
 --> Pipeline["Pipeline Control"]
---> Runs["Runs Inspector"]
---> Analytics["Analytics"]
+--> Intelligence["Pipeline Intelligence"]
+--> Explorer["Pipeline Explorer"]
+--> Audit["Audit System"]
 ```
 
 ### System at a Glance
@@ -189,26 +207,26 @@ Overview["Overview Dashboard"]
 | Layer | What it does | State |
 |---|---|:---:|
 | Authentication | Session login, bearer token, cookies, OTP/MFA | ✅ |
-| Search | Multi-query, multi-experience, paginated API acquisition | ✅ |
+| Providers | Multi-provider acquisition matrix (Naukri API, JobSpy: Indeed / LinkedIn / Google) | ✅ |
 | Search termination | Empty-page, partial-page, repeated-page and challenge stop conditions | ✅ |
 | Resilience | Search cache, challenge detection, cooldown, partial-result preservation and fallback | ✅ |
 | Classification | AI relevance, title quality, red flags, candidate fit and transition-role compatibility | ✅ |
 | Work-mode policy | Remote-anywhere; office/hybrid/unknown only when Pune-compatible | ✅ |
-| Ranking | LLM-assisted fit scoring, deterministic guards and score caching | ✅ |
-| Policy | Thresholds, duplicate prevention, run limits and dry-run controls | ✅ |
-| Diversity | Company, role-family and vacancy-fingerprint concentration control | ✅ |
-| Strategy | Evidence-gated adaptive thresholds and allocation | ✅ |
-| Execution | Direct application and questionnaire application flows | ✅ |
+| Job Age Policy | Deterministically rejects jobs older than configurable max age threshold (default 30 days) | ✅ |
+| Ranking & Scoring | Candidate-grounded `LLM Reviewed` fit scoring, Post-Score Guard normalization, and score caching | ✅ |
+| Selection Policy | Thresholds, duplicate prevention, run limits, and dry-run controls for **Selected** batching | ✅ |
+| Diversity Controls | Company, role-family and vacancy-fingerprint concentration control | ✅ |
+| InferenceRouter | Cost control, token budget management, and model routing | ✅ |
+| Execution | Direct application, ATS router, and questionnaire application flows | ✅ |
 | Resolution | Deterministic evidence + constraints + LLM fallback | ✅ |
-| Failure handling | Response interpretation, retry policy, terminal states | ✅ |
-| Ledger | SQLite state, event history, run summaries | ✅ |
+| Failure handling | Response interpretation, retry policy, terminal state accounting | ✅ |
+| Decision Ledger | Authoritative SQLite WAL state, transaction audit trail, run summaries | ✅ |
 | Monitoring | Server application-history reconciliation | ✅ |
 | Lifecycle | Submitted → Viewed → Shortlisted → Interview → Outcome | ✅ |
-| Analytics | Velocity, age, response time, funnel and segment performance | ✅ |
-| Control plane | React Operations Console for execution, inspection and workflow management | ✅ |
-| Pipeline operations | Dry-run/live launch controls, bounded execution and runtime inspection | ✅ |
-| Run inspection | Immutable artifact history, stage state and diagnostic evidence | ✅ |
-| System health | Runtime, storage, configuration and integration diagnostics | ✅ |
+| Pipeline Intelligence | Velocity, age, response time, funnel metrics, and subtrack performance | ✅ |
+| Pipeline Explorer | Stage timelines, decision tree history, execution manifests, and artifact inspection | ✅ |
+| Control plane | Career Workflow Operations Console (16 pages) for execution, inspection, and triage | ✅ |
+| System Health & Audit | Preflight diagnostics, runtime watchdog, database locks, and automated system audit reports | ✅ |
 | Automation | Daemon scheduler with runtime recovery, locking, heartbeat and interactive workstation mode | ✅ |
 | Runtime | Process state, lock management, recovery, watchdog and heartbeat | ✅ |
 | Observability | Stage metrics, rejection analytics, runtime artifacts and execution reports | ✅ |
@@ -219,50 +237,52 @@ Overview["Overview Dashboard"]
 
 ```mermaid
 flowchart TD
-    subgraph Discovery
-    S1[Naukri Search API] --> B[Acquisition Orchestrator]
-    S2[Recommended Jobs] --> B
-    S3[JobSpy: Indeed / LinkedIn / Google] --> B
+    subgraph Discovery ["Acquisition (Providers)"]
+    S1[Naukri Provider] --> B[Acquisition Orchestrator]
+    S2[JobSpy Provider: Indeed / LinkedIn / Google] --> B
     B --> C{Search Healthy?}
-    C -->|Yes| SR[Summary Ranking]
+    C -->|Yes| SR[Summary Ranking & Qualification]
     C -->|Challenge| E[Challenge Cooldown]
     E --> F[Search Cache Fallback]
     F --> SR
     end
 
-    subgraph Ranking
-    SR -->|Top 150| DF[Detail Fetch]
-    DF --> D[LLM Scoring]
-    D --> G[Ranked Pool]
+    subgraph Ranking ["Classification & LLM Reviewed Scoring"]
+    SR -->|Qualified| DF[Detail Fetch]
+    DF --> D[LLM Scoring & LLM Reviewed]
+    D --> PSG[Post-Score Guard & Posting Age Policy]
+    PSG --> G[Ranked Candidates Pool]
     end
 
-    subgraph Selection
+    subgraph Selection ["Selection & Diversity"]
     G --> H[Selection Strategy]
-    H --> I[Application Budget Limit]
-    I --> J[Ranked Application Batch]
+    H --> I[Application Budget & Diversity Controls]
+    I --> J[Selected Applications Batch]
     end
 
-    subgraph Application Router
+    subgraph Router ["Application Router"]
     J --> L[Application Router]
     end
 
-    subgraph Observability
-    L -.-> O[Job Decision Ledger (SQLite WAL)]
-    O -.-> P[Pipeline Intelligence CLI]
+    subgraph Observability ["Observability & Intelligence"]
+    L -.-> O[Decision Ledger (SQLite WAL)]
+    O -.-> P[Pipeline Intelligence]
+    O -.-> PE[Pipeline Explorer]
+    O -.-> AU[Audit System Engine]
     end
 
-    subgraph Application Engines
+    subgraph Engines ["Application Execution Engines"]
     L --> M{Application Type}
     M -->|Naukri Native| NAE[Naukri Engine]
     M -->|ATS Redirect| ATS[ATS Handler]
     M -->|External| EXT[External Engine]
 
     NAE --> Q[Questionnaire Resolver]
-    Q --> N[(Application Ledger SQLite)]
+    Q --> N[(Decision Ledger SQLite WAL)]
     end
 
-    subgraph Control Plane
-    UI[React Operations Console] --> API[FastAPI Server]
+    subgraph ControlPlane ["Control Plane"]
+    UI[Career Workflow Operations Console] --> API[FastAPI Control Plane & Routers]
     API --> N
     API --> B
     API --> L
@@ -453,44 +473,53 @@ Resolution combines candidate profile data, deterministic matching, allowed-answ
 
 The executor interprets application responses semantically rather than treating every HTTP response as a binary success or failure. Recognized outcomes include `Applied`, `AlreadyApplied`, `QuestionnaireRequired`, `RecoverableFailure`, `TerminalFailure`, and `ManualReview`.
 
-### 6. Persistent Application Ledger
+### 6. Decision Ledger
 
-The SQLite ledger (`data/application_ledger.db`) is the durable state layer of the system and the single source of truth for all application state, tracking scores, timestamps, acquisition sources, server statuses, and run summaries.
+The SQLite WAL decision ledger (`data/application_ledger.db`) is the authoritative state layer and single source of truth for all job decisions, candidate qualification scores, lifecycle stage transitions, acquisition sources, server statuses, terminal state accounting, and complete audit histories.
 
 ### 7. Server-Side Lifecycle Reconciliation
 
 Run `python monitor_applications.py` to reconcile outcomes. The monitor authenticates, fetches complete application history, normalizes server statuses (SUBMITTED → VIEWED → SHORTLISTED → INTERVIEW), reconciles existing ledger records, and prints lifecycle funnels.
 
-### 8. Application Intelligence
+### 8. Pipeline Intelligence & Audit System
 
-Run `python application_report.py` to generate metrics covering response rates, interview rates, application velocity, age distributions, and performance by priority and subtrack.
+**Pipeline Intelligence** projections (`src/orchestration/pipeline_intelligence.py`, `/intelligence`) compile real-time telemetry metrics covering conversion funnels, response velocity, priority breakdowns, role subtrack performance, and LLM token cost intelligence.
+
+The **Audit System** framework (`api/routers/audit.py`, `/audit`) provides automated diagnostic audits across system components, AI integrations, and application policies, generating actionable technical Markdown reports.
 
 ---
 
-## Operations Control Plane
+## Career Workflow Operations Console
 
-Career Workflow includes a React-based operations console for running and inspecting the application system without collapsing operational state into a collection of terminal commands.
+Career Workflow includes a modern React-based operations console for running, monitoring, and inspecting the application system without collapsing operational state into a collection of raw terminal commands.
 
-### Operational surfaces
+### Operational Surfaces (16 Dedicated Pages)
 
-| Surface | Purpose |
-|---|---|
-| **Command Center** | Single-screen operational overview of process truth, artifact state, throughput, execution progression and recent runs. |
-| **Pipeline** | Configure, launch and inspect dry-run or live pipeline executions. |
-| **Jobs** | Inspect acquired and classified job inventory. |
-| **Applications** | Browse application portfolio and lifecycle state. |
-| **Manual / Review Queue** | Manage manually sourced opportunities and inspect unresolved automated shortlists. |
-| **Analytics** | Inspect lifecycle conversion, response velocity, priority performance and subtrack performance. |
-| **Run Inspector** | Examine immutable run artifacts and execution evidence. |
-| **System Health** | Run preflight diagnostics across runtime, storage and integration dependencies. |
-| **Settings** | Inspect operational configuration and runtime policy. |
+| Surface | Route | Purpose |
+|---|---|---|
+| **Overview Dashboard** | `/dashboard` | High-level operational overview of process state, artifact metadata, throughput, execution progression, and recent runs. |
+| **Pipeline Control** | `/pipeline` | Configure, launch, and inspect live or dry-run pipeline executions in real time. |
+| **Jobs Workspace** | `/jobs` | Search, filter, and inspect acquired and classified job inventory across qualification tiers. |
+| **Decision Ledger** | `/ledger` | Transaction-safe view of all job decisions, score breakdowns, status transitions, and audit records. |
+| **Applications** | `/applications` | Complete application portfolio management and lifecycle tracking (Submitted → Interview). |
+| **Inbox / Manual Review** | `/inbox` | Triage manually sourced opportunities and inspect unresolved automated shortlists. |
+| **Pipeline Intelligence** | `/intelligence` | Funnel conversion charts, response velocity, subtrack breakdown, and LLM token cost analysis. |
+| **Pipeline Explorer** | `/explorer` | Deep-dive into specific run decision trees, stage execution timelines, and detailed job state. |
+| **Audit System** | `/audit` | Automated diagnostic framework generating system component, AI integration, and policy reports. |
+| **Run Inspector** | `/runs` | Examine immutable run artifacts, execution manifests, git commit state, and raw logs. |
+| **System Health** | `/system` | Preflight diagnostics across runtime, storage, database locks, API endpoints, and dependencies. |
+| **Configuration** | `/configuration` | Inspect operational configuration, search strategies, posting age threshold, and policy settings. |
+| **Providers** | `/providers` | Provider status, health indicators, rate limits, and acquisition breakdowns (Naukri, JobSpy). |
+| **Logs Viewer** | `/logs` | Real-time streaming and searching of pipeline execution and backend API server logs. |
+| **Metrics** | `/metrics` | Quantitative throughput and conversion visualizations. |
+| **Developer Tools** | `/developer` | API schema documentation, endpoint inspection, and integration diagnostic utilities. |
 
-### State semantics
+### State Semantics
 
 The control plane distinguishes three different kinds of truth:
 1. **PROCESS STATE**: what the launcher-owned process is doing now
 2. **ARTIFACT STATE**: what the latest immutable run artifact records
-3. **PORTFOLIO STATE**: what the persistent application ledger records over time
+3. **PORTFOLIO STATE**: what the persistent decision ledger records over time
 
 ---
 
@@ -508,7 +537,7 @@ flowchart TD
     F --> G[Execution]
     G --> H[Response Interpretation]
     H --> I[Retry Budget]
-    I --> J[Persistent Ledger]
+    I --> J[Decision Ledger]
 ```
 
 ---
@@ -520,10 +549,10 @@ flowchart TD
 | Component | Technology | Purpose |
 |---|---|---|
 | Core Language | Python 3.10+ | Orchestration and execution logic |
-| API Layer | FastAPI | Serves data to the Operations Console |
+| API Layer | FastAPI | Serves data & routes to the Operations Console |
 | Server | Uvicorn | ASGI web server |
 | Scraping / Automation | Playwright / JobSpy | Provider integration and headless browsing |
-| State Management | SQLite | Persistent ledger for jobs, analytics, and lifecycle |
+| State Management | SQLite WAL Mode | Authoritative Decision Ledger for jobs, analytics, and lifecycle |
 
 ### Frontend
 
@@ -545,10 +574,16 @@ flowchart TD
 .
 ├── CHANGELOG.md
 ├── README.md
-├── api/                            # FastAPI backend for the Operations Console
+├── api/                            # FastAPI backend & routers for Operations Console
 │   ├── main.py
 │   ├── routes.py
-│   └── schemas.py
+│   ├── schemas.py
+│   └── routers/                    # Dedicated router modules
+│       ├── audit.py
+│       ├── developer.py
+│       ├── ledger.py
+│       ├── logs.py
+│       └── providers.py
 ├── application_report.py
 ├── apply_agent.py
 ├── assets/                         # Documentation screenshots and static assets
@@ -562,35 +597,39 @@ flowchart TD
 │   ├── runner.py
 │   ├── run_inspector.py
 │   └── ...
-├── data/                           # SQLite database (ledger, queues, caches)
-│   ├── application_ledger.db
+├── data/                           # SQLite database (Decision Ledger, queues, caches)
+│   ├── application_ledger.db       # Authoritative SQLite WAL Decision Ledger
 │   ├── job_search_cache.json
 │   └── score_cache.json
-├── docs/                           # Extended technical documentation
+├── docs/                           # Extended technical documentation & audit reports
 ├── frontend/                       # Modern React + Vite operations console
 │   ├── package.json
 │   ├── src/
-│   └── vite.config.ts
+│   │   ├── components/
+│   │   ├── hooks/                  # Custom React hooks (useLedger, useAudit, etc.)
+│   │   ├── pages/                  # 16 dedicated control plane surfaces
+│   │   └── vite.config.ts
 ├── monitor_applications.py         # External lifecycle reconciliation script
-├── pyproject.toml
+├── pyproject.toml                  # PEP 517/518 build packaging & cw CLI declaration
 ├── requirements.txt
 ├── run_pipeline.py                 # Internal execution entrypoint
-├── run_scheduler.py                # Daemon mode execution
+├── run_scheduler.py                # Daemon & interactive mode execution
 ├── src/
 │   ├── acquisition/                # JobSpy & provider integrations
 │   ├── application/                # Routing, execution, queues, and policy
-│   ├── client/                     # Session management and job classifiers
+│   ├── cli/                        # Typer unified CLI (`cw run`, `cw doctor`, etc.)
+│   ├── client/                     # Session management, job classifier & age policy
 │   ├── config/                     # Core system config
 │   ├── exceptions/                 # Custom error models
-│   ├── llm/                        # LLM clients and schemas
+│   ├── llm/                        # InferenceRouter, LLM clients, and schemas
 │   ├── models/                     # Shared data models
-│   ├── orchestration/              # Pipeline events, runtime, and stages
+│   ├── orchestration/              # Pipeline events, runtime, intelligence & Decision Ledger
 │   ├── resolution/                 # Hybrid questionnaire resolvers
 │   ├── search/                     # Job search caching and challenges
 │   ├── state/                      # SQLite handlers and schemas
 │   └── utils/                      # Telemetry and helper functions
-├── tests/                          # Pytest suite
-└── tools/                          # CLI utilities (diagnostics, backfills)
+├── tests/                          # 500+ Pytest suite across 5 domains
+└── tools/                          # CLI utilities (diagnostics, backfills, factory reset)
 ```
 
 ---
@@ -869,7 +908,7 @@ python run_scheduler.py --interactive --session-hours 2
 
 ---
 
-## Operational Data Model
+## Decision Ledger Data Model
 
 ```mermaid
 erDiagram
@@ -916,10 +955,10 @@ Typical local runtime state:
 
 | Artifact | Purpose |
 |---|---|
-| `application_ledger.db` | Authoritative application and lifecycle state |
-| `job_search_cache.json` | Search resilience fallback |
-| `score_cache.json` | Reuse previous scoring results |
-| `questionnaire_telemetry.csv` | Resolution diagnostics |
+| `application_ledger.db` | Authoritative **Decision Ledger** (SQLite WAL mode) for job decisions, candidate qualification, and lifecycle state |
+| `job_search_cache.json` | Search resilience fallback and provider cache |
+| `score_cache.json` | LLM score caching and fingerprint store |
+| `questionnaire_telemetry.csv` | Hybrid questionnaire resolution diagnostics |
 | `responses/` | Raw and unresolved API response captures |
 
 ### Pipeline Artifacts (`artifacts/runs/<run_id>/`)
@@ -927,10 +966,10 @@ Typical local runtime state:
 | Artifact | Purpose |
 |---|---|
 | `manifest.json` | Run metadata, identifiers, timestamps, execution mode, and overall status |
-| `timeline.json` | Stage execution timeline, durations, and performance metrics |
+| `timeline.json` | Stage execution timeline, stage metrics, durations, and performance benchmarks |
 | `environment.json` | Effective runtime configuration, policies, providers, and execution context |
 | `diagnostics.json` | Preflight checks, runtime diagnostics, validation results, and system health |
-| `pipeline.log` *(planned)* | Complete terminal output for the run, captured alongside the run artifacts for forensic debugging |
+| `pipeline.log` | Complete terminal output stream captured alongside run artifacts for forensic debugging |
 | `classification.json` | Classification stage metrics, AI evaluation summary, and rejection breakdown |
 | `selection.json` | Selection stage metrics, policy decisions, and application eligibility summary |
 | `application.json` | Application execution metrics, routing decisions, submission results, and failures |
@@ -949,9 +988,11 @@ The repository contains a domain-organized test suite.
 
 ```text
 tests/
+├── acquisition/    provider health, JobSpy integration, merge & normalization
 ├── application/    policy, strategy, lifecycle, ledger, analytics, execution
-├── client/         login, session, history, direct application flows
-├── llm/            local client, schemas, LLM resolver
+├── client/         login, session, history, posting age policy, direct flows
+├── llm/            local client, schemas, InferenceRouter, LLM resolver
+├── orchestration/  Decision Ledger, Pipeline Intelligence, Pipeline Explorer
 ├── resolution/     constraints, hybrid resolution, telemetry, serialization
 └── search/         acquisition, cache, challenge handling, cooldown
 ```
@@ -959,14 +1000,15 @@ tests/
 
 Complete validation:
 ```bash
-python -m pytest
+rm -f data/ui_runtime/pipeline.lock && pytest
 ```
 
 Current validation status:
-- 480+ backend tests passing
+- **500+ backend tests passing** (509 active unit & integration tests)
 - Scheduler runtime tests passing
 - Interactive scheduler tests passing
-- Application tests passing
+- Decision Ledger & Pipeline Explorer tests passing
+- Provider & JobSpy integration tests passing
 
 ---
 
@@ -1124,9 +1166,13 @@ timeline
 - [x] resilient multi-query acquisition with caching, challenge detection and cooldown handling
 - [x] candidate-aware classification, scoring, location policy, selection and diversity controls
 - [x] hybrid deterministic and local-LLM questionnaire resolution
-- [x] persistent application ledger, lifecycle tracking and server-history reconciliation
-- [x] funnel analytics, response metrics and evidence-gated adaptive strategy
-- [x] React operations console for pipeline execution, portfolio inspection and actionable workflow triage
+- [x] persistent Decision Ledger (SQLite WAL), lifecycle tracking and server-history reconciliation
+- [x] Pipeline Intelligence funnel analytics, response metrics and evidence-gated strategy
+- [x] Career Workflow Operations Console (16 surfaces) for pipeline execution, Decision Ledger inspection, and workflow triage
+- [x] Pipeline Explorer for stage execution timelines, decision trees, and artifact inspection
+- [x] Automated System Audit framework generating component, AI integration, and policy diagnostic reports
+- [x] Multi-provider architecture (Naukri, JobSpy) with runtime health tracking and degradation safeguards
+- [x] InferenceRouter for LLM cost controls, Post-Score Guard output normalization, and Job Posting Age Policy filtering
 - [x] daemon scheduler with runtime locking and recovery
 
 ### Next Operational Phase

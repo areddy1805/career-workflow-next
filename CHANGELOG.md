@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [1.1.0] - 2026-07-24
+
+### Career Workflow Operations Console Overhaul, Decision Ledger & Pipeline Intelligence
+
+#### Added
+- **Decision Ledger Infrastructure**: Implemented SQLite WAL-backed authoritative `Decision Ledger` (`src/orchestration/job_decision_ledger.py`, `/ledger`) with full transaction tracing, status transition auditing, and queryable search/filtering APIs.
+- **Pipeline Intelligence & Explorer**: Introduced `Pipeline Intelligence` telemetry projections (`src/orchestration/pipeline_intelligence.py`, `/intelligence`) and `Pipeline Explorer` (`src/orchestration/pipeline_explorer.py`, `/explorer`) for interactive run decision trees, stage execution timelines, and diagnostic inspection.
+- **Automated System Auditing Framework**: Built comprehensive system audit engine (`api/routers/audit.py`, `/audit`) that runs multi-phase diagnostics across components, AI integration, and application policies, outputting structured technical Markdown reports.
+- **16-Surface Operations Console**: Expanded the React operations console with 16 dedicated pages (`Overview`, `Pipeline`, `Jobs`, `Decision Ledger`, `Applications`, `Inbox`, `Intelligence`, `Explorer`, `Audit`, `Runs`, `System Health`, `Configuration`, `Providers`, `Logs`, `Metrics`, `Developer Tools`).
+- **Custom React Hooks**: Added modular frontend hooks (`useLedger`, `useAudit`, `usePipelineExplorer`, `useSystemHealth`, `useConfiguration`, `useProviders`) with automatic API data synchronization.
+- **Posting Age Policy**: Integrated configurable job freshness threshold filtering (`JOB_POSTING_MAX_AGE_DAYS`, default 30 days) to deterministically reject stale job postings before evaluation (`src/client/posting_age_policy.py`).
+- **Post-Score Guard**: Added output validation and score normalization guard (`src/orchestration/post_score_guard.py`) for AI candidate fit scoring outputs (`LLM Reviewed`).
+- **InferenceRouter & Token Cost Control**: Introduced `InferenceRouter` and `InferenceService` (`src/llm/inference_router.py`) to manage LLM API costs, token budgets, and provider inference routing efficiently.
+- **Single Candidate Architecture**: Consolidated search profile architecture into standard candidate categories with automated resume routing.
+- **Multi-Provider Health Safeguards**: Added provider health monitoring and automatic degradation safeguards to prevent failing search providers from stalling execution runs.
+
+#### Changed
+- **API Routing Architecture**: Refactored backend into modular FastAPI routers (`api/routers/audit.py`, `ledger.py`, `providers.py`, `logs.py`, `developer.py`).
+- **Data Fetching & State Synchronization**: Replaced monolithic component state fetching in React with clean, isolated custom hooks and React Query refetching.
+- **Terminology Synchronization**: Standardized system terminology across code, APIs, UI, and documentation (`Career Workflow Operations Console`, `Decision Ledger`, `Pipeline Intelligence`, `Pipeline Explorer`, `LLM Reviewed`, `Detail Fetch`, `Qualified`, `Selected`, `Applications`, `Providers`).
+
+#### Fixed
+- **Duplicate Rejection Accounting**: Resolved terminal state duplicate tracking bug in rejected jobs accounting.
+- **Pipeline Lock Cleanup**: Fixed lock file handling to support clean process recovery without manual lock file removal.
+- **Test Mode Telemetry**: Ensured test mode execution properly records metric projections without mutating production database tables.
+
 ## [1.0.0-RC2] - 2026-07-23
 
 ### Unified CLI, Packaging Overhaul & Production Diagnostics

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "career-workflow"
-version = "1.0.0-rc1"
+version = "1.1.0"
 description = "Policy-Driven AI Job Discovery, Qualification, and Application Orchestration Engine"
 
 [project.scripts]
