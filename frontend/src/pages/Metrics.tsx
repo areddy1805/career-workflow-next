@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchRuns, fetchDashboard } from '@/lib/api';
+import { useRuns, useDashboard } from '@/lib/hooks';
 import {
   ResponsiveContainer,
   BarChart,
@@ -69,15 +68,8 @@ function KpiCard({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
-  const { data: runs = [], isLoading: runsLoading } = useQuery({
-    queryKey: ['runs'],
-    queryFn: fetchRuns,
-  });
-
-  const { data: dashboard, isLoading: dashLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
-  });
+  const { data: runs = [], isLoading: runsLoading } = useRuns();
+  const { data: dashboard, isLoading: dashLoading } = useDashboard();
 
   const isLoading = runsLoading || dashLoading;
 

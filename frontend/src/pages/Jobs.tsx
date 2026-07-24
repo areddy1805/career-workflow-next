@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchJobs, fetchJobDetails, transitionQueueJob, moveQueueJob } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { transitionQueueJob, moveQueueJob } from '@/lib/api';
+import { useJobs, useJobDetails } from '@/lib/hooks';
 import {
   useReactTable,
   getCoreRowModel,
@@ -65,22 +66,23 @@ function scoreColor(score: number | null | undefined) {
 // ─── Column human-readable names ──────────────────────────────────────────────
 const COLUMN_LABELS: Record<string, string> = {
   select:          'Select',
-  status:          'Status',
   company:         'Company',
   title:           'Title',
-  score:           'AI Score',
+  provider:        'Provider',
   location:        'Location',
-  source:          'Source',
-  last_updated_at: 'Last Updated',
+  posting_age:     'Posting Age',
+  score:           'Score',
+  decision:        'Decision',
+  pipeline_stage:  'Pipeline Stage',
+  reason:          'Reason',
+  resume:          'Resume',
+  applied:         'Applied',
   actions:         'Actions',
 };
 
 export default function Jobs() {
   const queryClient = useQueryClient();
-  const { data: jobs = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['jobs'],
-    queryFn: fetchJobs,
-  });
+  const { data: jobs = [], isLoading, refetch, isFetching } = useJobs();
 
   // Persisted state
   const { sorting, columnVisibility, setSorting, setColumnVisibility } = useJobStore();
@@ -94,11 +96,7 @@ export default function Jobs() {
   const [jsonDialogData, setJsonDialogData]    = useState<any>(null);
 
   // Query for details
-  const { data: jobDetails, isLoading: detailsLoading } = useQuery({
-    queryKey: ['job', selectedJobId],
-    queryFn: () => fetchJobDetails(selectedJobId!),
-    enabled: !!selectedJobId,
-  });
+  const { data: jobDetails, isLoading: detailsLoading } = useJobDetails(selectedJobId!);
 
   // Apply saved view filter
   const applyView = useCallback((viewId: ViewId) => {
@@ -137,69 +135,77 @@ export default function Jobs() {
       enableResizing: false,
     },
     {
-      accessorKey: 'status',
-      header: 'Status',
-      size: 110,
-      cell: ({ row }: any) => <StatusBadge status={row.getValue('status') ?? 'UNKNOWN'} />,
-    },
-    {
       accessorKey: 'company',
       header: 'Company',
-      size: 150,
-      cell: ({ row }: any) => (
-        <span className="truncate block" title={row.getValue('company')}>
-          {row.getValue('company')}
-        </span>
-      ),
+      size: 130,
+      cell: ({ row }: any) => <span className="truncate block" title={row.getValue('company')}>{row.getValue('company')}</span>,
     },
     {
       accessorKey: 'title',
       header: 'Title',
-      size: 260,
-      cell: ({ row }: any) => (
-        <span className="truncate block" title={row.getValue('title')}>
-          {row.getValue('title')}
-        </span>
-      ),
+      size: 200,
+      cell: ({ row }: any) => <span className="truncate block font-medium" title={row.getValue('title')}>{row.getValue('title')}</span>,
     },
     {
-      accessorKey: 'score',
-      header: 'Score',
-      size: 72,
-      cell: ({ row }: any) => {
-        const s = row.getValue('score') as number | null;
-        if (activeView === 'high-score' && s != null && s < 70) return null;
-        return (
-          <span className={cn('font-mono font-semibold text-xs tabular-nums', scoreColor(s))}>
-            {s ?? '—'}
-          </span>
-        );
-      },
+      accessorKey: 'provider',
+      header: 'Provider',
+      size: 100,
+      cell: ({ row }: any) => <span className="font-mono text-[10px] text-muted-foreground">{row.getValue('provider') ?? row.original.source}</span>,
     },
     {
       accessorKey: 'location',
       header: 'Location',
-      size: 140,
-      cell: ({ row }: any) => (
-        <span className="truncate block text-muted-foreground" title={row.getValue('location')}>
-          {row.getValue('location') ?? '—'}
-        </span>
-      ),
+      size: 120,
+      cell: ({ row }: any) => <span className="truncate block text-muted-foreground text-xs" title={row.getValue('location')}>{row.getValue('location') ?? '—'}</span>,
     },
     {
-      accessorKey: 'source',
-      header: 'Source',
-      size: 110,
-      cell: ({ row }: any) => (
-        <span className="font-mono text-[10px] text-muted-foreground">{row.getValue('source')}</span>
-      ),
+      accessorKey: 'posting_age',
+      header: 'Age',
+      size: 60,
+      cell: ({ row }: any) => <span className="text-xs text-muted-foreground">{row.getValue('posting_age') ?? '—'}</span>,
     },
     {
-      accessorKey: 'last_updated_at',
-      header: 'Updated',
-      size: 110,
+      accessorKey: 'score',
+      header: 'Score',
+      size: 60,
+      cell: ({ row }: any) => {
+        const s = row.getValue('score') as number | null;
+        if (activeView === 'high-score' && s != null && s < 70) return null;
+        return <span className={cn('font-mono font-semibold text-xs tabular-nums', scoreColor(s))}>{s ?? '—'}</span>;
+      },
+    },
+    {
+      accessorKey: 'decision',
+      header: 'Decision',
+      size: 100,
+      cell: ({ row }: any) => <StatusBadge status={row.getValue('decision') ?? row.original.status ?? 'UNKNOWN'} />,
+    },
+    {
+      accessorKey: 'pipeline_stage',
+      header: 'Stage',
+      size: 100,
+      cell: ({ row }: any) => <span className="text-xs font-medium text-muted-foreground uppercase">{row.getValue('pipeline_stage') ?? '—'}</span>,
+    },
+    {
+      accessorKey: 'reason',
+      header: 'Reason',
+      size: 150,
+      cell: ({ row }: any) => <span className="truncate block text-[10px] text-muted-foreground" title={row.getValue('reason')}>{row.getValue('reason') ?? '—'}</span>,
+    },
+    {
+      accessorKey: 'resume',
+      header: 'Resume',
+      size: 100,
+      cell: ({ row }: any) => <span className="truncate block text-[10px] text-muted-foreground">{row.getValue('resume') ?? '—'}</span>,
+    },
+    {
+      accessorKey: 'applied',
+      header: 'Applied',
+      size: 80,
       cell: ({ row }: any) => (
-        <RelativeTime date={row.getValue('last_updated_at')} className="text-muted-foreground text-xs" />
+        row.getValue('applied') ? (
+          <RelativeTime date={row.getValue('applied')} className="text-muted-foreground text-xs" />
+        ) : <span className="text-muted-foreground text-xs">—</span>
       ),
     },
     {

@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchDashboard } from '@/lib/api';
+import { useDashboard } from '@/lib/hooks';
 import { StatusBadge } from '@/components/StatusBadge';
 import { RelativeTime } from '@/components/RelativeTime';
 import {
@@ -361,11 +360,7 @@ function OverviewSkeleton() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
-    refetchInterval: 30_000,
-  });
+  const { data: dashboard, isLoading } = useDashboard();
 
   if (isLoading) return <OverviewSkeleton />;
 

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
-  fetchManualReviewQueue,
-  fetchExternalApplyQueue,
-  fetchOtherActionQueue,
-} from '@/lib/api';
+  useManualReviewQueue,
+  useExternalApplyQueue,
+  useOtherActionQueue,
+} from '@/lib/hooks';
 import { cn, formatSalary } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { JobDrawer } from '@/components/JobDrawer';
@@ -13,10 +12,10 @@ import { Button } from '@/components/ui/button';
 
 type TabId = 'manual-review' | 'external-apply' | 'other-action';
 
-const TABS: Array<{ id: TabId; label: string; queryKey: string; fetchFn: any }> = [
-  { id: 'manual-review',  label: 'Manual Review',  queryKey: 'manual-review',  fetchFn: fetchManualReviewQueue  },
-  { id: 'external-apply', label: 'ATS Required',   queryKey: 'external-apply', fetchFn: fetchExternalApplyQueue },
-  { id: 'other-action',   label: 'Needs Attention',queryKey: 'other-action',   fetchFn: fetchOtherActionQueue   },
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'manual-review',  label: 'Manual Review' },
+  { id: 'external-apply', label: 'ATS Required' },
+  { id: 'other-action',   label: 'Needs Attention' },
 ];
 
 
@@ -26,9 +25,9 @@ export default function Queues() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
   // Pre-fetch all tab counts for display
-  const mrData  = useQuery({ queryKey: ['queue', 'manual-review'],  queryFn: fetchManualReviewQueue,  staleTime: 30_000 });
-  const eaData  = useQuery({ queryKey: ['queue', 'external-apply'], queryFn: fetchExternalApplyQueue, staleTime: 30_000 });
-  const oaData  = useQuery({ queryKey: ['queue', 'other-action'],   queryFn: fetchOtherActionQueue,   staleTime: 30_000 });
+  const mrData  = useManualReviewQueue();
+  const eaData  = useExternalApplyQueue();
+  const oaData  = useOtherActionQueue();
 
   const mrItems = (mrData.data as any)?.items?.length ?? null;
   const eaItems = (eaData.data as any)?.items?.length ?? null;

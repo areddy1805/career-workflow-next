@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPipelineState, launchPipeline } from '@/lib/api';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { launchPipeline } from '@/lib/api';
+import { usePipelineState } from '@/lib/hooks';
 import { Play, AlertTriangle, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RelativeTime } from '@/components/RelativeTime';
@@ -21,11 +22,7 @@ export default function Pipeline() {
   const logEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['pipeline_state'],
-    queryFn: fetchPipelineState,
-    refetchInterval: query => (query.state.data?.running ? 2000 : 8000),
-  });
+  const { data, isLoading, error } = usePipelineState();
 
   const launchMutation = useMutation({
     mutationFn: launchPipeline,

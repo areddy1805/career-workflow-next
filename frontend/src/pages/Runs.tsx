@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchRuns } from '@/lib/api';
+import { useRuns } from '@/lib/hooks';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -20,10 +19,7 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function Runs() {
-  const { data: runs = [], isLoading } = useQuery({
-    queryKey: ['runs'],
-    queryFn: fetchRuns,
-  });
+  const { data: runs = [], isLoading } = useRuns();
 
   const [selectedRun, setSelectedRun] = useState<any | null>(null);
 
@@ -170,6 +166,14 @@ export default function Runs() {
                     </div>
                   </div>
                 )}
+                
+                <div className="pt-4 border-t border-border/40">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Actions</p>
+                  <div className="flex flex-col gap-2">
+                    <a href={`/explorer?runId=${selectedRun.run_id}`} className="text-xs text-primary hover:underline block">Open in Explorer ↗</a>
+                    <a href={`/api/runs/${selectedRun.run_id}/artifacts/zip`} className="text-xs text-muted-foreground hover:text-foreground hover:underline block" target="_blank" rel="noopener noreferrer">Download Artifacts (ZIP) ↗</a>
+                  </div>
+                </div>
               </div>
             )}
           </ScrollArea>

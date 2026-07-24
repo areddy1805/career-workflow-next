@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchSearchIntelligence, fetchDashboard } from '@/lib/api';
+import { useIntelligence, useDashboard } from '@/lib/hooks';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
@@ -259,15 +258,8 @@ function QueryBrowser({ queries }: { queries: any[] }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Search() {
-  const { data, isLoading: siLoading } = useQuery({
-    queryKey: ['search_intelligence'],
-    queryFn: fetchSearchIntelligence,
-  });
-
-  const { data: dashboard, isLoading: dashLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
-  });
+  const { data, isLoading: siLoading } = useIntelligence();
+  const { data: dashboard, isLoading: dashLoading } = useDashboard();
 
   const isLoading = siLoading || dashLoading;
 

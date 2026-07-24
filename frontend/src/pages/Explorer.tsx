@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchArtifacts, fetchRunArtifactsList, fetchRunArtifactContent } from '@/lib/api';
+import { useArtifacts, useRunArtifacts, useRunArtifactContent } from '@/lib/hooks';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -23,28 +22,16 @@ function FileIcon({ name }: { name: string }) {
 }
 
 export default function Artifacts() {
-  const { data: artifacts = [], isLoading } = useQuery({
-    queryKey: ['artifacts'],
-    queryFn: fetchArtifacts,
-  });
-
+  const { data: artifacts = [], isLoading } = useArtifacts();
   const { theme } = usePreferences();
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   // Load file list for selected run
-  const { data: runDetail, isLoading: runDetailLoading } = useQuery({
-    queryKey: ['run-artifacts', selectedRunId],
-    queryFn: () => fetchRunArtifactsList(selectedRunId!),
-    enabled: !!selectedRunId,
-  });
+  const { data: runDetail, isLoading: runDetailLoading } = useRunArtifacts(selectedRunId || '');
 
   // Load content for selected file
-  const { data: fileContent, isLoading: fileLoading } = useQuery({
-    queryKey: ['run-artifact-content', selectedRunId, selectedFile],
-    queryFn: () => fetchRunArtifactContent(selectedRunId!, selectedFile!),
-    enabled: !!selectedRunId && !!selectedFile,
-  });
+  const { data: fileContent, isLoading: fileLoading } = useRunArtifactContent(selectedRunId || '', selectedFile || '');
 
   const fileList: Array<{ name: string; size_bytes: number; suffix: string }> = runDetail?.files || [];
 

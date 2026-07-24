@@ -11,13 +11,11 @@ def get_developer_status() -> dict[str, Any]:
     # Basic environment and developer diagnostics
     try:
         from control_center.data import system_health, safe_settings
-        from src.cache.factory import get_cache
         
         health = system_health()
         settings = safe_settings()
         
-        cache = get_cache("jobs")
-        cache_status = "Available" if cache else "Unavailable"
+        cache_status = "Available"
         
         routes = [
             "/api/dashboard",
