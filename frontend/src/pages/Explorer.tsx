@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchArtifacts, fetchRunArtifacts, fetchRunArtifactContent } from '@/lib/api';
+import { fetchArtifacts, fetchRunArtifactsList, fetchRunArtifactContent } from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -35,7 +35,7 @@ export default function Artifacts() {
   // Load file list for selected run
   const { data: runDetail, isLoading: runDetailLoading } = useQuery({
     queryKey: ['run-artifacts', selectedRunId],
-    queryFn: () => fetchRunArtifacts(selectedRunId!),
+    queryFn: () => fetchRunArtifactsList(selectedRunId!),
     enabled: !!selectedRunId,
   });
 

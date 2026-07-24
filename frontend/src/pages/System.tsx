@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchRuntime } from '@/lib/api';
+import { fetchSystem } from '@/lib/api';
 import { Activity, Server, Clock, Lock, Cpu, CheckCircle, AlertCircle } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { RelativeTime } from '@/components/RelativeTime';
@@ -62,7 +62,7 @@ function AliveIndicator({ alive }: { alive: boolean | undefined }) {
 export default function Runtime() {
   const { data: runtime, isLoading } = useQuery({
     queryKey: ['runtime'],
-    queryFn: fetchRuntime,
+    queryFn: fetchSystem,
     refetchInterval: 3000,
   });
 
@@ -77,7 +77,13 @@ export default function Runtime() {
     );
   }
 
-  const { scheduler, pipeline, ui, latest_run_details } = runtime ?? {};
+  const data: any = runtime || {};
+  const {
+    scheduler = {},
+    pipeline = {},
+    ui = {},
+    latest_run_details = {}
+  } = data;
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">

@@ -18,14 +18,20 @@ import { fetchManualReviewQueue, fetchExternalApplyQueue } from '@/lib/api';
 
 import Dashboard from '@/pages/Dashboard';
 import Jobs from '@/pages/Jobs';
-import Runs from '@/pages/Runs';
-import Runtime from '@/pages/Runtime';
-import Artifacts from '@/pages/Artifacts';
-import Analytics from '@/pages/Analytics';
-import AppSettings from '@/pages/Settings';
 import Pipeline from '@/pages/Pipeline';
-import Queues from '@/pages/Queues';
-import SearchPage from '@/pages/Search';
+import Runs from '@/pages/Runs';
+import Ledger from '@/pages/Ledger';
+import Applications from '@/pages/Applications';
+import Intelligence from '@/pages/Intelligence';
+import Explorer from '@/pages/Explorer';
+import Metrics from '@/pages/Metrics';
+import Audit from '@/pages/Audit';
+import Configuration from '@/pages/Configuration';
+import Logs from '@/pages/Logs';
+import Providers from '@/pages/Providers';
+import System from '@/pages/System';
+import Developer from '@/pages/Developer';
+import About from '@/pages/About';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -42,23 +48,35 @@ const NAV_GROUPS = [
     items: [
       { name: 'Overview',   path: '/',          icon: LayoutDashboard },
       { name: 'Jobs',       path: '/jobs',      icon: Briefcase       },
-      { name: 'Inbox',      path: '/queues',    icon: Inbox, badge: true },
+      { name: 'Pipeline',   path: '/pipeline',  icon: Play            },
+      { name: 'Runs',       path: '/runs',      icon: PlaySquare      },
     ],
   },
   {
-    label: 'Pipeline',
+    label: 'Intelligence & Ledger',
     items: [
-      { name: 'Pipeline',   path: '/pipeline',  icon: Play    },
-      { name: 'Runs',       path: '/runs',      icon: PlaySquare },
-      { name: 'Runtime',    path: '/runtime',   icon: Server  },
+      { name: 'Decision Ledger',    path: '/ledger',        icon: Inbox, badge: true },
+      { name: 'Applications',       path: '/applications',  icon: Inbox },
+      { name: 'Intelligence',       path: '/intelligence',  icon: Search },
+      { name: 'Explorer',           path: '/explorer',      icon: FileJson },
     ],
   },
   {
-    label: 'Intelligence',
+    label: 'Telemetry & System',
     items: [
-      { name: 'Analytics',          path: '/analytics', icon: BarChart2 },
-      { name: 'Search Intelligence', path: '/search',    icon: Search    },
-      { name: 'Artifacts',          path: '/artifacts', icon: FileJson  },
+      { name: 'Metrics',    path: '/metrics',   icon: BarChart2 },
+      { name: 'Audit',      path: '/audit',     icon: Search },
+      { name: 'Configuration', path: '/config', icon: Settings },
+      { name: 'Logs',       path: '/logs',      icon: FileJson },
+      { name: 'Providers',  path: '/providers', icon: Server },
+      { name: 'System',     path: '/system',    icon: Server },
+    ],
+  },
+  {
+    label: 'Platform',
+    items: [
+      { name: 'Developer',  path: '/developer', icon: Zap },
+      { name: 'About',      path: '/about',     icon: Inbox },
     ],
   },
 ];
@@ -370,16 +388,22 @@ function App() {
             <CommandMenu />
             <Layout>
               <Routes>
-                <Route path="/"          element={<Dashboard />} />
-                <Route path="/jobs"      element={<Jobs />} />
-                <Route path="/runs"      element={<Runs />} />
-                <Route path="/runtime"   element={<Runtime />} />
-                <Route path="/artifacts" element={<Artifacts />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/queues"    element={<Queues />} />
-                <Route path="/search"    element={<SearchPage />} />
-                <Route path="/settings"  element={<AppSettings />} />
-                <Route path="/pipeline"  element={<Pipeline />} />
+                <Route path="/"              element={<Dashboard />} />
+                <Route path="/jobs"          element={<Jobs />} />
+                <Route path="/pipeline"      element={<Pipeline />} />
+                <Route path="/runs"          element={<Runs />} />
+                <Route path="/ledger"        element={<Ledger />} />
+                <Route path="/applications"  element={<Applications />} />
+                <Route path="/intelligence"  element={<Intelligence />} />
+                <Route path="/explorer"      element={<Explorer />} />
+                <Route path="/metrics"       element={<Metrics />} />
+                <Route path="/audit"         element={<Audit />} />
+                <Route path="/config"        element={<Configuration />} />
+                <Route path="/logs"          element={<Logs />} />
+                <Route path="/providers"     element={<Providers />} />
+                <Route path="/system"        element={<System />} />
+                <Route path="/developer"     element={<Developer />} />
+                <Route path="/about"         element={<About />} />
               </Routes>
             </Layout>
           </Router>
