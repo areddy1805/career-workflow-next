@@ -1,0 +1,41 @@
+# config/ranking.yaml
+meta:
+  version: "1.0.0"
+  created: "2026-07-24"
+
+hard_filters:
+  - id: visa_required
+    field: work_authorization
+    condition: "equals"
+    value: "visa_required"
+    action: "REJECT"
+    reason: "Visa sponsorship required but candidate requires authorized employer"
+
+boosts:
+  - id: ai_boost
+    field: ai_score
+    threshold: 0.5
+    value: 15.0
+    reason: "Strong AI relevance boost"
+  - id: angular_boost
+    field: angular_score
+    threshold: 0.8
+    value: 10.0
+    reason: "High Angular skill match boost"
+
+penalties:
+  - id: java_only_penalty
+    field: backend_score
+    threshold: 0.2
+    value: -15.0
+    reason: "Low backend fit penalty"
+  - id: missing_salary_penalty
+    field: missing_salary
+    threshold: 0.5
+    value: -5.0
+    reason: "Missing salary information penalty"
+
+thresholds:
+  min_score_auto_apply: 80.0
+  min_score_llm_classify: 40.0
+  min_confidence_auto_bypass: 85.0

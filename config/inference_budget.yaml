@@ -1,0 +1,22 @@
+# config/inference_budget.yaml
+global_budget:
+  max_daily_cost_usd: 10.0
+  max_daily_tokens: 500000
+
+provider_budgets:
+  qwen:
+    max_daily_cost_usd: 5.0
+    max_daily_tokens: 250000
+  deepseek:
+    max_daily_cost_usd: 5.0
+    max_daily_tokens: 250000
+
+run_budget:
+  max_llm_calls_per_run: 200
+  max_tokens_per_run: 50000
+
+stage_budgets:
+  classification:
+    max_calls: 150
+  question_resolution:
+    max_calls: 50
