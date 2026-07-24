@@ -11,6 +11,12 @@ class SummaryScoringConfig:
 
 
 @dataclass
+class JobPolicyConfig:
+    max_posting_age_days: int = 30
+    reject_unknown_posting_age: bool = False
+
+
+@dataclass
 class SearchStrategyConfig:
     spray_and_pray: bool = True
     rank_before_fetch: bool = True
@@ -19,6 +25,7 @@ class SearchStrategyConfig:
     reject_walkins: bool = True
     reject_duplicates: bool = True
     summary_scoring: SummaryScoringConfig = field(default_factory=SummaryScoringConfig)
+    job_policy: JobPolicyConfig = field(default_factory=JobPolicyConfig)
 
 
 def load_search_strategy() -> SearchStrategyConfig:
@@ -36,6 +43,10 @@ def load_search_strategy() -> SearchStrategyConfig:
                 strategy_data["summary_scoring"] = SummaryScoringConfig(
                     **strategy_data["summary_scoring"]
                 )
+            
+            job_policy_data = data.get("job_policy", {})
+            strategy_data["job_policy"] = JobPolicyConfig(**job_policy_data)
+            
             return SearchStrategyConfig(**strategy_data)
     except Exception as e:
         print(f"Warning: Failed to load search strategy from {config_path}: {e}")

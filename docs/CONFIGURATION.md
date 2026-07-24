@@ -82,3 +82,8 @@ Provides ground-truth candidate background information (years of experience, tec
 
 ### 3.2 `config/candidate_profile.py`
 Defines candidate technical taxonomy, role titles, and technology keyword mappings for classification heuristic scoring.
+
+## Job Policy (`job_policy`)
+Configures threshold-based deterministic filtering.
+- `max_posting_age_days` (default 30): Rejects jobs strictly older than this threshold.
+- `reject_unknown_posting_age` (default false): Whether to reject jobs that lack a discernible posting date.

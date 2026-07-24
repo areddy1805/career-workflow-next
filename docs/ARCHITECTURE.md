@@ -136,3 +136,6 @@ The core architecture follows a **Staged Pipeline Pattern** decoupled from stora
 2. **DataFrame Isolation**: Pandas is restricted strictly within `JobSpyProvider` internal processing and never leaks into `src/orchestration` or `src/application`.
 3. **Strict Universal Links**: Raw URLs and direct apply links are preserved across all data transformations.
 4. **Idempotence**: Application ledger checks prevent duplicate applications to the same job posting ID across runs.
+
+### Posting Age Policy in Decision Ledger
+The posting age policy emits `POSTING_TOO_OLD` rejection reasons to the Decision Ledger, capturing the date, age, threshold, provider, and job fingerprint for auditability.

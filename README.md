@@ -403,6 +403,10 @@ deduplicate → hard vetoes → title-quality filter → company vetoes → AI r
 
 Location policy is asymmetric by design (e.g., Remote is eligible globally; Office/Hybrid is conservatively eligible only when locally compatible).
 
+### Posting Age Policy
+Jobs older than a configurable threshold (default 30 days) are deterministically rejected before application to avoid wasting resources on stale listings. See `job_policy` in `config/search_strategy.yaml`.
+
+
 ### 3. Policy and Diversity Engine
 
 The system does not let a ranking score directly trigger unlimited applications.

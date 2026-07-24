@@ -402,11 +402,14 @@ class JobFilterPipeline2:
         jobs = self.normalize_jobs(jobs)
         print("AFTER NORMALIZE:", len(jobs))
 
+        jobs = self.age_filter(jobs)
+        print("AFTER AGE FILTER:", len(jobs))
+
         jobs = self.dedup(jobs)
         print("AFTER DEDUP:", len(jobs))
 
-        jobs = self.hard_veto(jobs)
-        print("AFTER HARD VETO:", len(jobs))
+        jobs = self.impossible_filter(jobs)
+        print("AFTER IMPOSSIBLE FILTER:", len(jobs))
 
         # Experience is a soft penalty, but still hard rejects impossible roles.
         jobs = self.experience_filter(jobs)
@@ -496,19 +499,20 @@ class JobFilterPipeline2:
 
             # days old
             posted = (job.get("posted_date") or "").lower()
-            days_old = 7
-            if "today" in posted or "hour" in posted or "just now" in posted:
-                days_old = 0
-            elif "yesterday" in posted:
-                days_old = 1
-            else:
-                m = re.search(r"(\d+)\s*day", posted)
-                if m:
-                    days_old = int(m.group(1))
+            days_old = None
+            if posted:
+                if "today" in posted or "hour" in posted or "just now" in posted:
+                    days_old = 0
+                elif "yesterday" in posted:
+                    days_old = 1
                 else:
-                    m = re.search(r"(\d+)\s*week", posted)
+                    m = re.search(r"(\d+)\s*day", posted)
                     if m:
-                        days_old = int(m.group(1)) * 7
+                        days_old = int(m.group(1))
+                    else:
+                        m = re.search(r"(\d+)\s*week", posted)
+                        if m:
+                            days_old = int(m.group(1)) * 7
 
             # experience range
             exp = job.get("experience") or ""
@@ -557,6 +561,52 @@ class JobFilterPipeline2:
             )
 
         return normalized
+
+    # =========================================================
+    # AGE FILTER
+    # =========================================================
+    def age_filter(self, jobs):
+        from src.config.search_strategy import load_search_strategy
+        from src.orchestration.job_decision_ledger import compute_job_fingerprint
+        
+        strategy = load_search_strategy()
+        max_age = strategy.job_policy.max_posting_age_days
+        reject_unknown = strategy.job_policy.reject_unknown_posting_age
+
+        clean = []
+        for j in jobs:
+            days_old = j.get("days_old")
+            
+            if days_old is None:
+                if reject_unknown:
+                    posted_date = j.get("posted_date") or "unknown"
+                    provider = j.get("provider_name", "unknown")
+                    title = str(j.get("title") or "")
+                    company = str(j.get("company") or "")
+                    location = str(j.get("location") or "")
+                    fingerprint = compute_job_fingerprint(title, company, location)
+                    
+                    reason = f"Posting date: {posted_date}, Age: unknown, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
+                    self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
+                    if self.metrics:
+                        self.metrics.record_rejection("Posting Too Old")
+                    continue
+            elif days_old > max_age:
+                posted_date = j.get("posted_date") or "unknown"
+                provider = j.get("provider_name", "unknown")
+                title = str(j.get("title") or "")
+                company = str(j.get("company") or "")
+                location = str(j.get("location") or "")
+                fingerprint = compute_job_fingerprint(title, company, location)
+                
+                reason = f"Posting date: {posted_date}, Age: {days_old}, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
+                self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
+                if self.metrics:
+                    self.metrics.record_rejection("Posting Too Old")
+                continue
+                
+            clean.append(j)
+        return clean
 
     # =========================================================
     # DEDUP
@@ -985,7 +1035,8 @@ class JobFilterPipeline2:
             mandatory_hit = sum(1 for t in j.get("mandatory_tags", []) if t in my_stack)
             total_hit = len(tags & my_stack)
 
-            days_old = j.get("days_old", 7)
+            days_old_val = j.get("days_old")
+            days_old = days_old_val if days_old_val is not None else 7
             # Recency bonus: max 7 points (0 days old = 7, 7 days old = 0)
             recency_days = max(0, 7 - days_old)
 

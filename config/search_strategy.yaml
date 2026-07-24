@@ -123,3 +123,7 @@ acquisition:
               - "AI Engineer"
               - "Applied AI"
           negative_keywords: []
+
+job_policy:
+  max_posting_age_days: 30
+  reject_unknown_posting_age: false
