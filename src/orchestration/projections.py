@@ -95,6 +95,10 @@ class MetricsProjection:
     def get_metrics(self) -> Dict[str, int]:
         return self.metrics
 
+    def flush(self, run_dir: Path):
+        with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
+            json.dump(self.metrics, f, indent=2)
+
 
 class ExplorerProjection:
     def __init__(self, fingerprint: dict):

@@ -151,8 +151,10 @@ def test_run_artifacts_are_persisted(
     run_dir = tmp_path / result.run_id
 
     assert (run_dir / "run.json").exists()
-
     assert (run_dir / "result.json").exists()
+    assert (run_dir / "metrics.json").exists()
+    assert (run_dir / "manifest.json").exists()
+    assert (run_dir / "timeline.json").exists()
 
 
 def test_negative_application_limit_rejected(
@@ -200,3 +202,19 @@ def test_pipeline_result_exposes_complete_application_accounting(tmp_path):
         "manual_review",
     ):
         assert key in result
+
+
+def test_full_pipeline_persists_all_artifacts(tmp_path):
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=0, artifacts_root=tmp_path, test_mode=True)
+    result = pipeline.run()
+    run_dir = tmp_path / result.run_id
+
+    assert (run_dir / "run.json").exists()
+    assert (run_dir / "result.json").exists()
+    assert (run_dir / "metrics.json").exists()
+    assert (run_dir / "manifest.json").exists()
+    assert (run_dir / "timeline.json").exists()
+    assert (run_dir / "event_log.json").exists()
+    assert (run_dir / "job_trace.json").exists()
+    assert (run_dir / "pipeline_explorer.json").exists()
+

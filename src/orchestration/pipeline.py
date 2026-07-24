@@ -1313,6 +1313,7 @@ class CareerWorkflowPipeline:
             timezone.utc,
         )
 
+        self.metrics_proj.flush(self.run_dir)
         self.explorer_proj.flush(self.run_dir)
         self.trace_proj.flush(self.run_dir)
         
