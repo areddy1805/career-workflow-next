@@ -1,0 +1,19 @@
+llm:
+  default_provider: deepseek
+  fallback_provider: omlx
+
+providers:
+  deepseek:
+    enabled: true
+    model: deepseek-v4-flash
+    base_url: https://api.deepseek.com
+    timeout: 60
+    retries: 3
+    thinking:
+      enabled: false
+      reasoning_effort: high
+  omlx:
+    enabled: true
+    model: qwen3.5-4b
+    base_url: http://127.0.0.1:8000/v1
+    timeout: 120

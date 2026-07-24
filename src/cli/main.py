@@ -42,9 +42,17 @@ def run(
     acquisition_mode: str = typer.Option("full", "--acquisition-mode", help="Acquisition mode (full, incremental)"),
     canary: bool = typer.Option(False, "--canary", help="Force a live run to at most one application."),
     force_live: bool = typer.Option(False, "--force-live", help="Bypass search challenge cooldowns."),
-    provider: str = typer.Option("all", "--provider", help="Specify which acquisition providers to run.")
+    provider: str = typer.Option("all", "--provider", help="Specify which acquisition or inference provider to run."),
+    llm_provider: Optional[str] = typer.Option(None, "--llm-provider", help="Specify active inference provider (deepseek, omlx, etc.).")
 ):
     """Run the Career Workflow orchestration pipeline."""
+    target_llm = llm_provider
+    if not target_llm and provider in ["deepseek", "omlx"]:
+        target_llm = provider
+
+    if target_llm:
+        os.environ["LLM_PROVIDER"] = target_llm
+
     command = build_pipeline_command(
         live=live,
         max_applications=max_applications,
@@ -62,7 +70,8 @@ def run(
         "acquisition_mode": acquisition_mode,
         "canary": canary,
         "force_live": force_live,
-        "provider": provider
+        "provider": provider,
+        "llm_provider": target_llm
     }
     
     console.print(f"[bold green]Starting Pipeline Run[/bold green] (live={live})")

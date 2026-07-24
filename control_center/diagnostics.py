@@ -256,6 +256,30 @@ def collect_health_checks() -> list[dict[str, Any]]:
     # ── Queue ─────────────────────────────────────────────────────────
     checks.append(_check_queue_health())
 
+    # ── Inference Platform ───────────────────────────────────────────
+    try:
+        from src.inference.manager import ProviderManager
+        mgr = ProviderManager()
+        for pname in mgr.provider_chain:
+            prov = mgr.providers.get(pname)
+            if prov:
+                healthy = mgr.check_provider_health(pname)
+                status_str = "PASS" if healthy else "WARN"
+                detail_str = f"vendor={prov.vendor} model={prov.model_name} healthy={healthy}"
+                checks.append({
+                    "check": f"Inference Provider ({pname})",
+                    "status": status_str,
+                    "detail": detail_str,
+                    "required": False
+                })
+    except Exception as exc:
+        checks.append({
+            "check": "Inference Platform",
+            "status": "WARN",
+            "detail": f"Failed checking providers: {exc}",
+            "required": False
+        })
+
     # ── Misc ──────────────────────────────────────────────────────────
     checks.append(
         {
