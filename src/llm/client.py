@@ -166,8 +166,9 @@ class OMLXClient:
             # --- DEBUG LOGGING ---
             print("LLM RESPONSE", file=sys.stdout)
             print(f"HTTP Status: {response.status_code}", file=sys.stdout)
-            print(f"Response Headers: {response.headers}", file=sys.stdout)
-            www_auth = response.headers.get("WWW-Authenticate", "<missing>")
+            headers_dict = getattr(response, "headers", {})
+            print(f"Response Headers: {headers_dict}", file=sys.stdout)
+            www_auth = headers_dict.get("WWW-Authenticate", "<missing>") if hasattr(headers_dict, "get") else "<missing>"
             print(f"WWW-Authenticate: {www_auth}", file=sys.stdout)
             # ---------------------
 
@@ -185,14 +186,16 @@ class OMLXClient:
 
             # Read body only if headers were okay
             print("Reading response body", file=sys.stdout, flush=True)
-            response.read()
+            if hasattr(response, "read"):
+                response.read()
             print("Response body read", file=sys.stdout, flush=True)
             print("Parsing JSON", file=sys.stdout, flush=True)
             data = response.json()
             print("JSON parsed", file=sys.stdout, flush=True)
 
             # --- DEBUG LOGGING ---
-            print(f"Response Body Length: {len(response.content)}", file=sys.stdout)
+            content_bytes = getattr(response, "content", b"")
+            print(f"Response Body Length: {len(content_bytes)}", file=sys.stdout)
             print("-" * 36, file=sys.stdout)
             # ---------------------
 

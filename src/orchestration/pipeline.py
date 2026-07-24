@@ -1295,7 +1295,10 @@ class CareerWorkflowPipeline:
             self._update_global_pipeline_state(current_stage=None)
 
     def run(self) -> PipelineResult:
-        lock_path = os.getenv("PIPELINE_LOCK_PATH", "data/ui_runtime/pipeline.lock")
+        if self.artifacts_root and self.artifacts_root != Path("artifacts/runs"):
+            lock_path = str(self.artifacts_root / "pipeline.lock")
+        else:
+            lock_path = os.getenv("PIPELINE_LOCK_PATH", "data/ui_runtime/pipeline.lock")
         stale_minutes = int(os.getenv("PIPELINE_LOCK_STALE_MINUTES", "720"))
         with PipelineLock(lock_path, stale_after_minutes=stale_minutes):
             result = self._run_unlocked()
