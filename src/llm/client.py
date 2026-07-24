@@ -99,6 +99,7 @@ class OMLXClient:
         max_tokens: int = 500,
     ) -> str:
         import sys
+
         print("Generate() entered", file=sys.stdout, flush=True)
         print("Building payload", file=sys.stdout, flush=True)
         payload = {
@@ -144,9 +145,9 @@ class OMLXClient:
         print(f"Provider: OMLXClient", file=sys.stdout)
         print(f"Base URL: {self.base_url}", file=sys.stdout)
         print(f"Model: {self.model}", file=sys.stdout)
-        print(f"Authorization Header Present: {auth_present}", file=sys.stdout)
-        print(f"Authorization Scheme: {auth_scheme}", file=sys.stdout)
-        print(f"Authorization Value: {auth_val}", file=sys.stdout)
+        # print(f"Authorization Header Present: {auth_present}", file=sys.stdout)
+        # print(f"Authorization Scheme: {auth_scheme}", file=sys.stdout)
+        # print(f"Authorization Value: {auth_val}", file=sys.stdout)
         print(f"Final URL: {self.base_url}/chat/completions", file=sys.stdout)
         print(f"HTTP Method: POST", file=sys.stdout)
         print(f"Request Body Size: {len(str(payload))}", file=sys.stdout)
@@ -168,7 +169,11 @@ class OMLXClient:
             print(f"HTTP Status: {response.status_code}", file=sys.stdout)
             headers_dict = getattr(response, "headers", {})
             print(f"Response Headers: {headers_dict}", file=sys.stdout)
-            www_auth = headers_dict.get("WWW-Authenticate", "<missing>") if hasattr(headers_dict, "get") else "<missing>"
+            www_auth = (
+                headers_dict.get("WWW-Authenticate", "<missing>")
+                if hasattr(headers_dict, "get")
+                else "<missing>"
+            )
             print(f"WWW-Authenticate: {www_auth}", file=sys.stdout)
             # ---------------------
 

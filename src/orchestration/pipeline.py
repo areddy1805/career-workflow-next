@@ -593,9 +593,19 @@ class CareerWorkflowPipeline:
         jobs = enriched_candidates
         jobs = classifier.full_description_red_flag_check(jobs)
         jobs = classifier.location_work_mode_gate(jobs)
-        print(f"[PIPELINE DEBUG] About to enter ai_score_batch", file=sys.stderr, flush=True)
-        jobs = classifier.ai_score_batch(jobs)
+
+        # Release 3.1 Intelligent Deterministic Ranking Engine
+        from src.core.ranking.pipeline_integration import DeterministicPipelineRunner
+        runner = DeterministicPipelineRunner()
+        llm_candidates, auto_apply_candidates, deterministic_rejected = runner.process_jobs(jobs)
+
+        self.context.rejected_jobs.extend(deterministic_rejected)
+
+        print(f"[PIPELINE DEBUG] About to enter ai_score_batch with {len(llm_candidates)} LLM candidates (bypassed {len(auto_apply_candidates)})", file=sys.stderr, flush=True)
+        llm_scored_jobs = classifier.ai_score_batch(llm_candidates)
         print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
+
+        jobs = llm_scored_jobs + auto_apply_candidates
         jobs = classifier.post_score_guard(jobs)
         jobs = classifier.rank(jobs)
 
