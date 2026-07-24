@@ -1,7 +1,9 @@
 import json
 from typing import Any
 
-from src.llm.client import OMLXClient
+from src.inference.engine import InferenceEngine
+from src.inference.request import InferenceRequest
+import time
 from src.llm.schemas import LLMQuestionDecision
 from src.resolution.evidence_retriever import (
     retrieve_evidence,
@@ -363,10 +365,12 @@ You are a decision component inside an automated job application system.
 class LLMQuestionResolver:
     def __init__(
         self,
-        client: OMLXClient | None = None,
+        engine: InferenceEngine = None,
         confidence_threshold: float = 0.85,
     ):
-        self.client = client or OMLXClient()
+        # We allow engine to be passed in to share the run context.
+        # If None, it will be instantiated by the caller or we could instantiate a default.
+        self.engine = engine
         self.confidence_threshold = confidence_threshold
 
     def resolve(
@@ -407,20 +411,23 @@ Relevant candidate evidence:
 Return the JSON decision.
 """.strip()
 
-        raw_response = self.client.chat(
-            messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+        if not self.engine:
+            raise RuntimeError("InferenceEngine not provided to LLMQuestionResolver.")
+
+        request = InferenceRequest(
+            request_id=f"req_{int(time.time()*1000)}",
+            run_id="question_resolver_run",
+            caller="question_resolver",
+            trace_id=f"question_{hash(question_text)}",
+            category="question_resolver",
+            prompt=user_prompt,
+            system_prompt=SYSTEM_PROMPT,
             temperature=0.0,
-            max_tokens=500,
+            max_tokens=500
         )
+
+        response = self.engine.complete(request)
+        raw_response = response.raw_response
 
         decision = self._parse_decision(raw_response)
 

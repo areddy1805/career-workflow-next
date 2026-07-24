@@ -36,19 +36,17 @@ DIRECTORIES_TO_CLEAR = [
 FILES_TO_DELETE = [
     # SQLite Ledgers & Queues
     "data/application_ledger.db*",
+    "data/job_decision_ledger.db*",
     "data/workflow_queue.db*",
     "data/manual_jobs.db*",
-    
     # Caches
     "data/job_search_cache.json",
     "data/score_cache.json",
-    
     # Runtime & Diagnostics
     "data/manual_action_queue.json",
     "data/search_challenge_state.json",
     "data/provider_health_history.json",
     "data/questionnaire_telemetry.csv",
-    
     # Legacy State Files (may exist from older versions)
     "data/runtime_state.json",
     "data/scheduler_state.json",
@@ -75,6 +73,7 @@ PRESERVED_PATHS = [
     "config/search_strategy.yaml",
 ]
 
+
 def clear_directory(dir_path: Path) -> int:
     """Removes all contents of a directory but keeps the directory itself."""
     deleted_count = 0
@@ -92,23 +91,32 @@ def clear_directory(dir_path: Path) -> int:
             deleted_count += 1
         except Exception as e:
             print(f"Warning: Failed to delete {item}: {e}")
-            
+
     return deleted_count
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Factory Reset Utility for Career Workflow.")
-    parser.add_argument("--yes", action="store_true", help="Skip confirmation and execute immediately")
+    parser = argparse.ArgumentParser(
+        description="Factory Reset Utility for Career Workflow."
+    )
+    parser.add_argument(
+        "--yes", action="store_true", help="Skip confirmation and execute immediately"
+    )
     args = parser.parse_args()
 
     if not args.yes:
         print("⚠️  WARNING\n")
-        print("This operation will permanently delete all generated runtime state, caches,")
-        print("application history, logs, runtime artifacts, and other local runtime data.\n")
+        print(
+            "This operation will permanently delete all generated runtime state, caches,"
+        )
+        print(
+            "application history, logs, runtime artifacts, and other local runtime data.\n"
+        )
         print("Source code and configuration will NOT be modified.\n")
         print("To continue, type:\n")
         print("YES\n")
         print("or press Ctrl+C to abort.")
-        
+
         try:
             response = input("> ")
         except (KeyboardInterrupt, EOFError):
@@ -120,9 +128,9 @@ def main():
             sys.exit(0)
 
     print("\nExecuting Factory Reset...\n")
-    
+
     deleted_items = []
-    
+
     # 1. Clear contents of specific directories
     for dir_rel in DIRECTORIES_TO_CLEAR:
         dir_path = PROJECT_ROOT / dir_rel
@@ -130,7 +138,7 @@ def main():
             count = clear_directory(dir_path)
             if count > 0:
                 deleted_items.append(f"{dir_rel}/* ({count} items)")
-                
+
     # 2. Delete specific files and globs
     for file_pattern in FILES_TO_DELETE:
         pattern_path = str(PROJECT_ROOT / file_pattern)
@@ -150,11 +158,11 @@ def main():
             print(f"✓ {item}")
     else:
         print("- No runtime files found to delete.")
-        
+
     print("\nPreserved:")
     for item in PRESERVED_PATHS:
         print(f"✓ {item}")
-        
+
     # 4. Recreate Required Directories
     created_items = []
     for dir_rel in REQUIRED_DIRECTORIES:
@@ -165,13 +173,14 @@ def main():
                 created_items.append(f"{dir_rel}/")
             except Exception as e:
                 print(f"Warning: Failed to create directory {dir_rel}: {e}")
-                
+
     if created_items:
         print("\nCreated:")
         for item in created_items:
             print(f"✓ {item}")
 
     print("\nFactory reset complete.")
+
 
 if __name__ == "__main__":
     main()

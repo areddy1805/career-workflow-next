@@ -130,6 +130,8 @@ class CareerWorkflowPipeline:
         except Exception:
             pass
 
+        self.inference_service = InferenceService(cache_manager=self.context.cache_manager)
+
     @staticmethod
     def _generate_run_id() -> str:
         if env_id := os.getenv("CW_RUN_ID"):
@@ -530,8 +532,6 @@ class CareerWorkflowPipeline:
         jobs = self.context.acquired_jobs
         self.exec_context.start_stage("Classification", jobs)
 
-        self.inference_service = InferenceService(cache_manager=self.context.cache_manager)
-        
         classifier = JobFilterPipeline2(
             metrics=self.context.metrics,
             exec_context=self.exec_context,
@@ -980,17 +980,8 @@ class CareerWorkflowPipeline:
     def _build_questionnaire_resolver(
         self,
     ) -> HybridQuestionResolver:
-        model = os.getenv(
-            "QUESTIONNAIRE_LLM_MODEL",
-            "qwen3.5-4b",
-        )
-
-        client = OMLXClient(
-            model=model,
-        )
-
         llm_resolver = LLMQuestionResolver(
-            client=client,
+            engine=self.inference_service.engine,
         )
 
         return HybridQuestionResolver(
@@ -1327,6 +1318,10 @@ class CareerWorkflowPipeline:
         self.metrics_proj.flush(self.run_dir)
         self.explorer_proj.flush(self.run_dir)
         self.trace_proj.flush(self.run_dir)
+        
+        if hasattr(self, "inference_service") and hasattr(self.inference_service, "engine"):
+            metrics_snapshot = self.inference_service.engine.metrics.get_snapshot()
+            self._write_artifact("pipeline_intelligence.json", {"llm_inference": metrics_snapshot})
         
         try:
             PipelineExplorerRenderer(self.run_dir).render()

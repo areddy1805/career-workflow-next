@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS llm_cache (
     model TEXT NOT NULL,
     latency_ms REAL NOT NULL,
     tokens INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    category TEXT
 );
 
 CREATE TABLE IF NOT EXISTS embedding_cache (

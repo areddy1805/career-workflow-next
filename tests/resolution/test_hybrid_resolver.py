@@ -17,14 +17,7 @@ from src.resolution.hybrid_resolver import (
 MODEL = "qwen3.5-4b"
 
 
-client = OMLXClient(
-    model=MODEL,
-)
-
-
-llm_resolver = LLMQuestionResolver(
-    client=client,
-)
+llm_resolver = LLMQuestionResolver()
 
 
 resolver = HybridQuestionResolver(

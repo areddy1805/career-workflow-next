@@ -18,13 +18,7 @@ QUESTION_TEXTS = [
 
 
 def main() -> None:
-    client = OMLXClient(
-        model="qwen3.5-4b",
-    )
-
-    resolver = LLMQuestionResolver(
-        client=client,
-    )
+    resolver = LLMQuestionResolver()
 
     for question_text in QUESTION_TEXTS:
         question = {

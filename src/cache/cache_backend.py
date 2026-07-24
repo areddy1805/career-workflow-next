@@ -52,6 +52,17 @@ class SQLiteBackend(CacheBackend):
         conn = self._get_conn()
         conn.executescript(schema_script)
 
+        # Run ALTER TABLE migrations for existing databases
+        try:
+            conn.execute("ALTER TABLE llm_cache ADD COLUMN expires_at TIMESTAMP")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            conn.execute("ALTER TABLE llm_cache ADD COLUMN category TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     def get(self, table: str, key_col: str, key_val: str) -> Optional[Dict[str, Any]]:
         conn = self._get_conn()
         cursor = conn.execute(f"SELECT * FROM {table} WHERE {key_col} = ?", (key_val,))

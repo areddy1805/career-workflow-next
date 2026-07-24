@@ -1,0 +1,6 @@
+features:
+  inference_engine: true
+  l1_cache: true
+  l2_cache: true
+  telemetry: true
+  cache_metrics: true

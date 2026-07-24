@@ -1,0 +1,12 @@
+cache:
+  enabled: true
+  l1:
+    enabled: true
+    max_size: 1000
+    ttl_seconds: 3600
+  l2:
+    enabled: true
+  question_answer:
+    ttl_days: 90
+  ai_score:
+    ttl_days: 30

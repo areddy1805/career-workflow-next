@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Tuple
 
 from src.cache.cache_manager import CacheManager
 from src.llm.client import OMLXClient, CircuitBreakerOpenException
+from src.inference.request import InferenceRequest as NewInferenceRequest
+from src.inference.engine import InferenceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +20,7 @@ class TaskProfile:
     cache: str      # "aggressive", "normal", "none"
 
 @dataclass
-class InferenceRequest:
+class LegacyInferenceRequest:
     task: TaskProfile
     prompt: str
     system_prompt: str = ""
@@ -100,9 +102,9 @@ class InferenceRouter:
         self.fallback_client = fallback_client
         self.telemetry = telemetry or CostTelemetry()
 
-    def complete(self, request: InferenceRequest) -> Tuple[dict, str]:
+    def complete(self, request: NewInferenceRequest) -> Tuple[dict, str, dict]:
         
-        estimated_cost = 0.001 if request.task.reasoning == "high" else 0.0005
+        estimated_cost = 0.001 if request.category == "ai_score" else 0.0005
         
         messages = []
         if request.system_prompt:
@@ -123,11 +125,20 @@ class InferenceRouter:
                 self.budget_manager.add_spend(cost)
                 self.telemetry.record_call(prompt_tokens, completion_tokens, latency, cost)
                 
+                
+                exec_metrics = {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": cost,
+                    "provider": "omlx",
+                    "model": "router_model"
+                }
+                
                 try:
                     parsed = json.loads(raw_response)
                 except json.JSONDecodeError:
                     parsed = {}
-                return parsed, raw_response
+                return parsed, raw_response, exec_metrics
             except Exception as e:
                 print(f"[InferenceRouter] Primary provider failed: {e}. Falling back...")
                 self.telemetry.record_failure()
@@ -139,11 +150,18 @@ class InferenceRouter:
             latency = (time.perf_counter() - start) * 1000
             self.telemetry.record_call(0, 0, latency, 0.0)
             
+            exec_metrics = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+                "provider": "omlx_fallback",
+                "model": "router_model"
+            }
             try:
                 parsed = json.loads(raw_response)
             except json.JSONDecodeError:
                 parsed = {}
-            return parsed, raw_response
+            return parsed, raw_response, exec_metrics
             
         raise RuntimeError("No available inference providers.")
 
@@ -161,39 +179,49 @@ class InferenceService:
         self.primary_client = OMLXClient() if os.getenv("OMLX_API_KEY") else None
         self.fallback_client = OMLXClient() # Assuming local defaults if no API key
         
+        import yaml
+        from pathlib import Path
+        root_dir = Path(__file__).resolve().parent.parent.parent
+        config = {}
+        try:
+            with open(root_dir / "config/features.yaml", "r") as f:
+                config.update(yaml.safe_load(f) or {})
+            with open(root_dir / "config/cache.yaml", "r") as f:
+                config.update(yaml.safe_load(f) or {})
+        except Exception as e:
+            logger.warning(f"Failed to load config: {e}")
+
         self.router = InferenceRouter(
             budget_manager=self.budget_manager,
             primary_client=self.primary_client,
             fallback_client=self.fallback_client,
             telemetry=self.telemetry
         )
+        self.engine = InferenceEngine(
+            router=self.router,
+            cache_manager=self.cache_manager,
+            config=config
+        )
+
         
     def classify_job(self, evidence: dict, prompt: str, system_prompt: str, context_hash: str) -> dict:
-        request = InferenceRequest(
-            task=TaskProfile(task_name="job_classification", reasoning="low", cache="aggressive"),
+        request = NewInferenceRequest(
+            request_id=f"req_{int(time.time()*1000)}",
+            run_id="legacy_run",
+            caller="job_classifier",
+            trace_id=context_hash,
+            category="ai_score",
             prompt=prompt,
             system_prompt=system_prompt,
-            evidence=evidence,
-            prompt_version="2",
-            evidence_version="1",
-            router_version="1",
-            context_hash=context_hash
+            metadata={
+                "evidence_version": "1",
+                "prompt_version": "2",
+                "router_version": "1",
+                "context_hash": context_hash
+            }
         )
         
-        cache_key = f"{request.context_hash}_{request.evidence_version}_{request.prompt_version}_{request.router_version}"
-        
-        if self.cache_manager and request.task.cache != "none":
-            start_lookup = time.perf_counter()
-            record = self.cache_manager.llm.get(cache_key)
-            self.cache_manager.track_lookup((time.perf_counter() - start_lookup) * 1000)
-            if record:
-                self.telemetry.record_cache_hit()
-                try:
-                    return json.loads(record["parsed_response"])
-                except Exception:
-                    pass
-                    
-        self.telemetry.record_cache_miss()
+
         
         max_retries = 2
         backoff_factor = 2.0
@@ -201,7 +229,9 @@ class InferenceService:
         
         for attempt in range(max_retries + 1):
             try:
-                parsed, raw_response = self.router.complete(request)
+                response = self.engine.complete(request)
+                parsed = response.parsed_response
+                raw_response = response.raw_response
                 break
             except CircuitBreakerOpenException as e:
                 logger.warning(f"LLM Circuit Breaker open: {e}. Skipping AI score for this job.")
@@ -218,29 +248,16 @@ class InferenceService:
         if not parsed:
             return {"decision": "LLM_SKIPPED", "llm_status": "SKIPPED", "llm_score": None, "reason": "UPSTREAM_UNAVAILABLE (Empty response)"}
             
-        if self.cache_manager and request.task.cache != "none":
-            start_save = time.perf_counter()
-            self.cache_manager.llm.set(
-                fingerprint=cache_key,
-                provider="router",
-                job_id=context_hash,
-                raw_response=raw_response,
-                parsed_response=json.dumps(parsed),
-                model="router_model",
-                latency_ms=0,
-                tokens=0
-            )
-            self.cache_manager.track_save((time.perf_counter() - start_save) * 1000)
-            
         return parsed
 
     def print_summary(self):
+        snapshot = self.engine.metrics.get_snapshot()
         print(f"\n--- Inference Summary ---")
-        print(f"Calls: {self.telemetry.calls}")
-        print(f"Cache Hits: {self.telemetry.cache_hits}")
-        print(f"Cache Misses: {self.telemetry.cache_misses}")
-        if self.telemetry.calls > 0:
-            print(f"Average Latency: {self.telemetry.latency_ms / self.telemetry.calls:.1f} ms")
-        print(f"Estimated Cost: ${self.telemetry.cost_usd:.4f}")
+        print(f"Calls: {snapshot['calls']}")
+        print(f"Cache Hits: {snapshot['cache_hits']}")
+        print(f"Cache Misses: {snapshot['cache_misses']}")
+        if snapshot['calls'] > 0:
+            print(f"Average Latency: {snapshot['latency_ms'] / snapshot['calls']:.1f} ms")
+        print(f"Estimated Cost: ${snapshot['cost_usd']:.4f}")
         print(f"Budget Remaining (Hourly): ${self.budget_manager.hourly_soft_limit_usd - self.budget_manager.current_hourly_spend:.4f}")
         print(f"-------------------------\n")
