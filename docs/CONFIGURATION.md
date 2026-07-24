@@ -48,8 +48,6 @@ Controls acquisition provider priority, JobSpy scraping sites, rate limits, and 
 ```yaml
 strategy:
   spray_and_pray: true
-  summary_fetch_budget: 500
-  detail_fetch_budget: 500
   application_budget: 500
   rank_before_fetch: true
 

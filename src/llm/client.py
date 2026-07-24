@@ -98,6 +98,9 @@ class OMLXClient:
         temperature: float = 0.0,
         max_tokens: int = 500,
     ) -> str:
+        import sys
+        print("Generate() entered", file=sys.stdout, flush=True)
+        print("Building payload", file=sys.stdout, flush=True)
         payload = {
             "model": self.model,
             "messages": messages,
@@ -150,46 +153,51 @@ class OMLXClient:
         print("-" * 36, file=sys.stdout)
         # ---------------------
 
+        print("Sending HTTP request", file=sys.stdout, flush=True)
         try:
-            with self.client.stream(
-                "POST",
+            response = self.client.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=self.timeout_seconds,
-            ) as response:
+            )
+            print("HTTP response received", file=sys.stdout, flush=True)
 
-                # --- DEBUG LOGGING ---
-                print("LLM RESPONSE", file=sys.stdout)
-                print(f"HTTP Status: {response.status_code}", file=sys.stdout)
-                print(f"Response Headers: {response.headers}", file=sys.stdout)
-                www_auth = response.headers.get("WWW-Authenticate", "<missing>")
-                print(f"WWW-Authenticate: {www_auth}", file=sys.stdout)
-                # ---------------------
+            # --- DEBUG LOGGING ---
+            print("LLM RESPONSE", file=sys.stdout)
+            print(f"HTTP Status: {response.status_code}", file=sys.stdout)
+            print(f"Response Headers: {response.headers}", file=sys.stdout)
+            www_auth = response.headers.get("WWW-Authenticate", "<missing>")
+            print(f"WWW-Authenticate: {www_auth}", file=sys.stdout)
+            # ---------------------
 
-                # Check for business logic errors before marking success
-                if response.status_code >= 400:
-                    state["consecutive_failures"] += 1
-                    if state["consecutive_failures"] >= state["breaker_threshold"]:
-                        state["circuit_open_until"] = (
-                            time.time() + state["breaker_cooldown_seconds"]
-                        )
-                        raise CircuitBreakerOpenException(
-                            f"Circuit breaker tripped for {self.base_url} due to consecutive HTTP {response.status_code} errors"
-                        )
-                    response.raise_for_status()
+            # Check for business logic errors before marking success
+            if response.status_code >= 400:
+                state["consecutive_failures"] += 1
+                if state["consecutive_failures"] >= state["breaker_threshold"]:
+                    state["circuit_open_until"] = (
+                        time.time() + state["breaker_cooldown_seconds"]
+                    )
+                    raise CircuitBreakerOpenException(
+                        f"Circuit breaker tripped for {self.base_url} due to consecutive HTTP {response.status_code} errors"
+                    )
+                response.raise_for_status()
 
-                # Read body only if headers were okay
-                response.read()
-                data = response.json()
+            # Read body only if headers were okay
+            print("Reading response body", file=sys.stdout, flush=True)
+            response.read()
+            print("Response body read", file=sys.stdout, flush=True)
+            print("Parsing JSON", file=sys.stdout, flush=True)
+            data = response.json()
+            print("JSON parsed", file=sys.stdout, flush=True)
 
-                # --- DEBUG LOGGING ---
-                print(f"Response Body Length: {len(response.content)}", file=sys.stdout)
-                print("-" * 36, file=sys.stdout)
-                # ---------------------
+            # --- DEBUG LOGGING ---
+            print(f"Response Body Length: {len(response.content)}", file=sys.stdout)
+            print("-" * 36, file=sys.stdout)
+            # ---------------------
 
-                # Reset circuit breaker on true success (2xx)
-                state["consecutive_failures"] = 0
+            # Reset circuit breaker on true success (2xx)
+            state["consecutive_failures"] = 0
 
         except httpx.HTTPError as exc:
             state["consecutive_failures"] += 1
@@ -209,7 +217,9 @@ class OMLXClient:
             ) from exc
 
         try:
+            print("Extracting message", file=sys.stdout, flush=True)
             content = data["choices"][0]["message"]["content"]
+            print("Message extracted", file=sys.stdout, flush=True)
 
         except (KeyError, IndexError, TypeError) as exc:
             raise OMLXClientError(
@@ -219,4 +229,5 @@ class OMLXClient:
         if not isinstance(content, str) or not content.strip():
             raise OMLXClientError("oMLX returned empty completion content")
 
+        print("Returning response", file=sys.stdout, flush=True)
         return content.strip()

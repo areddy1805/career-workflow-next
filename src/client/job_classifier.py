@@ -151,13 +151,55 @@ class JobFilterPipeline2:
     # ── IMPOSSIBLE FILTER (Data-Driven Domain Exclusions) ───────────────────
     # Reject ONLY things that are objectively impossible. Borderline/adjacent roles survive.
     IMPOSSIBLE_DOMAINS = {
-        "Healthcare": [r"\bdentist\b", r"\bdoctor\b", r"\bnurse\b", r"\bphysician\b", r"\bmedical officer\b", r"\bpharmacist\b"],
-        "Non-Software Engineering": [r"\bcivil\b", r"\bmechanical\b", r"\belectrical\b", r"\bchemical\b", r"\bstructural\b"],
-        "Finance/Accounting": [r"\baccountant\b", r"\bchartered accountant\b", r"\bca\b", r"\btax consultant\b", r"\bauditor\b"],
-        "Sales/Marketing": [r"\bsales executive\b", r"\bbusiness development executive\b", r"\breal estate sales\b", r"\btelecaller\b", r"\bbde\b", r"\bsales manager\b"],
-        "Legal/HR": [r"\blawyer\b", r"\battorney\b", r"\blegal counsel\b", r"\bhr recruiter\b", r"\btalent acquisition\b"],
-        "Legacy Systems": [r"\bsap payroll\b", r"\bmainframe cobol\b", r"\bpeoplesoft hcm\b"],
-        "Training/Entry": [r"\btutor\b", r"\btrainer\b", r"\bwalk-in\b", r"\bwalkin\b", r"\bwalk in\b"]
+        "Healthcare": [
+            r"\bdentist\b",
+            r"\bdoctor\b",
+            r"\bnurse\b",
+            r"\bphysician\b",
+            r"\bmedical officer\b",
+            r"\bpharmacist\b",
+        ],
+        "Non-Software Engineering": [
+            r"\bcivil\b",
+            r"\bmechanical\b",
+            r"\belectrical\b",
+            r"\bchemical\b",
+            r"\bstructural\b",
+        ],
+        "Finance/Accounting": [
+            r"\baccountant\b",
+            r"\bchartered accountant\b",
+            r"\bca\b",
+            r"\btax consultant\b",
+            r"\bauditor\b",
+        ],
+        "Sales/Marketing": [
+            r"\bsales executive\b",
+            r"\bbusiness development executive\b",
+            r"\breal estate sales\b",
+            r"\btelecaller\b",
+            r"\bbde\b",
+            r"\bsales manager\b",
+        ],
+        "Legal/HR": [
+            r"\blawyer\b",
+            r"\battorney\b",
+            r"\blegal counsel\b",
+            r"\bhr recruiter\b",
+            r"\btalent acquisition\b",
+        ],
+        "Legacy Systems": [
+            r"\bsap payroll\b",
+            r"\bmainframe cobol\b",
+            r"\bpeoplesoft hcm\b",
+        ],
+        "Training/Entry": [
+            r"\btutor\b",
+            r"\btrainer\b",
+            r"\bwalk-in\b",
+            r"\bwalkin\b",
+            r"\bwalk in\b",
+        ],
     }
 
     # Broad-coverage policy: company name never decides AI eligibility.
@@ -568,7 +610,7 @@ class JobFilterPipeline2:
     def age_filter(self, jobs):
         from src.config.search_strategy import load_search_strategy
         from src.orchestration.job_decision_ledger import compute_job_fingerprint
-        
+
         strategy = load_search_strategy()
         max_age = strategy.job_policy.max_posting_age_days
         reject_unknown = strategy.job_policy.reject_unknown_posting_age
@@ -576,7 +618,7 @@ class JobFilterPipeline2:
         clean = []
         for j in jobs:
             days_old = j.get("days_old")
-            
+
             if days_old is None:
                 if reject_unknown:
                     posted_date = j.get("posted_date") or "unknown"
@@ -585,7 +627,7 @@ class JobFilterPipeline2:
                     company = str(j.get("company") or "")
                     location = str(j.get("location") or "")
                     fingerprint = compute_job_fingerprint(title, company, location)
-                    
+
                     reason = f"Posting date: {posted_date}, Age: unknown, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
                     self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
                     if self.metrics:
@@ -598,13 +640,13 @@ class JobFilterPipeline2:
                 company = str(j.get("company") or "")
                 location = str(j.get("location") or "")
                 fingerprint = compute_job_fingerprint(title, company, location)
-                
+
                 reason = f"Posting date: {posted_date}, Age: {days_old}, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
                 self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
                 if self.metrics:
                     self.metrics.record_rejection("Posting Too Old")
                 continue
-                
+
             clean.append(j)
         return clean
 
@@ -620,15 +662,20 @@ class JobFilterPipeline2:
                 continue
             if job_id in seen:
                 continue
-                
+
             title = str(j.get("title") or "")
             company = str(j.get("company") or "")
             location = str(j.get("location") or "")
-            
+
             if self.exec_context and hasattr(self.exec_context, "ledger"):
-                if self.exec_context.ledger.is_duplicate_fingerprint(title, company, location):
+                if self.exec_context.ledger.is_duplicate_fingerprint(
+                    title, company, location
+                ):
                     self.record_decision(
-                        j, "Deduplication", "ALREADY_PROCESSED", "Job fingerprint found in active ledger decisions"
+                        j,
+                        "Deduplication",
+                        "ALREADY_PROCESSED",
+                        "Job fingerprint found in active ledger decisions",
                     )
                     if self.metrics:
                         self.metrics.record_rejection("Deduplication")
@@ -649,13 +696,16 @@ class JobFilterPipeline2:
             for domain, patterns in self.IMPOSSIBLE_DOMAINS.items():
                 if any(re.search(pattern, title) for pattern in patterns):
                     self.record_decision(
-                        j, "Impossible Filter", "OBJECTIVELY_INCOMPATIBLE", f"Title matched impossible domain: {domain}"
+                        j,
+                        "Impossible Filter",
+                        "OBJECTIVELY_INCOMPATIBLE",
+                        f"Title matched impossible domain: {domain}",
                     )
                     if self.metrics:
                         self.metrics.record_rejection("Impossible Filter")
                     rejected = True
                     break
-            
+
             if not rejected:
                 clean.append(j)
         return clean
@@ -1071,7 +1121,6 @@ class JobFilterPipeline2:
             guarded.append(job)
         return guarded
 
-
     def _job_text(self, job):
         return " ".join(
             [
@@ -1176,6 +1225,7 @@ class JobFilterPipeline2:
         Generic evaluator that bypasses LLM reasoning when structured evidence
         provides high confidence of a positive match.
         """
+
         @staticmethod
         def evaluate(features: dict, title: str) -> dict:
             # We aggregate signal strength across all extracted domains.
@@ -1183,26 +1233,30 @@ class JobFilterPipeline2:
             signal_strength += features.get("backend_hits", 0) * 1.0
             signal_strength += features.get("frontend_hits", 0) * 0.5
             signal_strength += features.get("ml_core_hits", 0) * 1.2
-            
+
             # Very strong single signals
             if features.get("ai_title"):
                 signal_strength += 5.0
             if features.get("fullstack_title"):
                 signal_strength += 3.0
-                
+
             if signal_strength >= 4.0:
                 return {
                     "status": "OBVIOUS_APPLY",
                     "decision": "APPLY",
                     "score": min(100, int(70 + signal_strength * 2)),
-                    "reason": f"High confidence deterministic match (signal strength: {signal_strength:.1f})"
+                    "reason": f"High confidence deterministic match (signal strength: {signal_strength:.1f})",
                 }
             return {"status": "NEEDS_REASONING"}
 
     # =========================================================
     # AI SCORING  — tags go in, score + reason come out
     # =========================================================
-    def ai_score_batch(self, jobs):
+    def ai_score_batch(self, jobs, timeout: float = 60.0, global_offset: int = 0):
+        import sys
+        import time
+        from datetime import datetime, timezone
+        print(f"Entering ai_score_batch (Total Jobs: {len(jobs)}, Timeout: {timeout}s)", file=sys.stdout, flush=True)
         result = []
         jobs_for_inference = []
 
@@ -1232,14 +1286,20 @@ class JobFilterPipeline2:
             "No markdown or extra text.\n"
         )
 
-        for job in jobs:
+        total_jobs = len(jobs)
+        for idx, job in enumerate(jobs, 1):
             jid = str(job.get("job_id") or "").strip()
             f = self._fit_features(job)
             title = (job.get("title") or "").lower()
-            
+            global_num = global_offset + idx
+
             if self.test_mode:
                 eval_result = self.EvidenceConfidenceEngine.evaluate(f, title)
-                score = eval_result.get("score", 70) if eval_result.get("status") == "OBVIOUS_APPLY" else 65
+                score = (
+                    eval_result.get("score", 70)
+                    if eval_result.get("status") == "OBVIOUS_APPLY"
+                    else 65
+                )
                 job["ai_decision"] = "APPLY"
                 job["ai_score"] = score
                 job["ai_reason"] = "Test mode deterministic score"
@@ -1249,16 +1309,20 @@ class JobFilterPipeline2:
                 )
                 result.append(job)
             else:
-                jobs_for_inference.append((job, f, title, jid))
-                
+                jobs_for_inference.append((idx, global_num, total_jobs, job, f, title, jid))
+
         if not self.test_mode and jobs_for_inference:
+
             def _process_inference(item):
-                job, f, title, jid = item
+                batch_num, global_num, total_in_batch, job, f, title, jid = item
+                import sys
+                raw_desc = (job.get("description") or "").strip()
+                raw_desc_len = len(raw_desc)
                 mandatory = ", ".join(job.get("mandatory_tags", [])) or "none"
                 optional = ", ".join(job.get("optional_tags", [])) or "none"
                 exp = f"{job.get('experience_min', 0)}-{job.get('experience_max', 10)} yrs"
-                description = (job.get("description") or "").strip()[:6000]
-                
+                description = raw_desc[:6000]
+
                 prompt = (
                     f"Job ID:      {job.get('job_id')}\n"
                     f"Title:       {job.get('title')}\n"
@@ -1268,32 +1332,94 @@ class JobFilterPipeline2:
                     f"Exp:         {exp}\n"
                     f"Full JD:\n{description}\n"
                 )
-                
-                context_hash = hashlib.md5(f"{job.get('provider_id', '')}:{jid}:{title}:{description}".encode('utf-8')).hexdigest()
-                
+                prompt_chars = len(prompt)
+                est_tokens = prompt_chars // 4
+
+                start_time_iso = datetime.now(timezone.utc).isoformat()
+                start_clock = time.perf_counter()
+
+                print(
+                    f"[JOB #{batch_num}/{total_in_batch} (Global #{global_num})] START - "
+                    f"ID: {jid} | Title: {job.get('title')} | Raw Desc: {raw_desc_len} chars | "
+                    f"Prompt: {prompt_chars} chars (~{est_tokens} tokens) | Time: {start_time_iso}",
+                    file=sys.stdout,
+                    flush=True,
+                )
+
+                context_hash = hashlib.md5(
+                    f"{job.get('provider_id', '')}:{jid}:{title}:{description}".encode(
+                        "utf-8"
+                    )
+                ).hexdigest()
+
                 parsed = self.inference_service.classify_job(
                     evidence=f,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    context_hash=context_hash
+                    context_hash=context_hash,
                 )
-                
+
+                duration_s = time.perf_counter() - start_clock
+                end_time_iso = datetime.now(timezone.utc).isoformat()
+
+                print(
+                    f"[JOB #{batch_num}/{total_in_batch} (Global #{global_num})] END - "
+                    f"ID: {jid} | Duration: {duration_s:.2f}s | Time: {end_time_iso}",
+                    file=sys.stdout,
+                    flush=True,
+                )
+
                 job["ai_decision"] = parsed.get("decision", "APPLY")
-                # Handle missing or explicitly None scores safely
-                score_val = parsed.get("llm_score") if "llm_score" in parsed else parsed.get("score", 50)
+                score_val = (
+                    parsed.get("llm_score")
+                    if "llm_score" in parsed
+                    else parsed.get("score", 50)
+                )
                 job["ai_score"] = score_val
-                job["ai_reason"] = parsed.get("reason", "Inference response missing reason")
+                job["ai_reason"] = parsed.get(
+                    "reason", "Inference response missing reason"
+                )
                 job["structured_evidence"] = f
-                
+
                 job.setdefault("decision_history", []).append(
-                    {"stage": "AI Score", "score": job["ai_score"], "decision": job["ai_decision"]}
+                    {
+                        "stage": "AI Score",
+                        "score": job["ai_score"],
+                        "decision": job["ai_decision"],
+                    }
                 )
                 return job
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(jobs_for_inference))) as executor:
-                scored_jobs = list(executor.map(_process_inference, jobs_for_inference))
-                result.extend(scored_jobs)
+            import sys
+            print(f"Creating ThreadPoolExecutor for {len(jobs_for_inference)} jobs...", file=sys.stdout, flush=True)
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(10, len(jobs_for_inference))
+            ) as executor:
+                futures = {}
+                for item in jobs_for_inference:
+                    batch_num, global_num, total_in_batch, job_obj, f, title, jid = item
+                    print(f"Submitting Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}", file=sys.stdout, flush=True)
+                    futures[executor.submit(_process_inference, item)] = item
 
+                print("Waiting for completed futures...", file=sys.stdout, flush=True)
+                completed_count = 0
+                failed_count = 0
+                for future in concurrent.futures.as_completed(futures):
+                    item = futures[future]
+                    batch_num, global_num, total_in_batch, job_obj, f, title, jid = item
+                    try:
+                        res = future.result(timeout=timeout)
+                        result.append(res)
+                        completed_count += 1
+                        print(f"Result acquired for Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} (Completed {completed_count}/{total_in_batch})", file=sys.stdout, flush=True)
+                    except concurrent.futures.TimeoutError:
+                        failed_count += 1
+                        print(f"[STALLED / TIMEOUT] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} timed out after {timeout}s!", file=sys.stdout, flush=True)
+                    except Exception as e:
+                        failed_count += 1
+                        print(f"[FAILED] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}: {e}", file=sys.stdout, flush=True)
+
+        print(f"Leaving ai_score_batch (Completed: {len(result)}, Failed/Timed out: {total_jobs - len(result)})", file=sys.stdout, flush=True)
         return result
 
     # =========================================================

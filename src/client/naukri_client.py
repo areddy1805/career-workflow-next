@@ -382,6 +382,7 @@ class NaukriLoginClient:
                 "uploadCallback": "true",
                 "fileKey": file_key,
             },
+            timeout=30.0,
         )
 
     def validate_file(self, file):

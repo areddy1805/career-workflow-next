@@ -1275,9 +1275,7 @@ def process_job_application(
 
     if resume_path and hasattr(jc, "update_resume"):
         try:
-            execute_with_safe_retry(
-                lambda: jc.update_resume(resume_path)
-            )
+            execute_with_safe_retry(lambda: jc.update_resume(resume_path))
         except Exception as e:
             # We don't fail the application if resume upload fails, but we log it.
             pass
@@ -1436,10 +1434,10 @@ def enrich_jobs_with_details(
     """
 
     metrics_lock = threading.Lock()
-    
+
     from src.orchestration.diagnostics import ExecutionMonitor
     from pathlib import Path
-    
+
     rd = Path(run_dir) if run_dir else Path("artifacts/runs/diagnostics_fallback")
     monitor = ExecutionMonitor(name="detail_fetch", total_tasks=len(jobs), run_dir=rd)
     monitor.start()
@@ -1466,15 +1464,16 @@ def enrich_jobs_with_details(
             monitor.task_phase("network")
             detail = None
             fingerprint = None
-            
+
             if cache_manager:
                 fingerprint = compute_detail_fetch_fingerprint(provider_id, job_id, "")
                 start_time = time.perf_counter()
                 record = cache_manager.detail.get(fingerprint)
                 cache_manager.track_lookup((time.perf_counter() - start_time) * 1000)
-                
+
                 if record:
                     import json
+
                     try:
                         monitor.task_phase("parsing")
                         detail = json.loads(record["content"])
@@ -1494,14 +1493,17 @@ def enrich_jobs_with_details(
                     monitor.task_phase("persistence")
                     if cache_manager and fingerprint:
                         import json
+
                         start_time = time.perf_counter()
                         cache_manager.detail.set(
                             fingerprint=fingerprint,
                             provider=provider_id,
                             job_id=job_id,
-                            content=json.dumps(detail)
+                            content=json.dumps(detail),
                         )
-                        cache_manager.track_save((time.perf_counter() - start_time) * 1000)
+                        cache_manager.track_save(
+                            (time.perf_counter() - start_time) * 1000
+                        )
                     elif detail_cache is not None:
                         with metrics_lock:
                             detail_cache[job_id] = detail
@@ -1552,13 +1554,13 @@ def enrich_jobs_with_details(
             return job
 
     enriched_jobs = []
-    
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
             executor.submit(_fetch_detail, (index, job)): index
             for index, job in enumerate(jobs, start=1)
         }
-        
+
         results = [None] * len(jobs)
         for future in concurrent.futures.as_completed(futures):
             idx = futures[future]
@@ -1737,14 +1739,14 @@ def run_application_batch(
             _record_app_reject(
                 job, policy_evaluation.reason.value, policy_evaluation.detail
             )
-            
+
             if exec_context:
                 exec_context.reject(
                     job,
                     reason=policy_evaluation.detail,
                     code=policy_evaluation.reason.value,
                 )
-                
+
             if ledger is not None:
                 ledger.record(
                     job,
@@ -1797,7 +1799,9 @@ def run_application_batch(
         # ----------------------------------------------------------
         # Resume Routing Engine
         # ----------------------------------------------------------
-        resume_routing = resume_router.route(job.to_dict() if hasattr(job, "to_dict") else vars(job))
+        resume_routing = resume_router.route(
+            job.to_dict() if hasattr(job, "to_dict") else vars(job)
+        )
         meta["resume_type"] = resume_routing["resume_type"]
         meta["resume_reason"] = resume_routing["resume_reason"]
         meta["resume_score_ai"] = resume_routing["resume_score_ai"]
