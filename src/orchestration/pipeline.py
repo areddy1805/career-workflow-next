@@ -599,6 +599,16 @@ class CareerWorkflowPipeline:
         runner = DeterministicPipelineRunner()
         llm_candidates, auto_apply_candidates, deterministic_rejected = runner.process_jobs(jobs)
 
+        for r_job in deterministic_rejected:
+            if not r_job.get("_rejection_recorded"):
+                reason = r_job.get("rejection_reason", "DETERMINISTIC_REJECT")
+                code = r_job.get("rejection_code", "SCORE_BELOW_THRESHOLD")
+                r_job["rejection_stage"] = "Classification"
+                r_job["rejection_code"] = code
+                r_job["rejection_reason"] = reason
+                r_job["_rejection_recorded"] = True
+                self.exec_context.reject(r_job, reason=reason, code=code)
+
         self.context.rejected_jobs.extend(deterministic_rejected)
 
         print(f"[PIPELINE DEBUG] About to enter ai_score_batch with {len(llm_candidates)} LLM candidates (bypassed {len(auto_apply_candidates)})", file=sys.stderr, flush=True)
