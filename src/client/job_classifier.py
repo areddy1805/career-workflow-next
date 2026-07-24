@@ -1279,12 +1279,14 @@ class JobFilterPipeline2:
                 )
                 
                 job["ai_decision"] = parsed.get("decision", "APPLY")
-                job["ai_score"] = parsed.get("score", 50)
+                # Handle missing or explicitly None scores safely
+                score_val = parsed.get("llm_score") if "llm_score" in parsed else parsed.get("score", 50)
+                job["ai_score"] = score_val
                 job["ai_reason"] = parsed.get("reason", "Inference response missing reason")
                 job["structured_evidence"] = f
                 
                 job.setdefault("decision_history", []).append(
-                    {"stage": "AI Score", "score": job["ai_score"]}
+                    {"stage": "AI Score", "score": job["ai_score"], "decision": job["ai_decision"]}
                 )
                 return job
 
@@ -1301,9 +1303,9 @@ class JobFilterPipeline2:
         return sorted(
             jobs,
             key=lambda job: (
-                job.get("ai_score", 0),
-                job.get("ai_signal_count", 0),
-                -job.get("days_old", 7),
+                job.get("ai_score") or 0,
+                job.get("ai_signal_count") or 0,
+                -(job.get("days_old") or 7),
             ),
             reverse=True,
         )

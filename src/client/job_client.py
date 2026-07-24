@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,6 +17,12 @@ from src.exceptions.exceptions import (
 )
 from src.models.models import Job
 from src.utils.nkparam_generator import generate_nkparam
+
+
+class CircuitBreakerOpenException(RuntimeError):
+    """Raised when the circuit breaker is open to prevent cascading failures."""
+    pass
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -125,6 +132,12 @@ class NaukriJobClient:
         self.pool = [
             "sa9chfJkrXEpn3Zt7rAPaAOb6gAWNSFzzmPQEc6tLSMzytUGPxrGDqiKJyjvBAHGIYPhbDRBDHMad071ZRZlZA=="
         ]
+        
+        # Circuit Breaker state
+        self._consecutive_failures = 0
+        self._circuit_open_until = 0.0
+        self._breaker_threshold = 5
+        self._breaker_cooldown_seconds = 60.0
 
     # ----------------------------------------------------------------------------------
     # Orchestration interfaces
@@ -299,24 +312,66 @@ class NaukriJobClient:
 
         logger.debug("Fetching job details for job_id=%s sid=%s", job_id, sid)
 
-        res = self._session.get(url, headers=headers, params=params, timeout=10.0)
+        # Circuit Breaker Check
+        if time.time() < self._circuit_open_until:
+            raise CircuitBreakerOpenException(f"Circuit breaker is open for NaukriJobClient (until {datetime.fromtimestamp(self._circuit_open_until, UTC).isoformat()})")
 
-        if res.status_code in (401, 403):
+        max_retries = 3
+        backoff_factor = 1.0
+        
+        for attempt in range(max_retries):
             try:
-                msg = res.json().get("message", "Auth failed")
-            except Exception:
-                msg = res.text
-            raise NaukriAuthError(msg)
+                res = self._session.get(url, headers=headers, params=params, timeout=10.0)
 
-        if not res.ok:
-            raise NaukriParseError(
-                f"Job details fetch failed: {res.status_code} — {res.text}"
-            )
+                if res.status_code in (401, 403):
+                    try:
+                        msg = res.json().get("message", "Auth failed")
+                    except Exception:
+                        msg = res.text
+                    raise NaukriAuthError(msg)
 
-        try:
-            return res.json()
-        except Exception:
-            raise NaukriParseError(f"Invalid JSON response: {res.text}")
+                if not res.ok:
+                    raise NaukriParseError(
+                        f"Job details fetch failed: {res.status_code} — {res.text}"
+                    )
+
+                try:
+                    data = res.json()
+                    # Success resets circuit breaker
+                    self._consecutive_failures = 0
+                    return data
+                except Exception:
+                    raise NaukriParseError(f"Invalid JSON response: {res.text}")
+                    
+            except (NaukriAuthError, NaukriParseError) as e:
+                # Fast fail for auth errors or deterministic parse errors (unless it's a 50x disguised as parse error)
+                if isinstance(e, NaukriAuthError):
+                    raise
+                # Treat other errors as potentially transient
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= self._breaker_threshold:
+                    self._circuit_open_until = time.time() + self._breaker_cooldown_seconds
+                    raise CircuitBreakerOpenException("Circuit breaker tripped due to consecutive failures") from e
+                    
+                if attempt < max_retries - 1:
+                    sleep_time = backoff_factor * (2 ** attempt)
+                    logger.warning(f"Fetch failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                else:
+                    raise
+            except Exception as e:
+                # Includes requests.exceptions.RequestException, Timeout, ConnectionError
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= self._breaker_threshold:
+                    self._circuit_open_until = time.time() + self._breaker_cooldown_seconds
+                    raise CircuitBreakerOpenException("Circuit breaker tripped due to consecutive network failures") from e
+                    
+                if attempt < max_retries - 1:
+                    sleep_time = backoff_factor * (2 ** attempt)
+                    logger.warning(f"Network error (attempt {attempt+1}/{max_retries}): {e}. Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                else:
+                    raise
 
     def is_external_apply(self, job_id: str, sid: str = "") -> bool:
         # Returns True if the job redirects to an external company URL for apply.

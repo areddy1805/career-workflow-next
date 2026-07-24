@@ -574,12 +574,18 @@ class CareerWorkflowPipeline:
         candidates = jobs
         candidates_before_suppression = len(candidates)
 
+        import sys
+        print(f"[PIPELINE DEBUG] About to enter enrich_jobs_with_details with {len(candidates)} candidates", file=sys.stderr, flush=True)
+
         enriched_candidates = enrich_jobs_with_details(
             providers=self.context.providers,
             jobs=candidates,
             detail_cache=(self.context.detail_cache),
             cache_manager=self.context.cache_manager,
+            run_dir=self.run_dir,
         )
+        
+        print(f"[PIPELINE DEBUG] Exited enrich_jobs_with_details", file=sys.stderr, flush=True)
 
         enriched_before_dedup = len(enriched_candidates)
         enriched_candidates = deduplicate_enriched_jobs(enriched_candidates)
@@ -587,7 +593,9 @@ class CareerWorkflowPipeline:
         jobs = enriched_candidates
         jobs = classifier.full_description_red_flag_check(jobs)
         jobs = classifier.location_work_mode_gate(jobs)
+        print(f"[PIPELINE DEBUG] About to enter ai_score_batch", file=sys.stderr, flush=True)
         jobs = classifier.ai_score_batch(jobs)
+        print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
         jobs = classifier.post_score_guard(jobs)
         jobs = classifier.rank(jobs)
 

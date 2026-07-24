@@ -1420,6 +1420,7 @@ def enrich_jobs_with_details(
     jobs: list[dict],
     detail_cache: dict[str, dict] | None = None,
     cache_manager: CacheManager | None = None,
+    run_dir: str | Path | None = None,
 ) -> list[dict]:
     """
     Fetch each candidate's detail payload concurrently and enrich the normalized
@@ -1435,6 +1436,13 @@ def enrich_jobs_with_details(
     """
 
     metrics_lock = threading.Lock()
+    
+    from src.orchestration.diagnostics import ExecutionMonitor
+    from pathlib import Path
+    
+    rd = Path(run_dir) if run_dir else Path("artifacts/runs/diagnostics_fallback")
+    monitor = ExecutionMonitor(name="detail_fetch", total_tasks=len(jobs), run_dir=rd)
+    monitor.start()
 
     def _fetch_detail(job_tuple: tuple[int, dict]) -> dict:
         index, job = job_tuple
@@ -1452,13 +1460,10 @@ def enrich_jobs_with_details(
         if not provider:
             return job
 
-        print(
-            f"  [DETAIL {index}/{len(jobs)}] "
-            f"{job.get('title')} @ "
-            f"{job.get('company')}"
-        )
+        monitor.task_started(task_id=job_id)
 
         try:
+            monitor.task_phase("network")
             detail = None
             fingerprint = None
             
@@ -1471,6 +1476,7 @@ def enrich_jobs_with_details(
                 if record:
                     import json
                     try:
+                        monitor.task_phase("parsing")
                         detail = json.loads(record["content"])
                         with metrics_lock:
                             cache_manager.metrics["detail_hits"] += 1
@@ -1485,6 +1491,7 @@ def enrich_jobs_with_details(
             if detail is None:
                 detail = provider.get_job_details(job_id)
                 if detail:
+                    monitor.task_phase("persistence")
                     if cache_manager and fingerprint:
                         import json
                         start_time = time.perf_counter()
@@ -1499,6 +1506,7 @@ def enrich_jobs_with_details(
                         with metrics_lock:
                             detail_cache[job_id] = detail
 
+            monitor.task_phase("extraction")
             full_description = _extract_job_detail_description(detail)
 
             if full_description:
@@ -1529,6 +1537,7 @@ def enrich_jobs_with_details(
 
             job["is_external_apply"] = job_data.get("responseManager") == "companyUrl"
 
+            monitor.task_completed(success=True)
             return job
 
         except Exception as exc:
@@ -1539,7 +1548,7 @@ def enrich_jobs_with_details(
             )
 
             job["detail_enrichment_failed"] = True
-
+            monitor.task_completed(success=False)
             return job
 
     enriched_jobs = []
@@ -1559,7 +1568,9 @@ def enrich_jobs_with_details(
                 original_job = jobs[idx - 1]
                 original_job["detail_enrichment_failed"] = True
                 results[idx - 1] = original_job
-                
+
+    monitor.stop()
+
     for res in results:
         if res is not None:
             enriched_jobs.append(res)
@@ -2392,11 +2403,17 @@ def run_application_cycle(
     final_jobs = pipeline.score_and_select(enriched_candidates)
 
     for result in final_jobs:
+        ai_decision = result.get("ai_decision", "APPLY")
+        ai_score = result.get("ai_score")
+        base_score = result.get("score", 0)
 
-        result["score"] = result.get(
-            "ai_score",
-            result.get("score", 0),
-        )
+        if ai_decision == "LLM_SKIPPED" or ai_score is None:
+            # Fallback to deterministic score
+            result["score"] = base_score
+            result["final_decision"] = "PASS_WITHOUT_LLM"
+        else:
+            result["score"] = ai_score
+            result["final_decision"] = ai_decision
 
         result["ai_detail"] = result.get(
             "ai_reason",

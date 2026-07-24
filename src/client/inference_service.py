@@ -2,11 +2,14 @@ import os
 import json
 import time
 import threading
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 from src.cache.cache_manager import CacheManager
-from src.llm.client import OMLXClient
+from src.llm.client import OMLXClient, CircuitBreakerOpenException
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TaskProfile:
@@ -192,8 +195,29 @@ class InferenceService:
                     
         self.telemetry.record_cache_miss()
         
-        parsed, raw_response = self.router.complete(request)
+        max_retries = 2
+        backoff_factor = 2.0
+        parsed, raw_response = None, None
         
+        for attempt in range(max_retries + 1):
+            try:
+                parsed, raw_response = self.router.complete(request)
+                break
+            except CircuitBreakerOpenException as e:
+                logger.warning(f"LLM Circuit Breaker open: {e}. Skipping AI score for this job.")
+                return {"decision": "LLM_SKIPPED", "llm_status": "SKIPPED", "llm_score": None, "reason": "UPSTREAM_UNAVAILABLE"}
+            except Exception as e:
+                if attempt < max_retries:
+                    sleep_time = backoff_factor * (2 ** attempt)
+                    logger.warning(f"LLM inference failed (attempt {attempt+1}/{max_retries+1}): {e}. Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                else:
+                    logger.error(f"LLM inference completely failed after {max_retries+1} attempts: {e}")
+                    return {"decision": "LLM_SKIPPED", "llm_status": "SKIPPED", "llm_score": None, "reason": f"UPSTREAM_UNAVAILABLE (Failed: {e})"}
+        
+        if not parsed:
+            return {"decision": "LLM_SKIPPED", "llm_status": "SKIPPED", "llm_score": None, "reason": "UPSTREAM_UNAVAILABLE (Empty response)"}
+            
         if self.cache_manager and request.task.cache != "none":
             start_save = time.perf_counter()
             self.cache_manager.llm.set(
