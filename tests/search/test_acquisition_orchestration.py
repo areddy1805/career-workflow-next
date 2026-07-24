@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 
-import apply_agent
+from src import legacy_apply_agent as apply_agent
 from src.models.models import Job
 
 

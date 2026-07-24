@@ -3,8 +3,8 @@ from typing import Any
 
 import pytest
 
-import apply_agent
-from apply_agent import process_job_application
+from src import legacy_apply_agent as apply_agent
+from src.legacy_apply_agent import process_job_application
 from src.application.outcome import ApplicationStatus
 
 

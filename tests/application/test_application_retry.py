@@ -1,6 +1,6 @@
 import pytest
 
-from apply_agent import execute_with_safe_retry
+from src.legacy_apply_agent import execute_with_safe_retry
 
 
 class HTTPError(Exception):

@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from pathlib import Path
 
 from src.cache.cache_backend import SQLiteBackend
@@ -37,14 +38,17 @@ class CacheManager:
             "lookups": 0,
             "saves": 0
         }
+        self._metrics_lock = threading.Lock()
 
     def track_lookup(self, duration_ms: float):
-        self.metrics["total_lookup_time_ms"] += duration_ms
-        self.metrics["lookups"] += 1
+        with self._metrics_lock:
+            self.metrics["total_lookup_time_ms"] += duration_ms
+            self.metrics["lookups"] += 1
 
     def track_save(self, duration_ms: float):
-        self.metrics["total_save_time_ms"] += duration_ms
-        self.metrics["saves"] += 1
+        with self._metrics_lock:
+            self.metrics["total_save_time_ms"] += duration_ms
+            self.metrics["saves"] += 1
 
     def get_average_lookup_time_ms(self) -> float:
         if self.metrics["lookups"] == 0:

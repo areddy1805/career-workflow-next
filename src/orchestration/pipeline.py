@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import resource
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -9,7 +11,7 @@ from typing import Callable
 from dotenv import load_dotenv
 
 from application_report import build_report_snapshot
-from apply_agent import (
+from src.legacy_apply_agent import (
     acquire_jobs,
     enrich_application_metadata,
     enrich_jobs_with_details,
@@ -55,6 +57,7 @@ from src.orchestration.stages import (
     PipelineStatus,
     StageStatus,
 )
+from src.orchestration.explorer import PipelineExplorerRenderer
 from src.resolution.hybrid_resolver import HybridQuestionResolver
 from src.search.challenge_cooldown import SearchChallengeCooldown
 from src.search.job_search_cache import JobSearchCache
@@ -1312,6 +1315,12 @@ class CareerWorkflowPipeline:
 
         self.explorer_proj.flush(self.run_dir)
         self.trace_proj.flush(self.run_dir)
+        
+        try:
+            PipelineExplorerRenderer(self.run_dir).render()
+        except Exception as e:
+            print(f"Warning: Failed to render Pipeline Explorer visual reports: {e}")
+
 
         counts = self.metrics_proj.get_metrics()
         c_res = self.context.stage_results.get("classification", {})
@@ -1319,6 +1328,19 @@ class CareerWorkflowPipeline:
         cache_metrics = {}
         if self.context.cache_manager:
             cache_metrics = self.context.cache_manager.metrics.copy()
+            
+        # Capture memory peak
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        # On macOS, ru_maxrss is in bytes, on Linux it is in kilobytes
+        if sys.platform == "darwin":
+            peak_mb = usage.ru_maxrss / (1024 * 1024)
+        else:
+            peak_mb = usage.ru_maxrss / 1024
+        self.context.metrics.memory_peak_mb = round(peak_mb, 2)
+        
+        # Capture LLM cost
+        if hasattr(self, 'classifier') and hasattr(self.classifier, 'inference_service'):
+            self.context.metrics.llm_cost_usd = round(self.classifier.inference_service.telemetry.cost_usd, 4)
 
         return PipelineResult(
             run_id=self.context.run_id,
@@ -1525,6 +1547,16 @@ class CareerWorkflowPipeline:
             print(f"LLM time: {llm_pct:.1f}%")
             print(f"Network: {net_pct:.1f}%")
             print(f"Applying: {app_pct:.1f}%")
+            
+        print("\nCosts and Resources:")
+        print(f"Peak Memory: {runtime.memory_peak_mb} MB")
+        print(f"LLM Cost: ${runtime.llm_cost_usd:.4f}")
+        
+        if hasattr(runtime, "stage_timings") and runtime.stage_timings:
+            print("\nStage Timings:")
+            for stage, duration in runtime.stage_timings.items():
+                print(f"- {stage}: {duration:.1f}s")
+                
         print("═" * 50 + "\n")
         
         if hasattr(self, "inference_service"):

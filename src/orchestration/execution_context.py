@@ -7,6 +7,7 @@ from typing import Any, List
 from .events import EventFactory
 from .event_bus import EventBus
 from .job_registry import JobRegistry
+from .job_decision_ledger import JobDecisionLedger
 
 
 def get_git_commit() -> str:
@@ -31,6 +32,7 @@ class PipelineExecutionContext:
         self.bus = EventBus(run_dir)
         self.registry = JobRegistry()
         self.event_factory = EventFactory(run_id)
+        self.ledger = JobDecisionLedger()
 
         self.fingerprint = {
             "git_commit": get_git_commit(),
@@ -94,34 +96,68 @@ class PipelineExecutionContext:
         )
         self.bus.publish(event)
 
+    def _record_decision(self, job: Any, status: str, reason: str = "", meta: dict = None):
+        if isinstance(job, dict):
+            job_id = str(job.get("job_id") or "")
+            provider_id = str(job.get("provider_id", "naukri"))
+            title = str(job.get("title") or "")
+            company = str(job.get("company") or "")
+            location = str(job.get("location") or "")
+        else:
+            job_id = str(getattr(job, "job_id", ""))
+            provider_id = str(getattr(job, "provider_id", "naukri"))
+            title = str(getattr(job, "title", ""))
+            company = str(getattr(job, "company", ""))
+            location = str(getattr(job, "location", ""))
+
+        if job_id:
+            self.ledger.record_decision(
+                job_id=job_id,
+                provider_id=provider_id,
+                title=title,
+                company=company,
+                location=location,
+                status=status,
+                reason=reason,
+                metadata=meta,
+                ttl_days=30
+            )
+
     def acquire(self, job: Any):
         self.emit_job_event(job, "JobAcquired", {})
 
     def reject(self, job: Any, reason: str, code: str):
         self.emit_job_event(job, "JobRejected", {"reason": reason, "code": code})
+        self._record_decision(job, "REJECTED", reason=reason, meta={"code": code})
 
     def select(self, job: Any, explanation: dict = None):
         self.emit_job_event(job, "JobSelected", {"explanation": explanation or {}})
+        self._record_decision(job, "SELECTED", meta={"explanation": explanation})
 
     def route(self, job: Any, strategy: str, reason: str = ""):
         self.emit_job_event(job, "JobRouted", {"strategy": strategy, "reason": reason})
+        self._record_decision(job, "ROUTED", reason=reason, meta={"strategy": strategy})
 
     def apply(self, job: Any, outcome: str, explanation: dict = None):
         self.emit_job_event(
             job, "JobApplied", {"outcome": outcome, "explanation": explanation or {}}
         )
+        self._record_decision(job, "APPLIED", reason=outcome, meta={"explanation": explanation})
         self.complete(job)
 
     def defer(self, job: Any, reason: str):
         self.emit_job_event(job, "JobDeferred", {"reason": reason})
+        self._record_decision(job, "DEFERRED", reason=reason)
 
     def skip(self, job: Any, reason: str, code: str = None):
         self.emit_job_event(
             job, "JobSkipped", {"reason": reason, "code": code or "SKIPPED"}
         )
+        self._record_decision(job, "SKIPPED", reason=reason, meta={"code": code})
 
     def fail(self, job: Any, error: str):
         self.emit_job_event(job, "JobFailed", {"error": error})
+        self._record_decision(job, "FAILED", reason=error)
 
     def complete(self, job: Any):
         self.emit_job_event(job, "JobCompleted", {})

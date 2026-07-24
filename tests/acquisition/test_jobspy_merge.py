@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from apply_agent import JobFetchResult
+from src.legacy_apply_agent import JobFetchResult
 from src.acquisition.config import load_acquisition_config as _load_acquisition_config
 from src.acquisition.acquisition_service import fetch_jobspy_jobs
 from src.acquisition.merge import merge_jobs

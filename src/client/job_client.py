@@ -299,7 +299,7 @@ class NaukriJobClient:
 
         logger.debug("Fetching job details for job_id=%s sid=%s", job_id, sid)
 
-        res = self._session.get(url, headers=headers, params=params)
+        res = self._session.get(url, headers=headers, params=params, timeout=10.0)
 
         if res.status_code in (401, 403):
             try:

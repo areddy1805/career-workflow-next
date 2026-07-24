@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from apply_agent import resolve_questionnaire
+from src.legacy_apply_agent import resolve_questionnaire
 
 
 @dataclass

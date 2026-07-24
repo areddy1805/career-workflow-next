@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
@@ -24,17 +25,42 @@ class InferenceRequest:
     router_version: str = "1"
     context_hash: str = ""
 
-@dataclass
 class CostTelemetry:
-    calls: int = 0
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    latency_ms: float = 0.0
-    cost_usd: float = 0.0
-    cache_hits: int = 0
-    cache_misses: int = 0
-    fallbacks: int = 0
-    failures: int = 0
+    def __init__(self):
+        self.calls: int = 0
+        self.prompt_tokens: int = 0
+        self.completion_tokens: int = 0
+        self.latency_ms: float = 0.0
+        self.cost_usd: float = 0.0
+        self.cache_hits: int = 0
+        self.cache_misses: int = 0
+        self.fallbacks: int = 0
+        self.failures: int = 0
+        self._lock = threading.Lock()
+
+    def record_call(self, prompt_tokens: int, completion_tokens: int, latency_ms: float, cost_usd: float):
+        with self._lock:
+            self.calls += 1
+            self.prompt_tokens += prompt_tokens
+            self.completion_tokens += completion_tokens
+            self.latency_ms += latency_ms
+            self.cost_usd += cost_usd
+
+    def record_cache_hit(self):
+        with self._lock:
+            self.cache_hits += 1
+
+    def record_cache_miss(self):
+        with self._lock:
+            self.cache_misses += 1
+
+    def record_failure(self):
+        with self._lock:
+            self.failures += 1
+
+    def record_fallback(self):
+        with self._lock:
+            self.fallbacks += 1
 
 class BudgetManager:
     def __init__(self, monthly_limit_usd: float = 5.0, daily_soft_limit_usd: float = 0.20, hourly_soft_limit_usd: float = 0.05):
@@ -45,20 +71,23 @@ class BudgetManager:
         self.current_monthly_spend = 0.0
         self.current_daily_spend = 0.0
         self.current_hourly_spend = 0.0
+        self._lock = threading.Lock()
 
     def add_spend(self, amount: float):
-        self.current_monthly_spend += amount
-        self.current_daily_spend += amount
-        self.current_hourly_spend += amount
+        with self._lock:
+            self.current_monthly_spend += amount
+            self.current_daily_spend += amount
+            self.current_hourly_spend += amount
 
     def can_afford(self, estimated_cost: float) -> bool:
-        if (self.current_hourly_spend + estimated_cost) > self.hourly_soft_limit_usd:
-            return False
-        if (self.current_daily_spend + estimated_cost) > self.daily_soft_limit_usd:
-            return False
-        if (self.current_monthly_spend + estimated_cost) > self.monthly_limit_usd:
-            return False
-        return True
+        with self._lock:
+            if (self.current_hourly_spend + estimated_cost) > self.hourly_soft_limit_usd:
+                return False
+            if (self.current_daily_spend + estimated_cost) > self.daily_soft_limit_usd:
+                return False
+            if (self.current_monthly_spend + estimated_cost) > self.monthly_limit_usd:
+                return False
+            return True
 
 
 class InferenceRouter:
@@ -69,7 +98,6 @@ class InferenceRouter:
         self.telemetry = telemetry or CostTelemetry()
 
     def complete(self, request: InferenceRequest) -> Tuple[dict, str]:
-        self.telemetry.calls += 1
         
         estimated_cost = 0.001 if request.task.reasoning == "high" else 0.0005
         
@@ -90,11 +118,7 @@ class InferenceRouter:
                 
                 cost = (prompt_tokens + completion_tokens) / 1000.0 * 0.0005
                 self.budget_manager.add_spend(cost)
-                
-                self.telemetry.prompt_tokens += prompt_tokens
-                self.telemetry.completion_tokens += completion_tokens
-                self.telemetry.latency_ms += latency
-                self.telemetry.cost_usd += cost
+                self.telemetry.record_call(prompt_tokens, completion_tokens, latency, cost)
                 
                 try:
                     parsed = json.loads(raw_response)
@@ -103,14 +127,14 @@ class InferenceRouter:
                 return parsed, raw_response
             except Exception as e:
                 print(f"[InferenceRouter] Primary provider failed: {e}. Falling back...")
-                self.telemetry.failures += 1
-                self.telemetry.fallbacks += 1
+                self.telemetry.record_failure()
+                self.telemetry.record_fallback()
         
         if self.fallback_client:
             start = time.perf_counter()
             raw_response = self.fallback_client.chat(messages=messages)
             latency = (time.perf_counter() - start) * 1000
-            self.telemetry.latency_ms += latency
+            self.telemetry.record_call(0, 0, latency, 0.0)
             
             try:
                 parsed = json.loads(raw_response)
@@ -160,13 +184,13 @@ class InferenceService:
             record = self.cache_manager.llm.get(cache_key)
             self.cache_manager.track_lookup((time.perf_counter() - start_lookup) * 1000)
             if record:
-                self.telemetry.cache_hits += 1
+                self.telemetry.record_cache_hit()
                 try:
                     return json.loads(record["parsed_response"])
                 except Exception:
                     pass
                     
-        self.telemetry.cache_misses += 1
+        self.telemetry.record_cache_miss()
         
         parsed, raw_response = self.router.complete(request)
         

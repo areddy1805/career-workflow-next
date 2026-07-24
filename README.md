@@ -246,6 +246,11 @@ flowchart TD
     J --> L[Application Router]
     end
 
+    subgraph Observability
+    L -.-> O[Job Decision Ledger (SQLite WAL)]
+    O -.-> P[Pipeline Intelligence CLI]
+    end
+
     subgraph Application Engines
     L --> M{Application Type}
     M -->|Naukri Native| NAE[Naukri Engine]

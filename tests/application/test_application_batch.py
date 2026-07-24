@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
-import apply_agent
-from apply_agent import run_application_batch
+from src import legacy_apply_agent as apply_agent
+from src.legacy_apply_agent import run_application_batch
 from src.application.outcome import (
     ApplicationOutcome,
     ApplicationStatus,

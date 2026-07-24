@@ -2,6 +2,7 @@ import json
 import os
 import re
 import hashlib
+import concurrent.futures
 from src.client.inference_service import InferenceService
 from src.orchestration.metrics import PipelineRunMetrics
 from src.cache.cache_manager import CacheManager
@@ -568,6 +569,20 @@ class JobFilterPipeline2:
                 continue
             if job_id in seen:
                 continue
+                
+            title = str(j.get("title") or "")
+            company = str(j.get("company") or "")
+            location = str(j.get("location") or "")
+            
+            if self.exec_context and hasattr(self.exec_context, "ledger"):
+                if self.exec_context.ledger.is_duplicate_fingerprint(title, company, location):
+                    self.record_decision(
+                        j, "Deduplication", "ALREADY_PROCESSED", "Job fingerprint found in active ledger decisions"
+                    )
+                    if self.metrics:
+                        self.metrics.record_rejection("Deduplication")
+                    continue
+
             seen.add(job_id)
             result.append(j)
         return result
@@ -1137,6 +1152,7 @@ class JobFilterPipeline2:
     # =========================================================
     def ai_score_batch(self, jobs):
         result = []
+        jobs_for_inference = []
 
         system_prompt = (
             "You are the evaluator for an autonomous job acquisition engine.\n"
@@ -1184,9 +1200,12 @@ class JobFilterPipeline2:
                     {"stage": "AI Score", "score": job["ai_score"]}
                 )
                 result.append(job)
-                continue
+            else:
+                jobs_for_inference.append((job, f, title, jid))
                 
-            # 3. Needs Reasoning -> Inference Service
+        # 3. Needs Reasoning -> Inference Service (Concurrent)
+        def _process_inference(item):
+            job, f, title, jid = item
             mandatory = ", ".join(job.get("mandatory_tags", [])) or "none"
             optional = ", ".join(job.get("optional_tags", [])) or "none"
             exp = f"{job.get('experience_min', 0)}-{job.get('experience_max', 10)} yrs"
@@ -1204,7 +1223,6 @@ class JobFilterPipeline2:
             
             context_hash = hashlib.md5(f"{job.get('provider_id', '')}:{jid}:{title}:{description}".encode('utf-8')).hexdigest()
             
-            # Delegate to InferenceService
             parsed = self.inference_service.classify_job(
                 evidence=f,
                 prompt=prompt,

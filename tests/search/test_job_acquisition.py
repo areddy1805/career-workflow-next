@@ -1,4 +1,4 @@
-from apply_agent import (
+from src.legacy_apply_agent import (
     JobFetchResult,
     resolve_job_acquisition,
 )

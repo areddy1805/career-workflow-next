@@ -8,7 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-from apply_agent import (
+from src.legacy_apply_agent import (
     classify_application_priority,
     classify_application_subtrack,
 )

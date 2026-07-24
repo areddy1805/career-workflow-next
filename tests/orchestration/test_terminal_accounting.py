@@ -41,7 +41,7 @@ def test_missing_policy_rejected_regression():
     """
     Test that POLICY_REJECTED emits a JobRejected event.
     """
-    from apply_agent import run_application_batch, ApplicationPolicy
+    from src.legacy_apply_agent import run_application_batch, ApplicationPolicy
     from src.orchestration.execution_context import PipelineExecutionContext
     
     exec_context = Mock(spec=PipelineExecutionContext)
@@ -56,7 +56,7 @@ def test_missing_policy_rejected_regression():
             return False
 
     # Since run_application_batch uses evaluate_application_policy, we mock the result
-    import apply_agent
+    import src.legacy_apply_agent as apply_agent
     original_eval = apply_agent.evaluate_application_policy
     try:
         mock_eval = Mock()

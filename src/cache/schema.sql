@@ -46,5 +46,8 @@ CREATE TABLE IF NOT EXISTS http_cache (
 
 
 CREATE INDEX IF NOT EXISTS idx_llm_cache_job_id ON llm_cache(job_id);
+CREATE INDEX IF NOT EXISTS idx_llm_cache_provider ON llm_cache(provider);
 CREATE INDEX IF NOT EXISTS idx_detail_fetch_expires ON detail_fetch_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_detail_fetch_job_id ON detail_fetch_cache(job_id);
 CREATE INDEX IF NOT EXISTS idx_http_cache_expires ON http_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_http_cache_url ON http_cache(url);

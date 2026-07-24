@@ -16,6 +16,10 @@ from src.audit.generators.architecture_report import generate_architecture_repor
 from src.audit.generators.explain_report import generate_explain_report
 from src.audit.generators.summary_report import generate_summary_report
 
+from src.orchestration.job_decision_ledger import JobDecisionLedger
+from src.orchestration.intelligence import PipelineIntelligence
+from rich.table import Table
+
 audit_app = typer.Typer(help="Pipeline Intelligence & Explainability Framework")
 console = Console()
 
@@ -103,11 +107,87 @@ def audit_architecture():
 
 @audit_app.command("explain")
 def audit_explain(job_id: str = typer.Argument(..., help="Job ID to explain")):
-    """Trace a specific job through the pipeline."""
-    out_dir = get_output_dir()
-    console.print(f"Generating explain report for {job_id} in [bold cyan]{out_dir}[/bold cyan]...")
-    generate_explain_report(job_id, out_dir)
-    console.print("[bold green]Done.[/bold green]")
+    """Trace a specific job through the pipeline using Pipeline Intelligence."""
+    ledger = JobDecisionLedger("data/job_decision_ledger.db")
+    intelligence = PipelineIntelligence(ledger)
+    
+    explanation = intelligence.explain_decision(job_id)
+    if explanation["status"] == "UNKNOWN":
+        console.print(f"[bold red]Error:[/] {explanation['explanation']}")
+        raise typer.Exit(1)
+        
+    console.print(f"\n[bold green]Pipeline Intelligence Trace for {job_id}[/]\n")
+    console.print(f"[bold]Provider:[/] {explanation['provider_id']}")
+    console.print(f"[bold]Timestamp:[/] {explanation['timestamp']}")
+    console.print(f"[bold]Terminal Status:[/] {explanation['status']}")
+    console.print(f"[bold]Reason Code:[/] {explanation['metadata'].get('code', 'N/A')}")
+    console.print(f"[bold]Details:[/] {explanation['reason']}\n")
+    
+    console.print("[bold cyan]Execution Path:[/]")
+    for idx, step in enumerate(explanation["path"]):
+        prefix = "└── " if idx == len(explanation["path"]) - 1 else "├── "
+        console.print(f"  {prefix}{step}")
+        
+    console.print(f"\n[bold yellow]Summary:[/] {explanation['summary']}\n")
+
+@audit_app.command("ledger")
+def audit_ledger(limit: int = 20):
+    """List the most recent decisions recorded in the Job Decision Ledger."""
+    ledger = JobDecisionLedger("data/job_decision_ledger.db")
+    
+    table = Table(title=f"Recent Job Decisions (Last {limit})")
+    table.add_column("Timestamp", style="cyan")
+    table.add_column("Job ID", style="magenta")
+    table.add_column("Status", style="green")
+    table.add_column("Reason", style="yellow")
+    
+    with ledger._connect() as conn:
+        rows = conn.execute(
+            "SELECT created_at, job_id, status, reason FROM decisions ORDER BY created_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        
+    if not rows:
+        console.print("No decisions found in the ledger.")
+        return
+        
+    for r in rows:
+        table.add_row(
+            r["created_at"],
+            r["job_id"],
+            r["status"],
+            str(r["reason"])
+        )
+        
+    console.print(table)
+
+@audit_app.command("metrics")
+def audit_metrics():
+    """Display high-level rejection and decision metrics from the ledger."""
+    ledger = JobDecisionLedger("data/job_decision_ledger.db")
+    
+    with ledger._connect() as conn:
+        rows = conn.execute(
+            "SELECT status, count(*) as c FROM decisions GROUP BY status ORDER BY c DESC"
+        ).fetchall()
+        
+    if not rows:
+        console.print("No metrics available. The ledger is empty.")
+        return
+        
+    table = Table(title="Pipeline Decision Metrics")
+    table.add_column("Status", style="cyan")
+    table.add_column("Count", style="green", justify="right")
+    
+    total = 0
+    for r in rows:
+        table.add_row(r["status"], str(r["c"]))
+        total += r["c"]
+        
+    table.add_section()
+    table.add_row("TOTAL", str(total), style="bold")
+    
+    console.print(table)
 
 @audit_app.command("all")
 def audit_all():

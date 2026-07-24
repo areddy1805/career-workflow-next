@@ -3,7 +3,8 @@ import sys
 import logging
 from pathlib import Path
 
-
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.acquisition.providers.jobspy_provider import JobSpyProvider, JobSpyConfig
 from src.models.models import Job

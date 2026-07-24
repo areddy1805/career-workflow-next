@@ -6,6 +6,8 @@ import logging
 import os
 import re
 import time
+import concurrent.futures
+import threading
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -1420,7 +1422,7 @@ def enrich_jobs_with_details(
     cache_manager: CacheManager | None = None,
 ) -> list[dict]:
     """
-    Fetch each candidate's detail payload once and enrich the normalized
+    Fetch each candidate's detail payload concurrently and enrich the normalized
     classifier job with its full description.
 
     JobSpy jobs (job_id starting with "jobspy_") are skipped for Naukri
@@ -1432,28 +1434,23 @@ def enrich_jobs_with_details(
     description rather than silently deleting potentially valid candidates.
     """
 
-    enriched_jobs = []
+    metrics_lock = threading.Lock()
 
-    for index, job in enumerate(
-        jobs,
-        start=1,
-    ):
+    def _fetch_detail(job_tuple: tuple[int, dict]) -> dict:
+        index, job = job_tuple
         job_id = str(job.get("job_id") or "").strip()
 
         if not job_id:
-            enriched_jobs.append(job)
-            continue
+            return job
 
         if job_id.startswith("jobspy_"):
-            enriched_jobs.append(job)
-            continue
+            return job
 
         provider_id = job.get("provider_id", "naukri")
         provider = providers.get(provider_id)
 
         if not provider:
-            enriched_jobs.append(job)
-            continue
+            return job
 
         print(
             f"  [DETAIL {index}/{len(jobs)}] "
@@ -1475,11 +1472,13 @@ def enrich_jobs_with_details(
                     import json
                     try:
                         detail = json.loads(record["content"])
-                        cache_manager.metrics["detail_hits"] += 1
+                        with metrics_lock:
+                            cache_manager.metrics["detail_hits"] += 1
                     except json.JSONDecodeError:
                         pass
                 else:
-                    cache_manager.metrics["detail_misses"] += 1
+                    with metrics_lock:
+                        cache_manager.metrics["detail_misses"] += 1
             elif detail_cache is not None:
                 detail = detail_cache.get(job_id)
 
@@ -1497,7 +1496,8 @@ def enrich_jobs_with_details(
                         )
                         cache_manager.track_save((time.perf_counter() - start_time) * 1000)
                     elif detail_cache is not None:
-                        detail_cache[job_id] = detail
+                        with metrics_lock:
+                            detail_cache[job_id] = detail
 
             full_description = _extract_job_detail_description(detail)
 
@@ -1529,7 +1529,7 @@ def enrich_jobs_with_details(
 
             job["is_external_apply"] = job_data.get("responseManager") == "companyUrl"
 
-            enriched_jobs.append(job)
+            return job
 
         except Exception as exc:
             logger.warning(
@@ -1540,7 +1540,29 @@ def enrich_jobs_with_details(
 
             job["detail_enrichment_failed"] = True
 
-            enriched_jobs.append(job)
+            return job
+
+    enriched_jobs = []
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(_fetch_detail, (index, job)): index
+            for index, job in enumerate(jobs, start=1)
+        }
+        
+        results = [None] * len(jobs)
+        for future in concurrent.futures.as_completed(futures):
+            idx = futures[future]
+            try:
+                results[idx - 1] = future.result()
+            except Exception as e:
+                original_job = jobs[idx - 1]
+                original_job["detail_enrichment_failed"] = True
+                results[idx - 1] = original_job
+                
+    for res in results:
+        if res is not None:
+            enriched_jobs.append(res)
 
     return enriched_jobs
 

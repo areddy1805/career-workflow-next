@@ -21,6 +21,11 @@ class PipelineRunMetrics:
     llm_time: float = 0.0
     filtering_time: float = 0.0
     application_time: float = 0.0
+    stage_timings: dict[str, float] = field(default_factory=dict)
+    
+    # Costs and Resources
+    llm_cost_usd: float = 0.0
+    memory_peak_mb: float = 0.0
 
     # Cache Metrics
     llm_cache_hits: int = 0
@@ -61,8 +66,12 @@ def instrument_stage(stage_name: str):
             start = time.perf_counter()
             result = func(*args, **kwargs)
             duration = time.perf_counter() - start
-            # If the instance has a context with metrics, we could log it there,
-            # but for now, we just rely on explicit accumulation for sub-timings.
+            
+            # If the instance has a context with metrics, log the stage timing
+            # self is args[0]
+            if args and hasattr(args[0], "context") and hasattr(args[0].context, "metrics") and args[0].context.metrics:
+                args[0].context.metrics.stage_timings[stage_name] = duration
+                
             return result
 
         return wrapper

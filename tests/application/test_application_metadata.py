@@ -1,4 +1,4 @@
-from apply_agent import (
+from src.legacy_apply_agent import (
     classify_application_priority,
     classify_application_subtrack,
     enrich_application_metadata,
