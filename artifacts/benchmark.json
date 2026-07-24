@@ -1,0 +1,12 @@
+{
+  "sample_size": 500,
+  "normalization": {
+    "total_time_sec": 0.00652629102114588,
+    "throughput_jobs_per_sec": 76613.19398413993
+  },
+  "extraction": {
+    "total_time_sec": 0.007948665996082127,
+    "throughput_jobs_per_sec": 62903.63694316109
+  },
+  "total_throughput_jobs_per_sec": 34542.41690700035
+}

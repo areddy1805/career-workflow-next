@@ -1,0 +1,84 @@
+# config/extraction_rules.yaml
+# Deterministic rules for job metadata extraction
+meta:
+  version: "1.0.0"
+  created: "2026-07-24"
+  updated: "2026-07-24"
+  checksum: "a1b2c3d4e5f6"
+
+seniority:
+  entry_level: ["junior", "entry level", "fresher", "0-2 years", "trainee", "associate"]
+  mid_level: ["mid level", "mid-level", "2-5 years", "3-5 years"]
+  senior: ["senior", "sr.", "sr ", "lead", "principal", "staff", "5+ years", "architect"]
+  executive: ["director", "vp", "head of", "cto", "manager"]
+
+work_mode:
+  remote: ["remote", "work from home", "wfh", "telecommute"]
+  hybrid: ["hybrid", "partial remote"]
+  onsite: ["on-site", "onsite", "in-office"]
+
+employment_type:
+  full_time: ["full-time", "full time", "permanent"]
+  contract: ["contract", "contractor", "freelance", "c2c", "w2"]
+  part_time: ["part-time", "part time"]
+  internship: ["internship", "intern"]
+
+# Keywords for technology stack extraction
+stack:
+  technologies:
+    - python
+    - java
+    - javascript
+    - typescript
+    - c++
+    - "c#"
+    - go
+    - golang
+    - rust
+    - ruby
+    - php
+    - html
+    - css
+  frameworks:
+    - react
+    - angular
+    - vue
+    - django
+    - flask
+    - fastapi
+    - spring
+    - express
+    - nodejs
+    - nextjs
+    - .net
+  databases:
+    - sql
+    - mysql
+    - postgresql
+    - mongodb
+    - redis
+    - cassandra
+    - elasticsearch
+    - oracle
+    - dynamodb
+  cloud:
+    - aws
+    - amazon web services
+    - azure
+    - gcp
+    - google cloud
+    - kubernetes
+    - docker
+    - terraform
+  ai_keywords:
+    - machine learning
+    - ai
+    - artificial intelligence
+    - deep learning
+    - nlp
+    - llm
+    - generative ai
+    - openai
+    - pytorch
+    - tensorflow
+    - rag
