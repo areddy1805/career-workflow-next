@@ -48,6 +48,10 @@ class OMLXClient:
                 "breaker_cooldown_seconds": 60.0,
             }
 
+    def close(self) -> None:
+        """Closes the underlying httpx client to release connections."""
+        self.client.close()
+
     def _headers(self) -> dict[str, str]:
         headers = {
             "Content-Type": "application/json",

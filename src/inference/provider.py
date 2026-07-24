@@ -44,6 +44,11 @@ class BaseProvider(ABC):
         """Returns ProviderCapabilities matrix."""
         pass
 
+    @abstractmethod
+    def close(self) -> None:
+        """Closes any underlying client connections and cleans up resources."""
+        pass
+
     @property
     @abstractmethod
     def provider_name(self) -> str:

@@ -40,10 +40,13 @@ class OpenAICompatibleProvider(BaseProvider):
 
         resolved_key = api_key or os.getenv(api_key_env, "")
         if not resolved_key and api_key_env:
-            resolved_key = os.getenv("OPENAI_API_KEY", "missing_key")
+            resolved_key = os.getenv("OPENAI_API_KEY", "")
+
+        if not resolved_key:
+            raise ValueError(f"API key must be provided or set in {api_key_env} or OPENAI_API_KEY environment variables.")
 
         self.client = OpenAI(
-            api_key=resolved_key or "missing_key",
+            api_key=resolved_key,
             base_url=self._base_url,
             timeout=self.timeout
         )
@@ -86,6 +89,9 @@ class OpenAICompatibleProvider(BaseProvider):
     @property
     def capabilities(self) -> ProviderCapabilities:
         return self._capabilities
+
+    def close(self) -> None:
+        self.client.close()
 
     def estimate_cost(self, prompt_tokens: int, completion_tokens: int, reasoning_tokens: int = 0) -> float:
         cost = (

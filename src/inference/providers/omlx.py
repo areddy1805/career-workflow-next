@@ -64,6 +64,9 @@ class OMLXProvider(BaseProvider):
     def capabilities(self) -> ProviderCapabilities:
         return self._capabilities
 
+    def close(self) -> None:
+        self.client.close()
+
     def estimate_cost(self, prompt_tokens: int, completion_tokens: int, reasoning_tokens: int = 0) -> float:
         # Local compute cost is $0.00
         return 0.0

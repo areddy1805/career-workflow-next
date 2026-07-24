@@ -80,6 +80,7 @@
 - **Decision Ledger:** SQLite WAL-backed authoritative decision ledger tracking candidate qualification, job lifecycle, terminal state accounting, and full audit trails.
 - **Application Routing:** Intelligent dispatch of jobs to the correct engine (Naukri Native, ATS handler, or External Fallback).
 - **Provider Architecture:** Unified interface supporting multiple job board providers seamlessly.
+- **LLM Provider Architecture:** Configurable `OpenAICompatibleProvider` supporting seamless failover across OpenAI, DeepSeek, OpenRouter, and local `OMLXProvider` fallback.
 - **Manual Review Queue:** Intercepts ambiguous roles or complex applications for human review.
 - **ATS Detection:** Prevents dead-ends by detecting and routing specific Applicant Tracking Systems.
 - **Live Pipeline & Intelligence:** Real-time execution with lock management, crash recovery, dry-run safety modes, and thread-safe telemetry projections.

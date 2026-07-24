@@ -4,6 +4,8 @@ import yaml
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+import json
+import openai
 
 from src.inference.provider import BaseProvider
 from src.inference.providers.openai_compatible import OpenAICompatibleProvider
@@ -50,6 +52,7 @@ class ProviderManager:
         self.config: Dict[str, Any] = {}
 
         self._load_config(config_path, config_dict)
+        self._validate_startup()
 
     def _load_config(self, config_path: Optional[str], config_dict: Optional[Dict[str, Any]]):
         if config_dict:
@@ -86,29 +89,35 @@ class ProviderManager:
         if "deepseek" in providers_cfg or primary == "deepseek" or "deepseek" in self.provider_chain:
             ds_cfg = providers_cfg.get("deepseek", {})
             if ds_cfg.get("enabled", True):
-                self.providers["deepseek"] = OpenAICompatibleProvider(
-                    name="deepseek",
-                    vendor="deepseek",
-                    base_url=ds_cfg.get("base_url", "https://api.deepseek.com"),
-                    api_key_env=ds_cfg.get("api_key_env", "DEEPSEEK_API_KEY"),
-                    model=ds_cfg.get("model", "deepseek-v4-flash"),
-                    timeout=float(ds_cfg.get("timeout", 60)),
-                    pricing=ds_cfg.get("pricing"),
-                    capabilities=ds_cfg.get("capabilities"),
-                    reasoning_config=ds_cfg.get("thinking")
-                )
+                try:
+                    self.providers["deepseek"] = OpenAICompatibleProvider(
+                        name="deepseek",
+                        vendor="deepseek",
+                        base_url=ds_cfg.get("base_url", "https://api.deepseek.com"),
+                        api_key_env=ds_cfg.get("api_key_env", "DEEPSEEK_API_KEY"),
+                        model=ds_cfg.get("model", "deepseek-v4-flash"),
+                        timeout=float(ds_cfg.get("timeout", 60)),
+                        pricing=ds_cfg.get("pricing"),
+                        capabilities=ds_cfg.get("capabilities"),
+                        reasoning_config=ds_cfg.get("thinking")
+                    )
+                except ValueError as e:
+                    logger.warning(f"[ProviderManager] Configuration Warning: DeepSeek unavailable - {e}")
 
         # Instantiate OMLX
         if "omlx" in providers_cfg or fallback == "omlx" or "omlx" in self.provider_chain:
             omlx_cfg = providers_cfg.get("omlx", {})
             if omlx_cfg.get("enabled", True):
-                self.providers["omlx"] = OMLXProvider(
-                    name="omlx",
-                    base_url=omlx_cfg.get("base_url"),
-                    model=omlx_cfg.get("model"),
-                    api_key=omlx_cfg.get("api_key"),
-                    timeout=float(omlx_cfg.get("timeout", 120))
-                )
+                try:
+                    self.providers["omlx"] = OMLXProvider(
+                        name="omlx",
+                        base_url=omlx_cfg.get("base_url"),
+                        model=omlx_cfg.get("model"),
+                        api_key=omlx_cfg.get("api_key"),
+                        timeout=float(omlx_cfg.get("timeout", 120))
+                    )
+                except Exception as e:
+                    logger.warning(f"[ProviderManager] Configuration Warning: OMLX unavailable - {e}")
 
         # Initialize health cache for each registered provider
         for pname in self.providers:
@@ -117,6 +126,40 @@ class ProviderManager:
                 "last_checked": 0.0,
                 "error": None
             }
+
+    def _validate_startup(self):
+        """Verifies provider configuration, models, URLs, retry limits, timeouts, and chain integrity."""
+        usable_providers = []
+        for pname in list(self.provider_chain):
+            if pname not in self.providers:
+                logger.warning(f"[ProviderManager] Provider '{pname}' in chain but unavailable. Removing from active chain.")
+                self.provider_chain.remove(pname)
+                continue
+            
+            provider = self.providers[pname]
+            
+            # Validate model names and URLs
+            if not provider.model_name:
+                logger.warning(f"[ProviderManager] Provider '{pname}' has no model configured. Removing.")
+                self.provider_chain.remove(pname)
+                del self.providers[pname]
+                continue
+                
+            # Verify provider config explicitly
+            cfg = self.config.get("providers", {}).get(pname, {})
+            retries = cfg.get("retries", 3)
+            timeout = cfg.get("timeout", 60)
+            if not isinstance(retries, int) or retries < 0:
+                logger.warning(f"[ProviderManager] Provider '{pname}' has invalid retries ({retries}). Defaulting to 3.")
+            if not isinstance(timeout, (int, float)) or timeout <= 0:
+                logger.warning(f"[ProviderManager] Provider '{pname}' has invalid timeout ({timeout}). Defaulting to 60.")
+
+            usable_providers.append(pname)
+
+        if not usable_providers and not self.providers:
+            raise RuntimeError("Inference Platform Startup Failed: No usable providers remain after configuration validation.")
+            
+        logger.info(f"[ProviderManager] Startup Validation Complete. Active provider chain: {self.provider_chain}")
 
     def check_provider_health(self, provider_name: str, force: bool = False) -> bool:
         """Cached health check with TTL (default 60s) to avoid unnecessary API traffic."""
@@ -139,6 +182,14 @@ class ProviderManager:
         }
         return is_healthy
 
+    def close(self) -> None:
+        """Gracefully close all initialized providers."""
+        for name, provider in self.providers.items():
+            try:
+                provider.close()
+            except Exception as e:
+                logger.warning(f"[ProviderManager] Error closing provider '{name}': {e}")
+
     def execute_with_retry(
         self,
         provider: BaseProvider,
@@ -157,8 +208,26 @@ class ProviderManager:
                 return response
             except Exception as e:
                 last_error = e
+                
+                # Classify the error for telemetry without leaking raw prompt data
+                error_type = "provider_error"
+                error_msg = f"{e.__class__.__name__}: {str(e)}"
+                
+                if isinstance(e, openai.AuthenticationError):
+                    error_type = "auth_error"
+                    error_msg = "Authentication Failed (Key invalid or missing)"
+                elif isinstance(e, openai.RateLimitError):
+                    error_type = "rate_limit"
+                    error_msg = "Rate Limit Exceeded"
+                elif isinstance(e, openai.APIConnectionError):
+                    error_type = "network_error"
+                    error_msg = "Network Connection Failed"
+                elif isinstance(e, json.JSONDecodeError):
+                    error_type = "parse_error"
+                    error_msg = "Failed to parse JSON"
+                
                 logger.warning(
-                    f"[ProviderManager] Attempt {attempt}/{retries} for provider '{provider.provider_name}' failed: {e}"
+                    f"[ProviderManager] Attempt {attempt}/{retries} for provider '{provider.provider_name}' failed ({error_type}): {error_msg}"
                 )
                 self.metrics.process_event(InferenceFailedEvent(
                     event_type="failed",
@@ -168,7 +237,7 @@ class ProviderManager:
                     caller=request.caller,
                     category=request.category,
                     timestamp=time.time(),
-                    error=str(e),
+                    error=error_msg,
                     attempt=attempt
                 ))
                 if attempt < retries:
