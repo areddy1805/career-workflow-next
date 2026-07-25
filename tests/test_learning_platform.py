@@ -13,7 +13,10 @@ def test_learning_platform_release_3_3():
     assert ledger.get_success_rate() == 100.0
 
     # 2. Cost Engine Analytics
-    report = CostEngine.calculate_metrics(total_jobs=1088, llm_calls=150, bypassed_jobs=938)
+    from src.inference.models import UnifiedInferenceMetrics
+    metrics = UnifiedInferenceMetrics(provider="Global")
+    metrics.requests = 150
+    report = CostEngine.calculate_metrics(total_jobs=1088, bypassed_jobs=938, metrics=metrics)
     assert isinstance(report, CostReport)
     assert report.cost_reduction_pct >= 85.0
     assert report.saved_cost_usd > 0.0

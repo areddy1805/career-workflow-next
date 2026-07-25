@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from typing import Any
 import pandas as pd
 import json
+import os
+from pathlib import Path
 
 from control_center.data import (
     application_summary,
@@ -428,3 +430,16 @@ def get_run_artifact_content(run_id: str, file_name: str) -> Any:
         return read_json_artifact(run_id, file_name)
     else:
         return {"content": read_text_artifact(run_id, file_name)}
+
+@router.get("/api/v1/viewmodel")
+def api_view_model() -> dict:
+    """Return the live ViewModel from the runtime snapshot."""
+    runtime_dir = Path(os.getenv("RUNTIME_DIR", "data/ui_runtime"))
+    current_path = runtime_dir / "current.json"
+    if not current_path.exists():
+        return {}
+    try:
+        data = json.loads(current_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}

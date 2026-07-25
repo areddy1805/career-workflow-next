@@ -31,6 +31,9 @@ class MockSuccessProvider(BaseProvider):
     def health_check(self) -> bool:
         return True
 
+    async def close(self) -> None:
+        pass
+
     def estimate_cost(self, p: int, c: int, r: int = 0) -> float:
         return 0.001
 
@@ -70,6 +73,9 @@ class MockFailingProvider(BaseProvider):
     def health_check(self) -> bool:
         return False
 
+    async def close(self) -> None:
+        pass
+
     def estimate_cost(self, p: int, c: int, r: int = 0) -> float:
         return 0.0
 
@@ -78,10 +84,11 @@ class MockFailingProvider(BaseProvider):
 
 
 def test_provider_manager_fallback():
-    mgr = ProviderManager(config_dict={
-        "llm": {"default_provider": "p1", "fallback_provider": "p2"},
-        "providers": {"p1": {}, "p2": {}}
-    })
+    with patch.object(ProviderManager, '_validate_startup'):
+        mgr = ProviderManager(config_dict={
+            "llm": {"default_provider": "p1", "fallback_provider": "p2"},
+            "providers": {"p1": {}, "p2": {}}
+        })
 
     p1 = MockFailingProvider(name="p1")
     p2 = MockSuccessProvider(name="p2")

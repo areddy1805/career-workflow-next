@@ -34,6 +34,10 @@ class PipelineExecutionContext:
         self.event_factory = EventFactory(run_id)
         self.ledger = JobDecisionLedger()
 
+        from src.runtime.state_manager import RuntimeStateManager
+        self.state_manager = RuntimeStateManager(run_dir)
+        self.bus.subscribe(self.state_manager.handle_event)
+
         self.fingerprint = {
             "git_commit": get_git_commit(),
             "pipeline_version": "3.1.0",
@@ -199,3 +203,44 @@ class PipelineExecutionContext:
         self.bus.publish(event)
 
         self.current_stage = None
+
+    def emit_run_started(self, *, profile: str, mode: str, provider: str,
+                          max_applications, dry_run: bool) -> None:
+        from datetime import datetime, timezone
+        payload = {
+            "run_id": self.run_id, "profile": profile, "mode": mode,
+            "provider": provider, "started_at": datetime.now(timezone.utc).isoformat(),
+            "total_stages": 8, "max_applications": max_applications, "dry_run": dry_run,
+        }
+        self.bus.publish(self.event_factory.create("System", "RunStarted", payload))
+
+    def emit_run_completed(self, status: str) -> None:
+        self.bus.publish(self.event_factory.create("System", "RunCompleted",
+            {"run_id": self.run_id, "status": status}))
+
+    def emit_run_failed(self, error: str) -> None:
+        self.bus.publish(self.event_factory.create("System", "RunFailed",
+            {"run_id": self.run_id, "error": error}))
+
+    def emit_health(self, component: str, status: str, details: str = None,
+                     provider_name: str = None) -> None:
+        payload = {"component": component, "status": status, "details": details}
+        if provider_name:
+            payload["provider_name"] = provider_name
+        self.bus.publish(self.event_factory.create("System", "HealthUpdated", payload))
+
+    def emit_inference_metrics(self, *, requests: int, total_tokens: int,
+                                total_cost: float, average_latency: float,
+                                fallback_count: int = 0, failed_requests: int = 0) -> None:
+        self.bus.publish(self.event_factory.create("System", "InferenceMetrics", {
+            "requests": requests, "total_tokens": total_tokens,
+            "total_cost": total_cost, "average_latency": average_latency,
+            "fallback_count": fallback_count, "failed_requests": failed_requests,
+        }))
+
+    def emit_efficiency_metrics(self, *, avoidance_rate: float,
+                                 semantic_reuse: int, deterministic_rejections: int) -> None:
+        self.bus.publish(self.event_factory.create("System", "EfficiencyMetrics", {
+            "avoidance_rate": avoidance_rate, "semantic_reuse": semantic_reuse,
+            "deterministic_rejections": deterministic_rejections,
+        }))

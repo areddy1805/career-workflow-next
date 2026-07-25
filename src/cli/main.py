@@ -43,7 +43,8 @@ def run(
     canary: bool = typer.Option(False, "--canary", help="Force a live run to at most one application."),
     force_live: bool = typer.Option(False, "--force-live", help="Bypass search challenge cooldowns."),
     provider: str = typer.Option("all", "--provider", help="Specify which acquisition or inference provider to run."),
-    llm_provider: Optional[str] = typer.Option(None, "--llm-provider", help="Specify active inference provider (deepseek, omlx, etc.).")
+    llm_provider: Optional[str] = typer.Option(None, "--llm-provider", help="Specify active inference provider (deepseek, omlx, etc.)."),
+    dashboard: bool = typer.Option(False, "--dashboard", help="Show live Rich CLI dashboard during run.")
 ):
     """Run the Career Workflow orchestration pipeline."""
     target_llm = llm_provider
@@ -74,12 +75,70 @@ def run(
         "llm_provider": target_llm
     }
     
-    console.print(f"[bold green]Starting Pipeline Run[/bold green] (live={live})")
-    
-    with ExecutionCapture("cw run", args):
-        _stream_process(command)
-    
-    console.print("[bold green]Run Complete.[/bold green]")
+    if dashboard:
+        import threading, time, json
+        from src.presentation.cli.renderer import OperatorConsole
+        
+        done_event = threading.Event()
+        renderer = OperatorConsole(refresh_rate=1.0)
+        
+        capture = ExecutionCapture("cw run", args)
+        
+        def _run_pipeline():
+            env = os.environ.copy()
+            env["CW_RUN_ID"] = capture.run_id
+            try:
+                # Pipe stdout and stderr to capture log without writing to terminal
+                process = subprocess.Popen(
+                    command,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+                for line in process.stdout:
+                    capture.log_file.write(line)
+                    capture.log_file.flush()
+                process.wait()
+                capture.exit_code = process.returncode
+            except Exception as e:
+                capture.log_file.write(f"Pipeline failed to launch: {e}\n")
+                capture.exit_code = 1
+            finally:
+                capture.log_file.close()
+                capture._write_metadata()
+                capture._write_version_info()
+                done_event.set()
+        
+        pipeline_thread = threading.Thread(target=_run_pipeline, daemon=True)
+        pipeline_thread.start()
+        
+        renderer.log_path = capture.log_file_path
+        
+        # Wait for run_id to appear in current.json (up to 3s)
+        runtime_dir = os.getenv("RUNTIME_DIR", "data/ui_runtime")
+        for _ in range(30):
+            current_path = Path(runtime_dir) / "current.json"
+            if current_path.exists():
+                try:
+                    data = json.loads(current_path.read_text())
+                    run_id = data.get("header", {}).get("run_id")
+                    if run_id and run_id != "Unknown":
+                        break
+                except Exception:
+                    pass
+            time.sleep(0.1)
+        
+        renderer.start(done_event=done_event)
+        pipeline_thread.join()
+    else:
+        console.print(f"[bold green]Starting Pipeline Run[/bold green] (live={live})")
+        
+        with ExecutionCapture("cw run", args):
+            _stream_process(command)
+        
+        console.print("[bold green]Run Complete.[/bold green]")
 
 @app.command()
 def schedule(

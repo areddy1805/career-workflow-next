@@ -153,6 +153,22 @@ class CareerWorkflowPipeline:
         self._persist_state()
         self._update_global_pipeline_state(current_stage="STARTING")
 
+        try:
+            from config.candidate_profile import CANDIDATE_PROFILE
+            profile_name = CANDIDATE_PROFILE.get("name", "Unknown")
+        except Exception:
+            profile_name = "Unknown"
+        try:
+            self.exec_context.emit_run_started(
+                profile=profile_name,
+                mode="live" if not self.context.dry_run else "dry-run",
+                provider=self.context.acquisition_provider,
+                max_applications=self.context.max_applications,
+                dry_run=self.context.dry_run,
+            )
+        except Exception:
+            pass
+
     def _update_global_pipeline_state(self, current_stage: str | None = None) -> None:
         state_path = Path(
             os.getenv("PIPELINE_STATE_PATH", "data/ui_runtime/pipeline_state.json")
@@ -447,6 +463,16 @@ class CareerWorkflowPipeline:
             ),
         }
         self._write_artifact("environment.json", environment)
+
+        try:
+            self.exec_context.emit_health("artifacts", "healthy", f"Run dir: {self.run_dir}")
+            import sqlite3 as _sq3
+            _c = _sq3.connect(":memory:")
+            _c.execute("PRAGMA journal_mode=WAL")
+            _c.close()
+            self.exec_context.emit_health("sqlite", "healthy", "WAL mode available")
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Acquisition
@@ -1360,6 +1386,16 @@ class CareerWorkflowPipeline:
                 self.status = PipelineStatus.FAILED
             self._update_global_pipeline_state(current_stage=None)
 
+            try:
+                if self.status == PipelineStatus.SUCCESS:
+                    self.exec_context.emit_run_completed("SUCCESS")
+                elif self.status == PipelineStatus.PARTIAL:
+                    self.exec_context.emit_run_completed("PARTIAL")
+                else:
+                    self.exec_context.emit_run_failed("Pipeline failed or was interrupted")
+            except Exception:
+                pass
+
     def run(self) -> PipelineResult:
         if self.artifacts_root and self.artifacts_root != Path("artifacts/runs"):
             lock_path = str(self.artifacts_root / "pipeline.lock")
@@ -1397,6 +1433,18 @@ class CareerWorkflowPipeline:
         if hasattr(self, "inference_service") and hasattr(self.inference_service, "engine"):
             metrics_snapshot = self.inference_service.engine.metrics.get_snapshot()
             self._write_artifact("pipeline_intelligence.json", {"llm_inference": metrics_snapshot})
+
+            try:
+                self.exec_context.emit_inference_metrics(
+                    requests=metrics_snapshot.get("calls", 0),
+                    total_tokens=metrics_snapshot.get("prompt_tokens", 0) + metrics_snapshot.get("completion_tokens", 0),
+                    total_cost=metrics_snapshot.get("cost_usd", 0.0),
+                    average_latency=(metrics_snapshot.get("latency_ms", 0.0) / metrics_snapshot.get("calls", 1)) if metrics_snapshot.get("calls", 0) > 0 else 0.0,
+                    fallback_count=metrics_snapshot.get("fallbacks", 0),
+                    failed_requests=metrics_snapshot.get("failures", 0),
+                )
+            except Exception:
+                pass
         
         try:
             PipelineExplorerRenderer(self.run_dir).render()
