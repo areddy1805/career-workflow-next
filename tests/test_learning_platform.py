@@ -3,7 +3,7 @@ from src.core.learning.ledger import LearningLedger
 from src.core.learning.cost_engine import CostEngine, CostReport
 from src.core.learning.ml_ranker import LightGBMRanker
 from src.core.features.vector import FeatureVector, FeatureResult
-
+from src.inference.models import UnifiedInferenceMetrics
 def test_learning_platform_release_3_3():
     # 1. Learning Ledger
     ledger = LearningLedger()
@@ -13,7 +13,15 @@ def test_learning_platform_release_3_3():
     assert ledger.get_success_rate() == 100.0
 
     # 2. Cost Engine Analytics
-    report = CostEngine.calculate_metrics(total_jobs=1088, llm_calls=150, bypassed_jobs=938)
+    metrics = UnifiedInferenceMetrics(
+        requests=150,
+        total_cost=0.005,
+        prompt_tokens=150000,
+        completion_tokens=5000,
+        reasoning_tokens=0,
+        provider="deepseek"
+    )
+    report = CostEngine.calculate_metrics(total_jobs=1088, bypassed_jobs=938, metrics=metrics)
     assert isinstance(report, CostReport)
     assert report.cost_reduction_pct >= 85.0
     assert report.saved_cost_usd > 0.0

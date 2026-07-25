@@ -47,6 +47,9 @@ class MockSuccessProvider(BaseProvider):
             fingerprint=request.fingerprint
         )
 
+    def close(self) -> None:
+        pass
+
 class MockFailingProvider(BaseProvider):
     def __init__(self, name="mock_fail"):
         self._name = name
@@ -76,8 +79,12 @@ class MockFailingProvider(BaseProvider):
     def generate(self, request: InferenceRequest) -> InferenceResponse:
         raise RuntimeError("API Connection Timeout")
 
+    def close(self) -> None:
+        pass
 
-def test_provider_manager_fallback():
+
+@patch("src.inference.manager.ProviderManager._validate_startup")
+def test_provider_manager_fallback(mock_validate):
     mgr = ProviderManager(config_dict={
         "llm": {"default_provider": "p1", "fallback_provider": "p2"},
         "providers": {"p1": {}, "p2": {}}
@@ -107,7 +114,8 @@ def test_provider_manager_fallback():
     assert resp.parsed_response == {"decision": "ELIGIBLE"}
     assert resp.metrics.get("fallback_used") is True
 
-def test_cached_health_check():
+@patch("src.inference.manager.ProviderManager._validate_startup")
+def test_cached_health_check(mock_validate):
     mgr = ProviderManager(config_dict={})
     p = MockSuccessProvider(name="p1")
     mgr.providers = {"p1": p}
