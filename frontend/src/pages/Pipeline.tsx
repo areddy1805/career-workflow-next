@@ -2,14 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { launchPipeline } from '@/lib/api';
 import { usePipelineState } from '@/lib/hooks';
-import { Play, AlertTriangle, ArrowDown } from 'lucide-react';
+import { Play, AlertTriangle, ArrowDown, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RelativeTime } from '@/components/RelativeTime';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { StatusBadge } from '@/components/StatusBadge';
+import { StatusBadge } from '@/components/operations/StatusBadge';
+import { SectionTitle } from '@/components/operations/SectionTitle';
 
 export default function Pipeline() {
   const queryClient = useQueryClient();
@@ -29,14 +30,12 @@ export default function Pipeline() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipeline_state'] }),
   });
 
-  // Auto-scroll log to bottom
   useEffect(() => {
     if (autoScroll && logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [data?.log, autoScroll]);
 
-  // Detect manual scroll — disable auto-scroll
   const handleLogScroll = () => {
     const el = logContainerRef.current;
     if (!el) return;
@@ -62,63 +61,59 @@ export default function Pipeline() {
   if (isLoading && !data) {
     return (
       <div className="p-6 text-sm text-muted-foreground animate-pulse">
-        Loading pipeline state…
+        Initializing Pipeline Control…
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6 text-sm text-red-500">
+      <div className="p-6 text-sm text-red-500 font-medium">
         Failed to load pipeline state: {(error as Error).message}
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-background overflow-auto">
+    <div className="h-full flex flex-col animate-in fade-in duration-300">
+      <SectionTitle 
+        title="Pipeline Control" 
+        subtitle="Configure, execute, and observe the application engine."
+        action={
+          <StatusBadge 
+            status={isRunning ? 'success' : 'neutral'} 
+            label={isRunning ? 'RUNNING' : 'IDLE'} 
+            pulse={isRunning} 
+          />
+        }
+      />
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            Pipeline Control
-            <StatusBadge status={isRunning ? 'RUNNING' : 'IDLE'} pulse={isRunning} />
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Configure, execute, and observe the application engine.</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-6 p-6 max-w-[1600px]">
-
+      <div className="flex flex-col lg:flex-row gap-6 pb-6">
         {/* Left: Log viewer */}
-        <div className="flex-[1.8] flex flex-col gap-0 min-w-0 border border-border/50 bg-card rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-border/50 bg-muted/10 flex items-center justify-between">
-            <div>
-              <h2 className="text-xs font-semibold">Live Output</h2>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Active launcher log</p>
+        <div className="flex-[1.8] flex flex-col gap-0 min-w-0 border border-border bg-[#0a0a0a] rounded-md shadow-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-card/50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+              <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">Live Output</h2>
             </div>
             {!autoScroll && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
+              <button
+                className="text-[10px] font-medium tracking-tight text-foreground hover:text-foreground/70 transition-colors flex items-center gap-1.5"
                 onClick={() => {
                   setAutoScroll(true);
                   logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
                 <ArrowDown className="w-3 h-3" /> Scroll to bottom
-              </Button>
+              </button>
             )}
           </div>
           <div
             ref={logContainerRef}
             onScroll={handleLogScroll}
-            className="h-[480px] overflow-y-auto p-4 bg-[hsl(var(--background))] relative"
-            style={{ fontFamily: 'JetBrains Mono, Fira Code, monospace' }}
+            className="h-[520px] overflow-y-auto p-4 relative"
           >
-            <pre className="text-[12px] text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">
+            <pre className="text-[11px] font-mono text-zinc-400 leading-relaxed whitespace-pre-wrap">
               {data?.log ?? 'No output yet. Launch the pipeline to begin.'}
             </pre>
             <div ref={logEndRef} />
@@ -126,14 +121,14 @@ export default function Pipeline() {
         </div>
 
         {/* Right: Telemetry + Config */}
-        <div className="flex-1 flex flex-col gap-5 min-w-[300px]">
+        <div className="flex-1 flex flex-col gap-6 min-w-[300px]">
 
           {/* Telemetry */}
-          <div className="border border-border/50 bg-card rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-border/50 bg-muted/10">
-              <h2 className="text-xs font-semibold">Process Telemetry</h2>
+          <div className="border border-border bg-card rounded-md shadow-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-card/50">
+              <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">Telemetry</h2>
             </div>
-            <div className="grid grid-cols-2 gap-px bg-border/40">
+            <div className="grid grid-cols-2 gap-px bg-border/50">
               {[
                 { label: 'Status',  value: isRunning ? 'Running' : 'Idle' },
                 { label: 'PID',     value: state.pid ?? '—' },
@@ -142,27 +137,26 @@ export default function Pipeline() {
                     ? <RelativeTime date={state.started_at} />
                     : '—' },
               ].map(item => (
-                <div key={item.label} className="bg-card px-4 py-3 flex flex-col gap-1">
-                  <span className="text-[9px] uppercase font-mono font-semibold text-muted-foreground tracking-wider">{item.label}</span>
-                  <span className="text-sm font-medium font-mono">{item.value}</span>
+                <div key={item.label} className="bg-card px-4 py-3 flex flex-col gap-1.5">
+                  <span className="text-[9px] uppercase font-semibold text-muted-foreground tracking-widest">{item.label}</span>
+                  <span className="text-sm font-medium tracking-tight text-foreground">{item.value}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Run Configuration */}
-          <div className="border border-border/50 bg-card rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-border/50 bg-muted/10">
-              <h2 className="text-xs font-semibold">Run Configuration</h2>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Safety-first execution controls</p>
+          <div className="border border-border bg-card rounded-md shadow-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-card/50">
+              <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">Configuration</h2>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-5">
 
               {/* Mode toggle */}
-              <div className="flex gap-1.5 p-1 bg-muted/40 rounded-md w-full border border-border/40">
+              <div className="flex gap-1 p-1 bg-muted/40 rounded-md w-full border border-border">
                 <button
                   className={cn(
-                    'flex-1 text-xs py-1.5 rounded-sm transition-colors font-medium',
+                    'flex-1 text-[11px] py-1.5 rounded-sm transition-all duration-200 font-semibold uppercase tracking-wider',
                     !live ? 'bg-background shadow-sm text-foreground border border-border/50' : 'text-muted-foreground hover:text-foreground'
                   )}
                   onClick={() => { setLive(false); setMaxApplications(500); }}
@@ -172,8 +166,8 @@ export default function Pipeline() {
                 </button>
                 <button
                   className={cn(
-                    'flex-1 text-xs py-1.5 rounded-sm transition-colors font-medium',
-                    live ? 'bg-background shadow-sm text-red-500 border border-red-500/30' : 'text-muted-foreground hover:text-foreground'
+                    'flex-1 text-[11px] py-1.5 rounded-sm transition-all duration-200 font-semibold uppercase tracking-wider',
+                    live ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20' : 'text-muted-foreground hover:text-foreground'
                   )}
                   onClick={() => { setLive(true); setMaxApplications(3); }}
                   disabled={isRunning}
@@ -183,8 +177,8 @@ export default function Pipeline() {
               </div>
 
               {/* Application ceiling */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="app-ceiling" className="text-xs font-medium">Application Ceiling</label>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="app-ceiling" className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Application Ceiling</label>
                 <Input
                   id="app-ceiling"
                   type="number"
@@ -193,41 +187,43 @@ export default function Pipeline() {
                   disabled={isRunning}
                   min={1}
                   max={1000}
-                  className="h-8 text-xs"
+                  className="h-9 text-sm"
                 />
               </div>
 
               {/* Live-only options */}
               {live && (
-                <div className="space-y-3 pt-2 border-t border-border/40">
-                  <label className="flex items-center gap-2.5 text-xs cursor-pointer">
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <label className="flex items-start gap-3 cursor-pointer group">
                     <Checkbox
                       checked={canary}
                       onCheckedChange={v => setCanary(!!v)}
                       disabled={isRunning}
                       id="canary"
+                      className="mt-0.5"
                     />
-                    <span>
-                      <span className="font-medium">Canary</span>
-                      <span className="text-muted-foreground ml-1">— one live application</span>
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-semibold text-foreground group-hover:text-foreground/80 transition-colors">Canary Release</span>
+                      <span className="text-[11px] text-muted-foreground">Limits execution to exactly one live application for validation.</span>
+                    </div>
                   </label>
-                  <label className="flex items-center gap-2.5 text-xs cursor-pointer">
+                  <label className="flex items-start gap-3 cursor-pointer group">
                     <Checkbox
                       checked={forceLive}
                       onCheckedChange={v => setForceLive(!!v)}
                       disabled={isRunning}
                       id="force-live"
+                      className="mt-0.5"
                     />
-                    <span>
-                      <span className="font-medium">Force Live</span>
-                      <span className="text-muted-foreground ml-1">— bypass cooldown</span>
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-semibold text-foreground group-hover:text-foreground/80 transition-colors">Force Live</span>
+                      <span className="text-[11px] text-muted-foreground">Bypasses provider cooldown constraints. Use with caution.</span>
+                    </div>
                   </label>
-                  <div className="flex items-start gap-2.5 p-3 bg-red-500/8 border border-red-500/20 rounded-md">
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-500 font-medium leading-relaxed">
-                      Live mode submits real applications and consumes quota.
+                  <div className="flex items-start gap-3 p-3 bg-red-500/5 border border-red-500/20 rounded-md">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-red-600 dark:text-red-400 font-medium leading-relaxed tracking-tight">
+                      Live mode submits actual applications to external systems and consumes quotas. Proceed carefully.
                     </p>
                   </div>
                 </div>
@@ -235,16 +231,19 @@ export default function Pipeline() {
 
               {/* Launch */}
               <Button
-                className="w-full h-9 text-sm font-semibold gap-2 mt-1"
+                className={cn(
+                  "w-full h-10 text-[13px] font-semibold tracking-wide transition-all",
+                  live ? "bg-red-600 hover:bg-red-700 text-white" : ""
+                )}
                 onClick={handleLaunchClick}
                 disabled={isRunning || launchMutation.isPending}
               >
                 {launchMutation.isPending
-                  ? 'Starting…'
+                  ? 'Initializing Sequence…'
                   : isRunning
-                  ? 'Pipeline Running'
-                  : 'Launch Pipeline'}
-                {!isRunning && <Play className="w-4 h-4" />}
+                  ? 'Sequence Running'
+                  : live ? 'Execute Live Run' : 'Execute Dry Run'}
+                {!isRunning && <Play className="w-4 h-4 ml-2 opacity-70" />}
               </Button>
 
             </div>
@@ -252,13 +251,12 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {/* Confirm live launch dialog */}
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Launch in Live Mode?"
-        description="This will submit real job applications and consume quota. Live mode cannot be undone once started. Confirm only if you intend to apply."
-        confirmLabel="Yes, Launch Live"
+        title="Execute Live Application Sequence?"
+        description="This will submit real applications to external providers. This action cannot be undone."
+        confirmLabel="Execute Live Run"
         confirmVariant="destructive"
         onConfirm={handleConfirmedLaunch}
       />

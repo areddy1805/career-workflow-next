@@ -357,5 +357,21 @@ def logs(
         pager = os.environ.get("PAGER", "less -R")
         subprocess.run(f"{pager} {log_path}", shell=True)
 
+@app.command()
+def render(
+    refresh_rate: float = typer.Option(1.0, "--refresh-rate", help="Dashboard refresh rate in seconds")
+):
+    """Render the live Operator Console dashboard without running a pipeline."""
+    import threading
+    from src.presentation.cli.renderer import OperatorConsole
+    
+    renderer = OperatorConsole(refresh_rate=refresh_rate)
+    
+    # We don't have a done_event to stop it, so it runs until Ctrl+C
+    try:
+        renderer.start()
+    except KeyboardInterrupt:
+        pass
+
 if __name__ == "__main__":
     app()

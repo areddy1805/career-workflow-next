@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { useLedgerSearch, useLedgerStats } from '@/lib/hooks';
+import { useLedgerSearch, useLedgerStats, useLedgerJob } from '@/lib/hooks';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/StatusBadge';
+import { StatusBadge } from '@/components/operations/StatusBadge';
+import { StatRow } from '@/components/operations/StatRow';
+import { SectionTitle } from '@/components/operations/SectionTitle';
 import { RelativeTime } from '@/components/RelativeTime';
-import { Search, ChevronLeft, ChevronRight, FileJson } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useLedgerJob } from '@/lib/hooks';
+import { Search, ChevronLeft, ChevronRight, FileJson, Cpu, MapPin, Building, Globe } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { CopyButton } from '@/components/CopyButton';
+import { cn } from '@/lib/utils';
 
 export default function Ledger() {
   const [query, setQuery] = useState('');
@@ -19,7 +23,6 @@ export default function Ledger() {
   const { data: stats } = useLedgerStats();
 
   const [selectedFingerprint, setSelectedFingerprint] = useState<string | null>(null);
-
   const { data: jobDetails, isLoading: detailsLoading } = useLedgerJob(selectedFingerprint || '');
 
   const items = data?.items || [];
@@ -27,196 +30,274 @@ export default function Ledger() {
   const hasMore = offset + limit < total;
 
   return (
-    <div className="h-full flex flex-col bg-background text-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Decision Ledger</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Operational state of every application tracked by the system.
-          </p>
-        </div>
-        {stats && (
-          <div className="flex gap-4">
-            <div className="text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Total</p>
-              <p className="font-mono text-sm">{stats.total?.toLocaleString()}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Applied</p>
-              <p className="font-mono text-sm text-emerald-500">{stats.applied?.toLocaleString()}</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border/40 shrink-0 bg-secondary/10">
-        <div className="relative w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search company or title..."
-            value={query}
-            onChange={e => { setQuery(e.target.value); setOffset(0); }}
-            className="h-8 pl-9 text-xs"
-          />
-        </div>
-        <select 
-          className="h-8 rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm"
-          value={status}
-          onChange={e => { setStatus(e.target.value); setOffset(0); }}
-        >
-          <option value="">All Statuses</option>
-          <option value="applied">Applied</option>
-          <option value="rejected">Rejected</option>
-          <option value="qualified">Qualified</option>
-        </select>
-        <select 
-          className="h-8 rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm"
-          value={provider}
-          onChange={e => { setProvider(e.target.value); setOffset(0); }}
-        >
-          <option value="">All Providers</option>
-          <option value="linkedin">LinkedIn</option>
-          <option value="naukri">Naukri</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 overflow-auto relative">
-        <table className="w-full text-left border-collapse">
-          <thead className="sticky top-0 bg-background z-20 shadow-[0_1px_0_var(--border)]">
-            <tr className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Company</th>
-              <th className="px-4 py-2 font-medium">Title</th>
-              <th className="px-4 py-2 font-medium">Location</th>
-              <th className="px-4 py-2 font-medium">Provider</th>
-              <th className="px-4 py-2 font-medium">Updated</th>
-              <th className="px-4 py-2 font-medium w-16"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {items.map((job: any) => (
-              <tr key={job.job_id} className="hover:bg-muted/50 transition-colors group">
-                <td className="px-4 py-2">
-                  <StatusBadge status={job.status} />
-                </td>
-                <td className="px-4 py-2 font-medium truncate max-w-[150px]">{job.company}</td>
-                <td className="px-4 py-2 truncate max-w-[200px]">{job.title}</td>
-                <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-[120px]">{job.location || '—'}</td>
-                <td className="px-4 py-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">{job.source}</span>
-                </td>
-                <td className="px-4 py-2">
-                  <RelativeTime date={job.last_updated_at} className="text-muted-foreground text-xs" />
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 text-[10px] opacity-0 group-hover:opacity-100"
-                    onClick={() => setSelectedFingerprint(job.job_id)}
-                  >
-                    View
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {isLoading && (
-          <div className="absolute inset-0 bg-background/50 flex justify-center pt-20 z-30">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono bg-card px-4 py-2 border border-border/50 rounded-full shadow-sm h-10">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              Loading ledger...
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      <div className="h-12 border-t border-border/40 flex items-center justify-between px-4 bg-background shrink-0">
-        <span className="text-xs text-muted-foreground">
-          Showing {offset + 1}-{Math.min(offset + limit, total)} of {total.toLocaleString()}
-        </span>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 text-xs" 
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - limit))}
-          >
-            <ChevronLeft className="w-3 h-3 mr-1" /> Prev
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 text-xs"
-            disabled={!hasMore}
-            onClick={() => setOffset(offset + limit)}
-          >
-            Next <ChevronRight className="w-3 h-3 ml-1" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Details Modal */}
-      <Dialog open={!!selectedFingerprint} onOpenChange={(v) => !v && setSelectedFingerprint(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
-            <DialogTitle>Job Details: {selectedFingerprint}</DialogTitle>
-          </DialogHeader>
-          <div className="p-6 overflow-auto bg-muted/20 flex-1">
-            {detailsLoading ? (
-               <div className="animate-pulse space-y-4">
-                 <div className="h-4 bg-muted w-1/3 rounded"></div>
-                 <div className="h-32 bg-muted rounded"></div>
-               </div>
-            ) : jobDetails ? (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="font-semibold text-lg">{jobDetails.job.title}</h3>
-                  <p className="text-muted-foreground">{jobDetails.job.company} • {jobDetails.job.location}</p>
-                  <div className="mt-2 flex gap-2">
-                    <StatusBadge status={jobDetails.job.status} />
-                    <span className="text-xs bg-muted px-2 py-1 rounded">{jobDetails.job.source}</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-semibold mb-3">Event Timeline</h4>
-                  <div className="space-y-3 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-border">
-                    {jobDetails.events.map((evt: any) => (
-                      <div key={evt.id} className="relative pl-6">
-                        <div className="absolute left-[3px] top-1.5 w-2 h-2 rounded-full bg-border border-2 border-background" />
-                        <div className="flex items-center gap-2 mb-1">
-                          <StatusBadge status={evt.status} />
-                          <RelativeTime date={evt.created_at} className="text-[10px] text-muted-foreground" />
-                        </div>
-                        {evt.detail && <p className="text-xs text-muted-foreground bg-background border rounded p-2">{evt.detail}</p>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <FileJson className="w-4 h-4" /> Raw Ledger Row
-                  </h4>
-                  <pre className="text-[10px] font-mono bg-background border p-4 rounded-md overflow-auto">
-                    {JSON.stringify(jobDetails.job, null, 2)}
-                  </pre>
-                </div>
+    <div className="h-full flex flex-col animate-in fade-in duration-300">
+      <SectionTitle 
+        title="Decision Ledger" 
+        subtitle="Operational state and AI analysis for every discovered opportunity."
+        action={
+          stats ? (
+            <div className="flex items-center gap-6 text-right">
+              <div>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Tracked</p>
+                <p className="font-mono text-[13px] font-semibold text-foreground tracking-tight">{stats.total?.toLocaleString()}</p>
               </div>
-            ) : (
-              <div className="text-muted-foreground text-center">Failed to load details</div>
-            )}
+              <div>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Applied</p>
+                <p className="font-mono text-[13px] font-semibold text-emerald-500 tracking-tight">{stats.applied?.toLocaleString()}</p>
+              </div>
+            </div>
+          ) : null
+        }
+      />
+
+      <div className="flex-1 flex flex-col min-h-0 bg-card border border-border rounded-md shadow-card">
+        {/* Filters */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/50 shrink-0">
+          <div className="relative w-64 group">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
+            <Input 
+              placeholder="Search companies, titles…"
+              value={query}
+              onChange={e => { setQuery(e.target.value); setOffset(0); }}
+              className="h-8 pl-9 text-xs bg-background/50 focus-visible:bg-background"
+            />
           </div>
-        </DialogContent>
-      </Dialog>
+          <select 
+            className="h-8 rounded-md border border-input bg-background/50 focus:bg-background px-3 py-1 text-xs shadow-sm transition-colors outline-none focus:ring-1 focus:ring-ring"
+            value={status}
+            onChange={e => { setStatus(e.target.value); setOffset(0); }}
+          >
+            <option value="">All Statuses</option>
+            <option value="applied">Applied</option>
+            <option value="rejected">Rejected</option>
+            <option value="qualified">Qualified</option>
+          </select>
+          <select 
+            className="h-8 rounded-md border border-input bg-background/50 focus:bg-background px-3 py-1 text-xs shadow-sm transition-colors outline-none focus:ring-1 focus:ring-ring"
+            value={provider}
+            onChange={e => { setProvider(e.target.value); setOffset(0); }}
+          >
+            <option value="">All Providers</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="naukri">Naukri</option>
+            <option value="indeed">Indeed</option>
+            <option value="google">Google</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto relative">
+          <table className="w-full text-left border-collapse">
+            <thead className="sticky top-0 bg-muted/30 z-20 backdrop-blur-sm">
+              <tr className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3 border-b border-border w-32">Status</th>
+                <th className="px-4 py-3 border-b border-border">Company</th>
+                <th className="px-4 py-3 border-b border-border">Title</th>
+                <th className="px-4 py-3 border-b border-border">Location</th>
+                <th className="px-4 py-3 border-b border-border">Provider</th>
+                <th className="px-4 py-3 border-b border-border">Updated</th>
+                <th className="px-4 py-3 border-b border-border w-16"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {items.map((job: any) => (
+                <tr 
+                  key={job.job_id} 
+                  className="hover:bg-muted/30 transition-colors group cursor-pointer"
+                  onClick={() => setSelectedFingerprint(job.job_id)}
+                >
+                  <td className="px-4 py-3">
+                    <StatusBadge 
+                      status={['applied', 'submitted', 'offer', 'interview'].includes(job.status?.toLowerCase()) ? 'success' : job.status?.toLowerCase() === 'rejected' ? 'neutral' : 'info'} 
+                      label={job.status} 
+                    />
+                  </td>
+                  <td className="px-4 py-3 font-medium text-foreground text-[13px] truncate max-w-[200px]">{job.company}</td>
+                  <td className="px-4 py-3 text-muted-foreground group-hover:text-foreground transition-colors text-[13px] truncate max-w-[250px]">{job.title}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs truncate max-w-[150px]">{job.location || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{job.source}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <RelativeTime date={job.last_updated_at} className="font-mono text-[11px] text-muted-foreground" />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {isLoading && (
+            <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex justify-center pt-32 z-30">
+              <div className="flex items-center gap-3 text-sm text-foreground font-mono bg-card px-5 py-3 border border-border rounded-full shadow-lg h-12">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                Querying ledger...
+              </div>
+            </div>
+          )}
+          
+          {!isLoading && items.length === 0 && (
+            <div className="py-24 flex flex-col items-center justify-center text-center">
+              <Search className="w-8 h-8 text-muted-foreground/30 mb-3" />
+              <p className="text-sm font-medium text-foreground">No records found</p>
+              <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or search query.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        <div className="h-12 border-t border-border flex items-center justify-between px-4 bg-card/50 shrink-0">
+          <span className="text-[11px] font-mono text-muted-foreground">
+            Showing {Math.min(offset + 1, total)}-{Math.min(offset + limit, total)} of {total.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 text-[11px] font-medium px-2.5 bg-background hover:bg-muted" 
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - limit))}
+            >
+              <ChevronLeft className="w-3 h-3 mr-1" /> Prev
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 text-[11px] font-medium px-2.5 bg-background hover:bg-muted"
+              disabled={!hasMore}
+              onClick={() => setOffset(offset + limit)}
+            >
+              Next <ChevronRight className="w-3 h-3 ml-1" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Details Sheet */}
+      <Sheet open={!!selectedFingerprint} onOpenChange={(v) => !v && setSelectedFingerprint(null)}>
+        <SheetContent className="w-[480px] sm:w-[600px] flex flex-col p-0 border-l border-border bg-background shadow-2xl">
+          <SheetHeader className="px-6 py-5 border-b border-border bg-card/50 shrink-0">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-base font-semibold tracking-tight text-foreground">Intelligence Trace</SheetTitle>
+              {selectedFingerprint && <CopyButton value={selectedFingerprint} className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
+            </div>
+            <p className="text-[11px] font-mono text-muted-foreground mt-1 truncate tracking-tight">
+              {selectedFingerprint}
+            </p>
+          </SheetHeader>
+          <ScrollArea className="flex-1 bg-muted/10">
+            <div className="p-6">
+              {detailsLoading ? (
+                 <div className="animate-pulse space-y-6">
+                   <div className="h-6 bg-muted/50 w-2/3 rounded"></div>
+                   <div className="h-40 bg-card rounded border border-border"></div>
+                 </div>
+              ) : jobDetails ? (
+                <div className="space-y-8">
+                  {/* Job Header */}
+                  <div>
+                    <h3 className="text-xl font-bold tracking-tight text-foreground mb-2">{jobDetails.job.title}</h3>
+                    <div className="flex flex-col gap-1.5 mb-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building className="w-4 h-4" />
+                        <span className="font-medium text-foreground">{jobDetails.job.company}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4" />
+                        <span>{jobDetails.job.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Globe className="w-4 h-4" />
+                        <span className="capitalize">{jobDetails.job.source}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <StatusBadge 
+                        status={['applied', 'submitted', 'offer', 'interview'].includes(jobDetails.job.status?.toLowerCase()) ? 'success' : jobDetails.job.status?.toLowerCase() === 'rejected' ? 'neutral' : 'info'} 
+                        label={jobDetails.job.status} 
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* AI Reasoning (If available) */}
+                  {jobDetails.job.llm_analysis && (
+                    <div>
+                      <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                        <Cpu className="w-3.5 h-3.5" />
+                        AI Analysis
+                      </h4>
+                      <div className="bg-card border border-border rounded-md shadow-card p-4 space-y-3">
+                        {typeof jobDetails.job.llm_analysis === 'object' ? (
+                           <>
+                              <StatRow label="Qualification" value={
+                                <StatusBadge 
+                                  status={jobDetails.job.llm_analysis.qualified ? 'success' : 'error'} 
+                                  label={jobDetails.job.llm_analysis.qualified ? 'Qualified' : 'Unqualified'} 
+                                />
+                              } />
+                              <div className="pt-2 border-t border-border">
+                                <p className="text-[11px] font-semibold text-foreground mb-1">Reasoning</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                  {jobDetails.job.llm_analysis.reasoning || 'No detailed reasoning provided.'}
+                                </p>
+                              </div>
+                           </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {JSON.stringify(jobDetails.job.llm_analysis)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Event Timeline */}
+                  <div>
+                    <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-4">Event Timeline</h4>
+                    <div className="space-y-4 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-border/60">
+                      {jobDetails.events.map((evt: any, i: number) => (
+                        <div key={evt.id} className="relative pl-6">
+                          <div className={cn(
+                            "absolute left-[3px] top-1.5 w-2 h-2 rounded-full border-2 border-background",
+                            i === 0 ? "bg-primary" : "bg-muted-foreground"
+                          )} />
+                          <div className="flex items-center gap-3 mb-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">{evt.status}</span>
+                            <span className="text-muted-foreground/30">•</span>
+                            <RelativeTime date={evt.created_at} className="text-[11px] font-mono text-muted-foreground" />
+                          </div>
+                          {evt.detail && (
+                            <div className="text-xs text-muted-foreground bg-card border border-border/50 rounded-md p-3 shadow-sm leading-relaxed">
+                              {evt.detail}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Raw Data Dump */}
+                  <div>
+                    <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
+                      <FileJson className="w-3.5 h-3.5" /> 
+                      Raw Ledger Entity
+                    </h4>
+                    <div className="bg-[#0a0a0a] border border-border rounded-md overflow-hidden">
+                      <pre className="text-[10px] font-mono text-zinc-400 p-4 overflow-auto max-h-[300px]">
+                        {JSON.stringify(jobDetails.job, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground text-center py-12 text-sm">Failed to load details</div>
+              )}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
