@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/image.png" alt="Career Workflow" width="720"/>
+  <img src="assets/logo.png" alt="Career Workflow" width="720"/>
 </p>
 
 <h1 align="center">Career Workflow</h1>
 
 <p align="center">
-  <strong>AI-Assisted Job Discovery, Evaluation, and Application Orchestration Engine</strong>
+  <strong>AI-Powered Job Discovery, Intelligence & Application Operations Platform</strong>
 </p>
 
 <p align="center">
@@ -14,10 +14,12 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi&logoColor=white">
   <img alt="Playwright" src="https://img.shields.io/badge/Playwright-1.40%2B-2EAD33?logo=playwright&logoColor=white">
-  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white">
-  <img alt="AI" src="https://img.shields.io/badge/AI-Gemini%20%7C%20Ollama-orange">
+  <img alt="SQLite WAL" src="https://img.shields.io/badge/SQLite-WAL%20Ledger-003B57?logo=sqlite&logoColor=white">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-Gemini%20%7C%20Ollama-orange">
+  <img alt="Architecture" src="https://img.shields.io/badge/Architecture-Event--Driven-6F42C1">
+  <img alt="Runtime" src="https://img.shields.io/badge/Runtime-v2-1F8B4C">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-AI%20Job%20Operations-blueviolet">
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-500%2B%20Passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-524%20Passing-brightgreen">
 </p>
 
 <p align="center">
@@ -26,9 +28,25 @@
   <em>The Career Workflow Operations Console.</em>
 </p>
 
-<p align="center">
-  <sub>Originally derived from the NopeRi API-client foundation and substantially extended into a policy-driven application orchestration, lifecycle intelligence, and adaptive strategy system.</sub>
-</p>
+## At a Glance
+
+| Category | Details |
+|----------|---------|
+| **What It Is** | AI-powered job discovery, evaluation, application orchestration, and lifecycle intelligence platform |
+| **Architecture** | Policy-driven, event-driven, closed-loop decision pipeline |
+| **Providers** | Naukri API + JobSpy (Indeed, LinkedIn, Google Jobs) |
+| **Runtime** | Runtime v2 with interactive and daemon execution modes |
+| **Frontend** | React 19 Operations Console (16 operational surfaces) |
+| **Backend** | FastAPI + Python orchestration engine |
+| **Persistence** | SQLite WAL Decision Ledger with lifecycle tracking |
+| **AI Capabilities** | Candidate-aware qualification, LLM fit scoring, hybrid questionnaire resolution, adaptive strategy |
+| **LLM Support** | Gemini, Ollama / OMLX, OpenAI-compatible providers (OpenAI, DeepSeek, OpenRouter) |
+| **Cost Optimization** | Multi-stage filtering, InferenceRouter, token budget management, score caching |
+| **Application Engine** | Native API execution, ATS routing, external application handling, manual review queue |
+| **Observability** | Pipeline Explorer, Run Inspector, Analytics, Audit Framework, Runtime Diagnostics |
+| **Automation** | Scheduler, crash recovery, lock management, telemetry, health monitoring |
+| **Testing** | **524 automated unit & integration tests passing** |
+| **License** | Personal automation and research |
 
 ---
 
@@ -82,6 +100,51 @@ It uses AI to determine fit instead of just keywords, handles multi-page applica
 - **Data Visualization:** Recharts (Analytics and funnel charts)
 - **Routing:** React Router DOM (Client-side navigation)
 
+
+## From API Client to AI Job Operations Platform
+
+Career Workflow represents the evolution of a lightweight API client into a production-oriented AI job operations platform while preserving the complete engineering history of that evolution.
+
+The project originated from the open-source NopeRi project by Traverser25, which provided a foundation for authentication, job search, and direct application through the Naukri API.
+
+From that foundation, the repository evolved through multiple architectural generations into the system presented today.
+
+### Engineering Evolution
+
+### Original Foundation
+
+- Authentication
+- Profile Management
+- Job Search
+- Direct Apply
+
+### Generation 2 — Intelligent Pipeline
+
+- Multi-query acquisition
+- Candidate-aware scoring
+- Policy engine
+- Search resilience
+
+### Generation 3 — Operational Intelligence
+
+- Decision Ledger
+- Lifecycle monitoring
+- Analytics
+- Adaptive strategy
+
+### Generation 4 — Production Platform
+
+- Runtime v2
+- Operations Console
+- Pipeline Explorer
+- Audit Framework
+- Multi-provider architecture
+- Cost-optimized LLM routing
+
+The original upstream project served as the initial API foundation. The orchestration architecture, runtime systems, AI pipeline, operational tooling, frontend, and intelligence platform contained in this repository were designed and implemented as part of the evolution of Career Workflow.
+
+Repository history has been intentionally preserved to document that engineering evolution.
+
 ---
 
 ## 2. Why Career Workflow Exists
@@ -90,7 +153,7 @@ It uses AI to determine fit instead of just keywords, handles multi-page applica
 
 **The Solution:** Career Workflow is built as a decision pipeline, not a simple loop over search results. It prioritizes *controlled, high-quality* applications over volume, leveraging AI for both parsing Job Descriptions and resolving complex application questions. It features a React-based Operations Console to give you total visibility and control over the pipeline.
 
-**Target Users:** Software Engineers, AI Engineers, Data Scientists, and tech professionals looking to optimize their job search process with precision rather than spam.
+**Designed For:** Software Engineers, AI Engineers, Data Scientists, and tech professionals looking to optimize their job search process with precision rather than spam.
 
 ### Career Workflow vs. Typical Auto-Apply Bot
 
@@ -212,7 +275,7 @@ Instead of maximizing the number of applications submitted, Career Workflow focu
 
 ## 5. Architecture Overview
 
-Career Workflow is a closed-loop job application orchestration system that combines resilient job discovery across multiple **Providers**, candidate-aware qualification (`LLM Reviewed`), policy-controlled selection, application execution, questionnaire resolution, lifecycle tracking, funnel analytics, and evidence-gated strategy adaptation.
+Career Workflow is a closed-loop AI job operations platform that combines resilient job discovery across multiple **Providers**, candidate-aware qualification (`LLM Reviewed`), policy-controlled selection, application execution, questionnaire resolution, lifecycle tracking, funnel analytics, and evidence-gated strategy adaptation.
 
 The **Career Workflow Operations Console** (a modern 16-surface React application) sits above these core systems, providing a single operational control plane for pipeline execution, **Decision Ledger** inspection, **Pipeline Explorer** run debugging, system auditing, and runtime diagnostics without compromising underlying ledger integrity or policy boundaries.
 
@@ -1012,9 +1075,17 @@ Current validation status:
 
 ## 20. Contributing
 
-Career Workflow originated as a fork of the NopeRi project by Traverser25.
-The upstream project provided the initial API-client foundation.
-This repository has since been substantially extended with independently developed systems for resilient acquisition, AI-scoring, policy controls, persistent ledger, lifecycle analytics, React UI control plane, and scheduler generation. Repository history is preserved to maintain implementation provenance and attribution.
+Career Workflow preserves the engineering history of its evolution from the original NopeRi API client.
+
+Contributions are welcome for new providers, orchestration improvements, runtime capabilities, analytics, AI integrations, testing, and developer tooling.
+
+Please open an issue before introducing significant architectural changes.
+
+### Attribution
+
+The project originated from the open-source NopeRi project by Traverser25.
+
+Repository history has been intentionally preserved to document the complete engineering evolution from the original API client to the current AI job operations platform while maintaining proper upstream attribution.
 
 ---
 
