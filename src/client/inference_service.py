@@ -32,44 +32,6 @@ class LegacyInferenceRequest:
     router_version: str = "1"
     context_hash: str = ""
 
-class CostTelemetry:
-    def __init__(self):
-        self.calls: int = 0
-        self.prompt_tokens: int = 0
-        self.completion_tokens: int = 0
-        self.latency_ms: float = 0.0
-        self.cost_usd: float = 0.0
-        self.cache_hits: int = 0
-        self.cache_misses: int = 0
-        self.fallbacks: int = 0
-        self.failures: int = 0
-        self._lock = threading.Lock()
-
-    def record_call(self, prompt_tokens: int, completion_tokens: int, latency_ms: float, cost_usd: float):
-        with self._lock:
-            self.calls += 1
-            self.prompt_tokens += prompt_tokens
-            self.completion_tokens += completion_tokens
-            self.latency_ms += latency_ms
-            self.cost_usd += cost_usd
-
-    def record_cache_hit(self):
-        with self._lock:
-            self.cache_hits += 1
-
-    def record_cache_miss(self):
-        with self._lock:
-            self.cache_misses += 1
-
-    def record_failure(self):
-        with self._lock:
-            self.failures += 1
-
-    def record_fallback(self):
-        with self._lock:
-            self.fallbacks += 1
-
-
 class InferenceService:
     def __init__(
         self,
@@ -79,7 +41,6 @@ class InferenceService:
     ):
         self.cache_manager = cache_manager
         self.provider_override = provider_override
-        self.telemetry = CostTelemetry()
         self.budget_manager = BudgetManager(
             limit_usd=float(os.getenv("BUDGET_MONTHLY_USD", "10.0")),
             warning_usd=float(os.getenv("BUDGET_DAILY_USD", "8.0"))
@@ -101,8 +62,7 @@ class InferenceService:
 
         self.router = InferenceRouter(
             budget_manager=self.budget_manager,
-            provider_manager=self.provider_manager,
-            telemetry=self.telemetry
+            provider_manager=self.provider_manager
         )
         self.engine = InferenceEngine(
             router=self.router,
@@ -142,7 +102,8 @@ class InferenceService:
             return {"decision": "LLM_SKIPPED", "llm_status": "SKIPPED", "llm_score": None, "reason": f"UPSTREAM_UNAVAILABLE (Failed: {e})"}
 
     def print_summary(self):
-        snapshot = self.engine.metrics.get_snapshot()
+        # Delegate to provider manager's metrics
+        snapshot = self.provider_manager.metrics.get_snapshot()
         print(f"\n--- Production Inference Platform Summary ---")
         print(f"Calls: {snapshot['calls']}")
         print(f"Cache Hits: {snapshot['cache_hits']}")
@@ -150,6 +111,7 @@ class InferenceService:
         print(f"Fallbacks: {snapshot['fallbacks']}")
         print(f"Failures: {snapshot['failures']}")
         if snapshot['calls'] > 0:
-            print(f"Average Latency: {snapshot['latency_ms'] / snapshot['calls']:.1f} ms")
+            avg_latency = snapshot['latency_ms'] / snapshot['calls']
+            print(f"Average Latency: {avg_latency:.1f} ms")
         print(f"Total Cost: ${snapshot['cost_usd']:.6f}")
         print(f"--------------------------------------------\n")

@@ -29,8 +29,10 @@ class CacheMissEvent(InferenceEvent):
 class InferenceCompletedEvent(InferenceEvent):
     model: str
     provider: str
+    vendor: str
     prompt_tokens: int
     completion_tokens: int
+    reasoning_tokens: int
     latency_ms: float
     cost_usd: float
 

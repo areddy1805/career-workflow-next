@@ -304,8 +304,10 @@ class ProviderManager:
                     timestamp=time.time(),
                     model=response.model,
                     provider=response.provider,
+                    vendor=response.vendor,
                     prompt_tokens=response.prompt_tokens,
                     completion_tokens=response.completion_tokens,
+                    reasoning_tokens=response.reasoning_tokens,
                     latency_ms=response.latency,
                     cost_usd=response.cost_usd
                 ))

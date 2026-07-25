@@ -667,8 +667,8 @@ class CareerWorkflowPipeline:
         # Release 3.3: Learning Ledger & Cost Engine Analytics
         cost_report = CostEngine.calculate_metrics(
             total_jobs=len(jobs) + len(deterministic_rejected),
-            llm_calls=len(llm_to_process),
-            bypassed_jobs=len(auto_apply_candidates) + len(semantic_reused)
+            bypassed_jobs=len(auto_apply_candidates) + len(semantic_reused),
+            metrics=self.inference_service.provider_manager.metrics.global_metrics
         )
 
         for result in jobs:
@@ -1582,64 +1582,160 @@ class CareerWorkflowPipeline:
     def print_observability_report(self, result: PipelineResult) -> None:
         projection = self.metrics_proj.get_metrics()
         runtime = self.context.metrics
-        print("\n" + "═" * 50)
-        print(" OBSERVABILITY REPORT")
-        print("═" * 50)
-        print(f"Jobs discovered: {projection['acquired']}")
-
-        print("Rejected:")
-        for reason, count in sorted(
-            runtime.skipped_reasons.items(), key=lambda x: x[1], reverse=True
-        ):
-            print(f"- {reason}: {count}")
-
-        print(f"Sent to AI: {result.scored}")
-        print(f"Qualified: {result.selected}")
-        print(f"Applied: {result.submitted}")
-
-        print("Skipped:")
-        print(f"- Manual review: {result.manual_review}")
-        print(f"- Already applied: {result.already_applied}")
-        print(f"- Policy rejected: {result.policy_rejected}")
-        print(f"- Dry run skipped: {result.dry_run_skipped}")
-        print(f"- Run limit reached: {result.run_limit_reached}")
-        print(f"- ATS queue: {result.ats_queue}")
-        print(f"- Generic queue: {result.generic_queue}")
-        print(f"- Manual queue: {result.manual_queue}")
-        print(f"- Unsupported: {result.unsupported}")
-        print(f"- Local skipped: {result.skipped_local}")
-        if result.failed > 0:
-            print(f"- Failed: {result.failed}")
-
-        print("\nLatency Analysis:")
-        mins = int(runtime.total_runtime // 60)
-        secs = int(runtime.total_runtime % 60)
-        print(f"Pipeline runtime: {mins}m {secs}s")
-
-        if result.scored > 0:
-            avg_job = runtime.total_runtime / result.scored
-            print(f"Average/job: {avg_job:.1f}s")
-            yield_rate = (result.selected / result.scored) * 100
-            print(f"Qualified yield: {yield_rate:.1f}%")
-
-        if runtime.total_runtime > 0:
-            llm_pct = (runtime.llm_time / runtime.total_runtime) * 100
-            net_pct = (runtime.network_time / runtime.total_runtime) * 100
-            app_pct = (runtime.application_time / runtime.total_runtime) * 100
-            print(f"LLM time: {llm_pct:.1f}%")
-            print(f"Network: {net_pct:.1f}%")
-            print(f"Applying: {app_pct:.1f}%")
+        
+        # Get unified metrics from ProviderManager
+        if hasattr(self, "inference_service") and self.inference_service:
+            unified_metrics = self.inference_service.provider_manager.metrics.get_unified_metrics()
+            global_metrics = unified_metrics["global"]
+            providers = unified_metrics["providers"]
             
-        print("\nCosts and Resources:")
-        print(f"Peak Memory: {runtime.memory_peak_mb} MB")
-        print(f"LLM Cost: ${runtime.llm_cost_usd:.4f}")
-        
-        if hasattr(runtime, "stage_timings") and runtime.stage_timings:
-            print("\nStage Timings:")
-            for stage, duration in runtime.stage_timings.items():
-                print(f"- {stage}: {duration:.1f}s")
+            # Determine main provider and model from the provider that handled the most requests
+            active_providers = {k: v for k, v in providers.items() if v.requests > 0}
+            main_provider_name = "None"
+            main_model_name = "None"
+            if active_providers:
+                main_p = max(active_providers.values(), key=lambda p: p.requests)
+                main_provider_name = main_p.provider
+                main_model_name = main_p.model
+
+            # --- Phase 4: Observability Report UI ---
+            print("\n" + "═" * 54)
+            print("Inference Platform")
+            print(f"Provider        : {main_provider_name.capitalize()}")
+            print(f"Model           : {main_model_name}")
+            print(f"Requests        : {global_metrics.requests}")
+            print(f"Fallbacks       : {global_metrics.fallback_count}")
+            print(f"Failures        : {global_metrics.failed_requests}")
+            print(f"Prompt Tokens   : {global_metrics.prompt_tokens:,}")
+            print(f"Completion      : {global_metrics.completion_tokens:,}")
+            print(f"Reasoning       : {global_metrics.reasoning_tokens:,}")
+            print(f"Total Tokens    : {global_metrics.total_tokens:,}")
+            print(f"Average Latency : {global_metrics.average_latency:.2f} s")
+            print(f"Total Cost      : ${global_metrics.total_cost:.6f}")
+            print("═" * 54)
+
+            # --- Phase 5: Cost Analytics ---
+            from src.core.learning.cost_engine import CostEngine
+            
+            # Calculate Derived Cost Analytics
+            cost_report = CostEngine.calculate_metrics(
+                total_jobs=projection.get('acquired', 0),
+                bypassed_jobs=0,
+                metrics=global_metrics
+            )
+            
+            print("\nCost Analytics")
+            print(f"Cloud Cost")
+            print(f"{main_provider_name.capitalize()}")
+            print(f"${cost_report.actual_cost_usd:.6f}")
+            print(f"Average / Request")
+            print(f"${cost_report.average_cost_per_request:.6f}")
+            print(f"Average Tokens")
+            avg_tokens = global_metrics.total_tokens / global_metrics.requests if global_metrics.requests > 0 else 0
+            print(f"{int(avg_tokens)}")
+            print(f"Average Prompt")
+            avg_prompt = global_metrics.prompt_tokens / global_metrics.requests if global_metrics.requests > 0 else 0
+            print(f"{int(avg_prompt)}")
+            print(f"Average Completion")
+            avg_comp = global_metrics.completion_tokens / global_metrics.requests if global_metrics.requests > 0 else 0
+            print(f"{int(avg_comp)}")
+            
+            print("\nDerived Analytics")
+            print(f"Saved Cost (vs No AI) : ${cost_report.saved_cost_usd:.6f}")
+            print(f"Cost Reduction        : {cost_report.cost_reduction_pct:.2f}%")
+            print(f"LLM Avoidance Rate    : {cost_report.llm_avoidance_rate:.2%}")
+
+            # --- Phase 7: Provider Section ---
+            print("\n" + "═" * 39)
+            print("Inference Providers")
+            
+            provider_chain = self.inference_service.provider_manager.provider_chain
+            primary = provider_chain[0] if provider_chain else "None"
+            fallback = provider_chain[1] if len(provider_chain) > 1 else "None"
+            
+            primary_health = "Yes" if self.inference_service.provider_manager.check_provider_health(primary) else "No"
+            print(f"Primary")
+            print(f"{primary.capitalize()}")
+            print(f"Healthy")
+            print(f"{primary_health}")
+            
+            if fallback != "None":
+                fallback_health = "Yes" if self.inference_service.provider_manager.check_provider_health(fallback) else "No"
+                print(f"Fallback")
+                print(f"{fallback.capitalize()}")
+                print(f"Healthy")
+                print(f"{fallback_health}")
                 
-        print("═" * 50 + "\n")
-        
-        if hasattr(self, "inference_service"):
-            self.inference_service.print_summary()
+            print(f"Provider Used")
+            print(f"{main_provider_name.capitalize()}")
+            print(f"Fallback Triggered")
+            print(f"{'Yes' if global_metrics.fallback_count > 0 else 'No'}")
+            print("═" * 39)
+            
+            # --- Phase 8: Performance Dashboard ---
+            print("\nPerformance Dashboard")
+            mins = int(runtime.total_runtime // 60)
+            secs = int(runtime.total_runtime % 60)
+            print(f"Pipeline Runtime\n{mins}m {secs}s")
+            print(f"Inference Time\n{global_metrics.total_latency:.1f} s")
+            print(f"Average Request\n{global_metrics.average_latency:.2f} s")
+            print(f"Maximum Request\n{global_metrics.maximum_latency:.2f} s")
+            print(f"Cache Savings\n{global_metrics.cache_hits}")
+            print(f"Network Retries\n{global_metrics.retry_count}")
+            print(f"Fallbacks\n{global_metrics.fallback_count}")
+            
+            if hasattr(runtime, "stage_timings") and runtime.stage_timings:
+                print("\nStage Timings:")
+                for stage, duration in runtime.stage_timings.items():
+                    print(f"- {stage}: {duration:.1f}s")
+                    
+            # --- Phase 9: Cost Breakdown ---
+            print("\nCost Breakdown")
+            print(f"Prompt Tokens\n{global_metrics.prompt_tokens:,}")
+            print(f"Completion Tokens\n{global_metrics.completion_tokens:,}")
+            print(f"Reasoning Tokens\n{global_metrics.reasoning_tokens:,}")
+            print(f"Total Tokens\n{global_metrics.total_tokens:,}")
+            print(f"Estimated Cost\n${global_metrics.total_cost:.6f}")
+            print(f"Average Cost\n${global_metrics.average_cost_per_request:.6f} / request")
+
+            # --- Phase 10: Provider Comparison ---
+            # Show provider comparisons only when multiple providers actually handled requests
+            if len(active_providers) > 1:
+                print("\nProvider Comparison")
+                for p_name, p_metrics in active_providers.items():
+                    print(f"{p_name.capitalize()}")
+                    print(f"Requests\n{p_metrics.requests}")
+                    print(f"Cost\n${p_metrics.total_cost:.4f}")
+                    print(f"Latency\n{p_metrics.average_latency:.1f} s")
+                    
+                if global_metrics.fallback_count > 0:
+                    print(f"Reason\nAutomatic Failover")
+
+            # --- Phase 6: Run Summary UI ---
+            print("\n" + "=" * 54)
+            print("Run Summary")
+            print("Status")
+            print(f"{self.status.value.upper()}")
+            print("Runtime")
+            print(f"{mins}m {secs}s")
+            print("Jobs Discovered")
+            print(f"{projection.get('acquired', 0)}")
+            print("Qualified")
+            print(f"{result.selected}")
+            print("Submitted")
+            print(f"{result.submitted}")
+            print("Provider")
+            print(f"{main_provider_name.capitalize()}")
+            print("Model")
+            print(f"{main_model_name}")
+            print("Requests")
+            print(f"{global_metrics.requests}")
+            print("Fallbacks")
+            print(f"{global_metrics.fallback_count}")
+            print("Failures")
+            print(f"{global_metrics.failed_requests}")
+            print("Total Tokens")
+            print(f"{global_metrics.total_tokens:,}")
+            print("Cloud Cost")
+            print(f"${global_metrics.total_cost:.6f}")
+            print("=" * 54 + "\n")

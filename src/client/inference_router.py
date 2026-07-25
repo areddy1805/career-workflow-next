@@ -54,13 +54,6 @@ class InferenceRouter:
         # Track budget and telemetry if active
         if response.cost_usd > 0:
             self.budget_manager.add_spend(response.cost_usd)
-        if self.telemetry:
-            self.telemetry.record_call(
-                prompt_tokens=response.prompt_tokens,
-                completion_tokens=response.completion_tokens,
-                latency_ms=response.latency,
-                cost_usd=response.cost_usd
-            )
 
         exec_metrics = {
             "prompt_tokens": response.prompt_tokens,
