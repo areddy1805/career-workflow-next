@@ -1,0 +1,167 @@
+from copy import deepcopy
+from datetime import datetime, timezone
+from typing import Dict, Any
+
+from src.orchestration.events import PipelineEvent
+from src.runtime.models import (
+    RunViewModel,
+    TimelineEvent,
+    WarningEvent,
+    ErrorEvent,
+    NotificationEvent,
+)
+
+
+def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
+    """
+    Pure function that takes the current RunViewModel state and a PipelineEvent,
+    and returns a new RunViewModel state.
+    """
+    new_state = deepcopy(state)
+    
+    if event.event_type == "run_initialized":
+        new_state.header.run_id = event.payload.get("run_id", "Unknown")
+        new_state.header.profile = event.payload.get("profile", "Unknown")
+        new_state.header.mode = event.payload.get("mode", "Unknown")
+        new_state.header.provider = event.payload.get("provider", "all")
+        new_state.header.strategy = event.payload.get("strategy", "default")
+        new_state.header.started_at = event.payload.get("started_at")
+        new_state.header.run_status = "Running"
+        
+        new_state.progress.total_stages = event.payload.get("total_stages", 0)
+        new_state.progress.status = "RUNNING"
+        
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message="Run initialized",
+            level="info"
+        ))
+
+    elif event.event_type == "stage_started":
+        stage_name = event.payload.get("stage_name", event.stage)
+        new_state.progress.current_stage = stage_name
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message=f"Started {stage_name} stage",
+            level="info"
+        ))
+        
+    elif event.event_type == "stage_completed":
+        stage_name = event.payload.get("stage_name", event.stage)
+        new_state.progress.completed_stages += 1
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message=f"Completed {stage_name} stage",
+            level="success"
+        ))
+        
+    elif event.event_type == "timeline_entry":
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message=event.payload.get("message", ""),
+            level=event.payload.get("level", "info")
+        ))
+        
+    elif event.event_type == "notification":
+        new_state.notifications.append(NotificationEvent(
+            timestamp=event.timestamp,
+            message=event.payload.get("message", ""),
+            level=event.payload.get("level", "warning")
+        ))
+        
+    elif event.event_type == "warning":
+        new_state.warnings.append(WarningEvent(
+            timestamp=event.timestamp,
+            message=event.payload.get("message", "")
+        ))
+        
+    elif event.event_type == "error":
+        new_state.errors.append(ErrorEvent(
+            timestamp=event.timestamp,
+            message=event.payload.get("message", ""),
+            traceback=event.payload.get("traceback")
+        ))
+
+    elif event.event_type == "acquisition_stats":
+        acquired = event.payload.get("acquired", new_state.statistics.jobs_discovered)
+        new_state.statistics.jobs_discovered = acquired
+        new_state.progress.jobs_acquired = acquired
+        new_state.decision_summary.jobs_found = acquired
+        
+    elif event.event_type == "classification_stats":
+        qualified = event.payload.get("passed_threshold", new_state.statistics.qualified)
+        new_state.statistics.qualified = qualified
+        new_state.progress.jobs_classified = qualified
+        new_state.decision_summary.qualified = qualified
+        
+    elif event.event_type == "selection_stats":
+        selected = event.payload.get("selected", new_state.statistics.selected)
+        rejected = event.payload.get("rejected", new_state.statistics.rejected)
+        new_state.statistics.selected = selected
+        new_state.statistics.rejected = rejected
+        new_state.decision_summary.rejected = rejected
+
+    elif event.event_type == "application_stats":
+        applied = event.payload.get("applied", new_state.statistics.applied)
+        manual = event.payload.get("manual_queue", new_state.statistics.manual_queue)
+        new_state.statistics.applied = applied
+        new_state.statistics.manual_queue = manual
+        new_state.progress.jobs_applied = applied
+        new_state.decision_summary.submitted = applied
+        new_state.decision_summary.manual_review = manual
+
+    elif event.event_type == "inference_metrics":
+        new_state.inference.requests = event.payload.get("requests", new_state.inference.requests)
+        new_state.inference.tokens = event.payload.get("total_tokens", new_state.inference.tokens)
+        new_state.inference.cost = event.payload.get("total_cost", new_state.inference.cost)
+        new_state.inference.average_latency = event.payload.get("average_latency", new_state.inference.average_latency)
+        new_state.inference.fallbacks = event.payload.get("fallback_count", new_state.inference.fallbacks)
+        new_state.inference.failed_requests = event.payload.get("failed_requests", new_state.inference.failed_requests)
+        new_state.decision_summary.llm_reviewed = new_state.inference.requests
+        
+    elif event.event_type == "efficiency_metrics":
+        new_state.efficiency.llm_avoidance_rate = event.payload.get("avoidance_rate", new_state.efficiency.llm_avoidance_rate)
+        new_state.efficiency.semantic_reuse = event.payload.get("semantic_reuse", new_state.efficiency.semantic_reuse)
+        new_state.efficiency.deterministic_rejections = event.payload.get("deterministic_rejections", new_state.efficiency.deterministic_rejections)
+        new_state.decision_summary.quota_skipped = new_state.efficiency.semantic_reuse + new_state.efficiency.deterministic_rejections
+
+    elif event.event_type == "health_status":
+        component = event.payload.get("component")
+        status = event.payload.get("status", "unknown")
+        details = event.payload.get("details")
+        if component == "providers":
+            provider_name = event.payload.get("provider_name", "unknown")
+            new_state.health.providers[provider_name] = {"status": status, "details": details}
+        elif component == "artifacts":
+            new_state.health.artifacts.status = status
+            new_state.health.artifacts.details = details
+        elif component == "sqlite":
+            new_state.health.sqlite.status = status
+            new_state.health.sqlite.details = details
+        elif component == "browser":
+            new_state.health.browser.status = status
+            new_state.health.browser.details = details
+
+    elif event.event_type == "run_completed":
+        status_str = event.payload.get("status", "SUCCESS")
+        new_state.progress.status = status_str
+        new_state.progress.current_stage = "Completed"
+        new_state.header.run_status = "Completed" if status_str == "SUCCESS" else "Partial"
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message="Run completed",
+            level="success"
+        ))
+
+    elif event.event_type == "run_failed":
+        new_state.progress.status = "FAILED"
+        new_state.progress.current_stage = "Failed"
+        new_state.header.run_status = "Failed"
+        new_state.timeline.append(TimelineEvent(
+            timestamp=event.timestamp,
+            message="Run failed",
+            level="error"
+        ))
+        
+    new_state.generated_at = datetime.now(timezone.utc).isoformat()
+    return new_state

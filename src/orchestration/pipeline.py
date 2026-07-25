@@ -152,6 +152,17 @@ class CareerWorkflowPipeline:
 
         self._persist_state()
         self._update_global_pipeline_state(current_stage="STARTING")
+        
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Initialization", "run_initialized", {
+                "run_id": self.context.run_id,
+                "profile": CANDIDATE_PROFILE.get("name", "Unknown"),
+                "mode": self.context.acquisition_mode,
+                "provider": self.context.acquisition_provider,
+                "started_at": self.context.started_at.isoformat(),
+                "total_stages": len(PIPELINE_STAGES)
+            }
+        ))
 
     def _update_global_pipeline_state(self, current_stage: str | None = None) -> None:
         state_path = Path(
@@ -273,7 +284,7 @@ class CareerWorkflowPipeline:
         self._persist_state()
         self._update_global_pipeline_state(current_stage=name)
 
-        print(f"\n[PIPELINE] {name.upper()} STARTED")
+        # print(f"\n[PIPELINE] {name.upper()} STARTED")
 
         stage_record = {
             "stage": name,
@@ -308,9 +319,8 @@ class CareerWorkflowPipeline:
         except Exception as error:
             import traceback
 
-            print("\n========== FULL TRACEBACK ==========\n")
-            traceback.print_exc()
-            print("\n====================================\n")
+            import logging
+            logging.error(f"Pipeline Stage {name} failed", exc_info=True)
             self.stage_statuses[name] = StageStatus.FAILED
 
             stage_record["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -329,9 +339,7 @@ class CareerWorkflowPipeline:
 
             self._persist_state()
 
-            print(
-                f"[PIPELINE] {name.upper()} FAILED: " f"{type(error).__name__}: {error}"
-            )
+            # print(f"[PIPELINE] {name.upper()} FAILED: {type(error).__name__}: {error}")
 
             return False
 
@@ -343,7 +351,7 @@ class CareerWorkflowPipeline:
 
         self._persist_state()
 
-        print(f"[PIPELINE] {name.upper()} SUCCESS")
+        # print(f"[PIPELINE] {name.upper()} SUCCESS")
 
         return True
 
@@ -503,10 +511,22 @@ class CareerWorkflowPipeline:
             self.exec_context.complete(job)
         self.exec_context.finish_stage(self.context.acquired_jobs)
 
-        print_acquisition_summary(
-            jobs=jobs,
-            fetch_result=fetch_result,
-        )
+        # print_acquisition_summary(
+        #     jobs=jobs,
+        #     fetch_result=fetch_result,
+        # )
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Acquisition", "acquisition_stats", {"acquired": len(jobs)}
+        ))
+        for provider_name, health_status in getattr(fetch_result, "jobspy_health", {}).items():
+            self.exec_context.bus.publish(self.exec_context.event_factory.create(
+                "Acquisition", "health_status", {
+                    "component": "providers",
+                    "provider_name": provider_name,
+                    "status": health_status.get("status", "unknown"),
+                    "details": f"Success rate: {health_status.get('success_rate', 0)}%"
+                }
+            ))
 
         self.context.stage_results["acquisition"] = {
             "jobs": len(jobs),
@@ -656,9 +676,9 @@ class CareerWorkflowPipeline:
                 vector_svc.add_vector(cid, dummy_vec, candidate)
                 llm_to_process.append(candidate)
 
-        print(f"[PIPELINE DEBUG] About to enter ai_score_batch with {len(llm_to_process)} LLM candidates (bypassed {len(auto_apply_candidates)}, semantic reused {len(semantic_reused)})", file=sys.stderr, flush=True)
+        # print(f"[PIPELINE DEBUG] About to enter ai_score_batch with {len(llm_to_process)} LLM candidates (bypassed {len(auto_apply_candidates)}, semantic reused {len(semantic_reused)})", file=sys.stderr, flush=True)
         llm_scored_jobs = classifier.ai_score_batch(llm_to_process)
-        print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
+        # print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
 
         jobs = llm_scored_jobs + auto_apply_candidates + semantic_reused
         jobs = classifier.post_score_guard(jobs)
@@ -692,6 +712,27 @@ class CareerWorkflowPipeline:
         self._write_artifact("cost_analytics.json", cost_report.__dict__)
         self._write_artifact("health_status.json", health_monitor.get_status().__dict__)
         self._write_artifact("performance_benchmark.json", PerformanceBenchmarkSuite.run_benchmark(num_jobs=len(jobs)))
+        
+        # Publish to EventBus for RuntimeStateManager
+        metrics = self.inference_service.provider_manager.metrics.global_metrics
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Classification", "inference_metrics", {
+                "requests": metrics.requests,
+                "total_tokens": metrics.total_tokens,
+                "total_cost": metrics.total_cost,
+                "average_latency": metrics.average_latency,
+                "fallback_count": metrics.fallback_count,
+                "failed_requests": metrics.failed_requests,
+            }
+        ))
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Classification", "efficiency_metrics", {
+                "avoidance_rate": cost_report.avoidance_rate,
+                "semantic_reuse": len(semantic_reused),
+                "deterministic_rejections": len(deterministic_rejected),
+            }
+        ))
+
 
         final_jobs = jobs
         self.context.rejected_jobs.extend(classifier.rejected_jobs)
@@ -718,7 +759,11 @@ class CareerWorkflowPipeline:
                 subtrack=str(result.get("subtrack") or ""),
             )
 
-        print_pipeline_results(final_jobs)
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Classification", "classification_stats", {"passed_threshold": len(final_jobs)}
+        ))
+
+        # print_pipeline_results(final_jobs)
 
         rejection_summary = {}
         for r in self.context.rejected_jobs:
@@ -1359,6 +1404,12 @@ class CareerWorkflowPipeline:
             if self.status == PipelineStatus.RUNNING:
                 self.status = PipelineStatus.FAILED
             self._update_global_pipeline_state(current_stage=None)
+
+            status_str = self.status.value
+            event_type = "run_completed" if status_str == "SUCCESS" else "run_failed"
+            self.exec_context.bus.publish(self.exec_context.event_factory.create(
+                "Finalization", event_type, {"status": status_str}
+            ))
 
     def run(self) -> PipelineResult:
         if self.artifacts_root and self.artifacts_root != Path("artifacts/runs"):

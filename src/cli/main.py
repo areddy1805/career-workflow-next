@@ -76,8 +76,35 @@ def run(
     
     console.print(f"[bold green]Starting Pipeline Run[/bold green] (live={live})")
     
-    with ExecutionCapture("cw run", args):
-        _stream_process(command)
+    from src.orchestration.pipeline import CareerWorkflowPipeline
+    from src.presentation.cli.renderer import OperatorConsole
+    import threading
+    
+    pipeline = CareerWorkflowPipeline(
+        dry_run=not live,
+        max_applications=max_applications,
+        acquisition_mode=acquisition_mode,
+        force_live=force_live,
+        acquisition_provider=provider,
+        test_mode=test
+    )
+    
+    pipeline.initialize_run()
+    
+    operator_console = OperatorConsole(pipeline.exec_context.state_manager, refresh_rate=0.5)
+    
+    def run_pipeline_thread():
+        try:
+            pipeline.run()
+        except Exception as e:
+            pass
+            
+    t = threading.Thread(target=run_pipeline_thread, daemon=True)
+    t.start()
+    
+    # Run the rich console on the main thread
+    operator_console.start()
+    t.join()
     
     console.print("[bold green]Run Complete.[/bold green]")
 

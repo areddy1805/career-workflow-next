@@ -8,6 +8,7 @@ from .events import EventFactory
 from .event_bus import EventBus
 from .job_registry import JobRegistry
 from .job_decision_ledger import JobDecisionLedger
+from src.runtime.state_manager import RuntimeStateManager
 
 
 def get_git_commit() -> str:
@@ -33,6 +34,9 @@ class PipelineExecutionContext:
         self.registry = JobRegistry()
         self.event_factory = EventFactory(run_id)
         self.ledger = JobDecisionLedger()
+        
+        self.state_manager = RuntimeStateManager(run_dir)
+        self.bus.subscribe(self.state_manager.handle_event)
 
         self.fingerprint = {
             "git_commit": get_git_commit(),

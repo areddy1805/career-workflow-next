@@ -428,3 +428,19 @@ def get_run_artifact_content(run_id: str, file_name: str) -> Any:
         return read_json_artifact(run_id, file_name)
     else:
         return {"content": read_text_artifact(run_id, file_name)}
+
+
+@router.get("/api/v1/viewmodel")
+def get_runtime_viewmodel() -> dict[str, Any]:
+    """Returns the latest runtime state (RunViewModel)."""
+    try:
+        current_path = Path("data/ui_runtime/current.json")
+        if current_path.exists():
+            with open(current_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    
+    # Return a default empty viewmodel if none exists
+    from src.runtime.models import RunViewModel
+    return RunViewModel().model_dump()
