@@ -4,9 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "career-workflow"
-version = "1.1.0"
+version = "4.0.0"
 description = "Policy-Driven AI Job Discovery, Qualification, and Application Orchestration Engine"
-
+authors = [
+  { name="Abhilash Reddy" }
+]
 [project.scripts]
 cw = "src.cli.main:app"
 [tool.setuptools.packages.find]
