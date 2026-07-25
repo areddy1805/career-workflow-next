@@ -165,6 +165,18 @@ def fetch_jobspy_jobs(
         keyword = query.keyword
         location = query.location
 
+        from src.orchestration.events import emit_live_progress
+        emit_live_progress({
+            "active_provider": "JobSpy",
+            "active_query": keyword,
+            "query_index": i,
+            "total_queries": len(planned_queries),
+            "current_page": 1,
+            "total_pages": 1,
+            "current_operation": f"Searching {site.capitalize()}",
+            "acquired_count": len(seen_hashes)
+        })
+
         if site in degraded_providers:
             logger.info(
                 "Skipped query '%s' on %s due to provider DEGRADED status.",

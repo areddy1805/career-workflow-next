@@ -37,6 +37,9 @@ class PipelineExecutionContext:
         
         self.state_manager = RuntimeStateManager(run_dir)
         self.bus.subscribe(self.state_manager.handle_event)
+        
+        from src.orchestration.events import set_global_bus
+        set_global_bus(self.bus, self.event_factory)
 
         self.fingerprint = {
             "git_commit": get_git_commit(),

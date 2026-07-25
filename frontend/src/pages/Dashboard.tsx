@@ -2,7 +2,7 @@ import { useViewModel } from '@/lib/hooks';
 import {
   Activity, Clock,
   BrainCircuit, Zap, ScrollText, AlertTriangle, XCircle, LayoutDashboard,
-  Terminal, Server, AlertCircle
+  Terminal, Server, AlertCircle, TerminalSquare, Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
@@ -90,9 +90,11 @@ function HeaderPanel({ header, version }: { header: any, version: string }) {
 
 function HealthPanel({ health }: { health: any }) {
   const getStatus = (s: string) => {
-    const sl = s.toLowerCase();
-    if (sl === 'healthy' || sl === 'success' || sl === 'active') return { color: 'bg-emerald-500', text: 'Operational' };
-    return { color: 'bg-red-500', text: s.charAt(0).toUpperCase() + s.slice(1) };
+    const sl = (s || '').toLowerCase();
+    if (['healthy', 'success', 'active', 'connected', 'wal', 'writable', 'available'].includes(sl)) 
+      return { color: 'bg-emerald-500', text: s.charAt(0).toUpperCase() + s.slice(1) };
+    if (sl === 'unknown') return { color: 'bg-white/20', text: 'Unknown' };
+    return { color: 'bg-red-500', text: s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unknown' };
   };
 
   return (
@@ -138,6 +140,20 @@ function PipelinePanel({ progress }: { progress: any }) {
           />
         </div>
       </div>
+      
+      {progress.current_stage === 'Acquisition' && progress.current_operation && (
+        <div className="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <p className="text-[11px] uppercase tracking-wider text-blue-400 mb-1">Current Activity</p>
+          <p className="text-sm font-medium text-white/90 mb-3">{progress.current_operation}</p>
+          <div className="grid grid-cols-2 gap-y-2 text-xs">
+            <span className="text-white/40">Query: <span className="text-white/80 font-mono">"{progress.active_query}"</span></span>
+            <span className="text-right text-white/60 font-mono">{progress.query_index} / {progress.total_queries}</span>
+            <span className="text-white/40">Page</span>
+            <span className="text-right text-white/60 font-mono">{progress.current_page} / {progress.total_pages}</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 mt-auto">
         <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg p-3 text-center">
           <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Acquired</p>
@@ -301,6 +317,42 @@ function ErrorsPanel({ errors }: { errors: any[] }) {
   );
 }
 
+function TerminalPanel({ logs, runId }: { logs: any[], runId: string }) {
+  return (
+    <Panel 
+      title="Terminal Output" 
+      icon={TerminalSquare} 
+      className="col-span-2 bg-[#060606] border-white/[0.1] h-[350px]"
+      action={
+        <div className="flex gap-2">
+          <a href={`/api/runs/${runId}/artifacts/pipeline.log`} download className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-xs text-white/70 transition-colors">
+            <Download className="w-3.5 h-3.5" />
+            pipeline.log
+          </a>
+          <a href={`/api/runs/${runId}/download`} download className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs transition-colors">
+            <Download className="w-3.5 h-3.5" />
+            Run Bundle
+          </a>
+        </div>
+      }
+    >
+      <div className="font-mono text-[11px] leading-relaxed space-y-1 overflow-auto h-full pr-2">
+        {logs?.map((log, i) => {
+          const color = log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARNING' ? 'text-amber-400' : log.level === 'DEBUG' ? 'text-white/30' : 'text-white/70';
+          return (
+            <div key={i} className="flex gap-3 whitespace-pre-wrap break-all">
+              <span className={color}>{log.message}</span>
+            </div>
+          );
+        })}
+        {(!logs || logs.length === 0) && (
+          <div className="text-white/30 italic h-full flex items-center justify-center">Waiting for terminal output...</div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 // --- Loading skeleton ---
 
 function OverviewSkeleton() {
@@ -342,7 +394,8 @@ export default function Dashboard() {
     decision_summary,
     timeline,
     notifications,
-    errors
+    errors,
+    terminal_logs
   } = viewmodel;
 
   return (
@@ -382,6 +435,8 @@ export default function Dashboard() {
           {/* Errors Row (only shows if errors exist) */}
           <ErrorsPanel errors={errors} />
           
+          {/* Terminal */}
+          <TerminalPanel logs={terminal_logs || []} runId={header.run_id} />
         </div>
       </div>
     </div>

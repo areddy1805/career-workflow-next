@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from typing import Any
 import pandas as pd
 import json
@@ -427,7 +428,37 @@ def get_run_artifact_content(run_id: str, file_name: str) -> Any:
     if file_name.lower().endswith(".json"):
         return read_json_artifact(run_id, file_name)
     else:
-        return {"content": read_text_artifact(run_id, file_name)}
+        file_path = Path("data") / "runs" / run_id / file_name
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        return FileResponse(file_path, filename=file_name)
+
+@router.get("/runs/{run_id}/artifacts/zip")
+@router.get("/runs/{run_id}/download")
+def download_run_bundle(run_id: str) -> Any:
+    import shutil
+    import tempfile
+    run_dir = Path("data") / "runs" / run_id
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    # Create archive
+    temp_dir = Path(tempfile.gettempdir())
+    archive_name = f"run_{run_id}"
+    archive_path = temp_dir / f"{archive_name}.tar.gz"
+    
+    shutil.make_archive(
+        base_name=str(temp_dir / archive_name),
+        format="gztar",
+        root_dir=str(run_dir.parent),
+        base_dir=run_id
+    )
+    
+    return FileResponse(
+        archive_path, 
+        filename=f"run_{run_id}.tar.gz",
+        media_type="application/gzip"
+    )
 
 
 @router.get("/api/v1/viewmodel")

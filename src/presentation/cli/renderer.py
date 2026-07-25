@@ -15,7 +15,8 @@ class OperatorConsole:
     def __init__(self, state_manager, refresh_rate: float = 0.5):
         self.state_manager = state_manager
         self.refresh_rate = refresh_rate
-        self.console = Console()
+        import sys
+        self.console = Console(file=sys.__stdout__)
         self.layout = self._make_layout()
 
     def _make_layout(self) -> Layout:
@@ -24,10 +25,10 @@ class OperatorConsole:
         
         layout.split_column(
             Layout(name="row1", size=6),
-            Layout(name="row2", size=8),
+            Layout(name="row2", size=11),
             Layout(name="row3", size=10),
             Layout(name="row4", size=8),
-            Layout(name="row5", size=8)
+            Layout(name="row5", size=10)
         )
         
         layout["row1"].split_row(
@@ -47,7 +48,8 @@ class OperatorConsole:
             Layout(name="decision", ratio=1)
         )
         layout["row5"].split_row(
-            Layout(name="errors")
+            Layout(name="terminal", ratio=2),
+            Layout(name="errors", ratio=1)
         )
         return layout
 
@@ -71,7 +73,12 @@ class OperatorConsole:
         table.add_column(justify="right")
         
         def render_status(s):
-            return "🟢 Healthy" if s.lower() == "healthy" or s.lower() == "success" else f"🔴 {s}"
+            sl = str(s).lower()
+            if sl in ("healthy", "success", "connected", "wal", "writable", "available"):
+                return f"🟢 {s.capitalize()}"
+            elif sl == "unknown":
+                return "⚪ Unknown"
+            return f"🔴 {s}"
             
         for provider, health in model.health.providers.items():
             table.add_row(provider.capitalize(), render_status(health.status))
@@ -103,6 +110,14 @@ class OperatorConsole:
         table.add_row("Jobs Acquired", str(model.progress.jobs_acquired))
         table.add_row("Jobs Classified", str(model.progress.jobs_classified))
         table.add_row("Jobs Applied", str(model.progress.jobs_applied))
+        
+        if model.progress.current_stage == "Acquisition" and model.progress.current_operation:
+            table.add_row("", "")
+            table.add_row("[bold cyan]Current Activity[/bold cyan]", "")
+            table.add_row(f"{model.progress.current_operation}", "")
+            table.add_row(f"Query: [yellow]{model.progress.active_query}[/yellow]", f"{model.progress.query_index}/{model.progress.total_queries}")
+            table.add_row("Page", f"{model.progress.current_page}/{model.progress.total_pages}")
+            table.add_row("Acquired", str(model.progress.acquired_count))
         
         return Panel(table, title="Pipeline Progress", border_style="cyan")
 
@@ -173,6 +188,16 @@ class OperatorConsole:
             text.append(f"[{time_str}] {event.message}\n", style="red bold")
         return Panel(text, title="Errors", border_style="red")
 
+    def render_terminal(self, model: RunViewModel) -> Panel:
+        text = Text()
+        for entry in model.terminal_logs[-8:]:
+            color = "white"
+            if entry.level == "ERROR": color = "red"
+            elif entry.level == "WARNING": color = "yellow"
+            elif entry.level == "DEBUG": color = "dim"
+            text.append(f"{entry.message}\n", style=color)
+        return Panel(text, title="Terminal", border_style="grey50")
+
     def _update_layout(self):
         model = self.state_manager.get_view_model()
         self.layout["header"].update(self.render_header(model))
@@ -184,6 +209,7 @@ class OperatorConsole:
         self.layout["timeline"].update(self.render_timeline(model))
         self.layout["notifications"].update(self.render_notifications(model))
         self.layout["errors"].update(self.render_errors(model))
+        self.layout["terminal"].update(self.render_terminal(model))
         return self.layout
 
     def start(self):

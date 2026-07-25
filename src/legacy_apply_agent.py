@@ -623,7 +623,10 @@ def fetch_all_jobs(
         f"{PAGES} page)"
     )
 
-    for query in SEARCH_TRACKS:
+    from src.orchestration.events import emit_live_progress
+    total_queries = len(SEARCH_TRACKS)
+    
+    for query_index, query in enumerate(SEARCH_TRACKS, 1):
         if challenge_encountered:
             break
 
@@ -635,6 +638,17 @@ def fetch_all_jobs(
             consecutive_low_yield = 0
 
             for page in range(1, PAGES + 1):
+                emit_live_progress({
+                    "active_provider": "Naukri",
+                    "active_query": query["keyword"],
+                    "query_index": query_index,
+                    "total_queries": total_queries,
+                    "current_page": page,
+                    "total_pages": PAGES,
+                    "current_operation": f"Searching Naukri ({exp}y exp)",
+                    "acquired_count": len(seen_ids)
+                })
+                
                 try:
                     search_requests_attempted += 1
 

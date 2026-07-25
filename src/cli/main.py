@@ -91,13 +91,25 @@ def run(
     
     pipeline.initialize_run()
     
+    from src.orchestration.terminal_logger import TerminalLogger, StdoutInterceptorShim
+    terminal_logger = TerminalLogger(
+        pipeline.run_dir / "pipeline.log",
+        pipeline.exec_context.bus,
+        pipeline.exec_context.event_factory
+    )
+    shim = StdoutInterceptorShim(terminal_logger)
+    
     operator_console = OperatorConsole(pipeline.exec_context.state_manager, refresh_rate=0.5)
     
     def run_pipeline_thread():
+        shim.start()
         try:
             pipeline.run()
         except Exception as e:
             pass
+        finally:
+            shim.stop()
+            terminal_logger.close()
             
     t = threading.Thread(target=run_pipeline_thread, daemon=True)
     t.start()

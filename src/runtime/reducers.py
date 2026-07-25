@@ -9,6 +9,7 @@ from src.runtime.models import (
     WarningEvent,
     ErrorEvent,
     NotificationEvent,
+    TerminalLogEntry,
 )
 
 
@@ -81,6 +82,35 @@ def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
             message=event.payload.get("message", ""),
             traceback=event.payload.get("traceback")
         ))
+        
+    elif event.event_type == "terminal_log":
+        new_state.terminal_logs.append(TerminalLogEntry(
+            timestamp=event.payload.get("timestamp", event.timestamp),
+            level=event.payload.get("level", "INFO"),
+            source=event.payload.get("source", "system"),
+            message=event.payload.get("message", "")
+        ))
+        # Bound it to 2500 logs to prevent memory leak
+        if len(new_state.terminal_logs) > 2500:
+            new_state.terminal_logs = new_state.terminal_logs[-2500:]
+            
+    elif event.event_type == "live_progress":
+        if "active_provider" in event.payload:
+            new_state.progress.active_provider = event.payload["active_provider"]
+        if "active_query" in event.payload:
+            new_state.progress.active_query = event.payload["active_query"]
+        if "query_index" in event.payload:
+            new_state.progress.query_index = event.payload["query_index"]
+        if "total_queries" in event.payload:
+            new_state.progress.total_queries = event.payload["total_queries"]
+        if "current_page" in event.payload:
+            new_state.progress.current_page = event.payload["current_page"]
+        if "total_pages" in event.payload:
+            new_state.progress.total_pages = event.payload["total_pages"]
+        if "acquired_count" in event.payload:
+            new_state.progress.acquired_count = event.payload["acquired_count"]
+        if "current_operation" in event.payload:
+            new_state.progress.current_operation = event.payload["current_operation"]
 
     elif event.event_type == "acquisition_stats":
         acquired = event.payload.get("acquired", new_state.statistics.jobs_discovered)

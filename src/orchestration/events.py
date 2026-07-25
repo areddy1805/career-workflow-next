@@ -55,3 +55,16 @@ class EventFactory:
             event_type=event_type,
             payload=payload,
         )
+
+# Global accessors for emitting events deep in the stack
+_CURRENT_BUS = None
+_CURRENT_FACTORY = None
+
+def set_global_bus(bus, factory):
+    global _CURRENT_BUS, _CURRENT_FACTORY
+    _CURRENT_BUS = bus
+    _CURRENT_FACTORY = factory
+
+def emit_live_progress(payload: dict):
+    if _CURRENT_BUS and _CURRENT_FACTORY:
+        _CURRENT_BUS.publish(_CURRENT_FACTORY.create("Acquisition", "live_progress", payload))

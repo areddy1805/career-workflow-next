@@ -1,17 +1,25 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+from datetime import datetime, timezone
 
 
 class HeaderView(BaseModel):
     title: str = "Career Workflow"
-    profile: str = "Unknown"
-    mode: str = "Unknown"
-    run_id: str = "Unknown"
+    profile: str = "N/A"
+    mode: str = "N/A"
+    run_id: str = "Pending"
     run_status: str = "Queued"  # Queued, Running, Paused, Cancelling, Completed, Failed
     started_at: Optional[str] = None
     provider: str = "all"
     strategy: str = "default"
+
+
+class TerminalLogEntry(BaseModel):
+    timestamp: str
+    level: str = "INFO"
+    source: str = "system"
+    message: str
 
 
 class PipelineProgressView(BaseModel):
@@ -25,6 +33,16 @@ class PipelineProgressView(BaseModel):
     jobs_acquired: int = 0
     jobs_classified: int = 0
     jobs_applied: int = 0
+    
+    # Live Acquisition & Operation Progress
+    active_provider: Optional[str] = None
+    active_query: Optional[str] = None
+    query_index: int = 0
+    total_queries: int = 0
+    current_page: int = 0
+    total_pages: int = 0
+    acquired_count: int = 0
+    current_operation: Optional[str] = None
 
 
 class LiveStatisticsView(BaseModel):
@@ -72,12 +90,11 @@ class HealthComponent(BaseModel):
     status: str = "unknown"  # healthy, degraded, failed
     details: Optional[str] = None
 
-
 class HealthView(BaseModel):
     providers: Dict[str, HealthComponent] = Field(default_factory=dict)
-    artifacts: HealthComponent = Field(default_factory=HealthComponent)
-    sqlite: HealthComponent = Field(default_factory=HealthComponent)
-    browser: HealthComponent = Field(default_factory=HealthComponent)
+    artifacts: HealthComponent = Field(default_factory=lambda: HealthComponent(status="writable"))
+    sqlite: HealthComponent = Field(default_factory=lambda: HealthComponent(status="wal"))
+    browser: HealthComponent = Field(default_factory=lambda: HealthComponent(status="connected"))
 
 
 class TimelineEvent(BaseModel):
@@ -115,7 +132,9 @@ class RunViewModel(BaseModel):
     inference: InferenceView = Field(default_factory=InferenceView)
     efficiency: EfficiencyView = Field(default_factory=EfficiencyView)
     health: HealthView = Field(default_factory=HealthView)
+    # Notifications / Events
     timeline: List[TimelineEvent] = Field(default_factory=list)
     notifications: List[NotificationEvent] = Field(default_factory=list)
     warnings: List[WarningEvent] = Field(default_factory=list)
     errors: List[ErrorEvent] = Field(default_factory=list)
+    terminal_logs: List[TerminalLogEntry] = Field(default_factory=list)
