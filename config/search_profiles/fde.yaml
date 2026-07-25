@@ -35,6 +35,10 @@ locations:
 - Remote
 - Pune
 - Bengaluru
+preferred_technologies:
+- backend
+- cloud
+- enterprise
 provider_specific_search_settings:
   jobspy:
     limit: 100

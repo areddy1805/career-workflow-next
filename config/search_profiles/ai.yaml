@@ -59,6 +59,13 @@ locations:
 - Remote
 - Pune
 - Bengaluru
+preferred_technologies:
+- ai_foundations
+- llm
+- rag
+- agentic_ai
+- vector_databases
+- llm_ecosystem
 provider_specific_search_settings:
   jobspy:
     limit: 100

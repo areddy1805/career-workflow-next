@@ -136,15 +136,15 @@ class OperatorConsole:
         table.add_column(justify="right")
         
         d = model.decision_summary
-        table.add_row("Jobs Found", str(d.jobs_found))
-        table.add_row("Rejected", str(d.rejected))
-        table.add_row("Qualified", str(d.qualified))
+        table.add_row("Jobs Discovered", str(d.jobs_found))
+        table.add_row("Already Processed", str(d.already_processed))
+        table.add_row("New Candidates", str(d.new_candidates))
+        table.add_row("Description Duplicates", str(d.description_duplicates))
         table.add_row("LLM Reviewed", str(d.llm_reviewed))
+        table.add_row("Qualified", str(d.qualified))
         table.add_row("Submitted", str(d.submitted))
-        table.add_row("Manual Review", str(d.manual_review))
-        table.add_row("Quota Skipped", str(d.quota_skipped))
         
-        return Panel(table, title="Decision Summary", border_style="cyan")
+        return Panel(table, title="Outcome Ledger", border_style="cyan")
 
     def render_timeline(self, model: RunViewModel) -> Panel:
         text = Text()

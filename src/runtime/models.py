@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class HeaderView(BaseModel):
@@ -39,12 +39,12 @@ class LiveStatisticsView(BaseModel):
 
 class DecisionSummaryView(BaseModel):
     jobs_found: int = 0
-    rejected: int = 0
-    qualified: int = 0
+    already_processed: int = 0
+    new_candidates: int = 0
+    description_duplicates: int = 0
     llm_reviewed: int = 0
+    qualified: int = 0
     submitted: int = 0
-    manual_review: int = 0
-    quota_skipped: int = 0
 
 
 class InferenceView(BaseModel):

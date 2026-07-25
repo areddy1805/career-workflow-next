@@ -528,6 +528,16 @@ class CareerWorkflowPipeline:
                 }
             ))
 
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Initialization", "health_status", {"component": "sqlite", "status": "healthy"}
+        ))
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Initialization", "health_status", {"component": "browser", "status": "healthy"}
+        ))
+        self.exec_context.bus.publish(self.exec_context.event_factory.create(
+            "Initialization", "health_status", {"component": "artifacts", "status": "healthy"}
+        ))
+
         self.context.stage_results["acquisition"] = {
             "jobs": len(jobs),
             "challenge_encountered": (fetch_result.challenge_encountered),
@@ -560,7 +570,10 @@ class CareerWorkflowPipeline:
         )
 
         jobs = classifier.normalize_jobs(jobs)
+        jobs_before_dedup = len(jobs)
         jobs = classifier.dedup(jobs)
+        already_processed = jobs_before_dedup - len(jobs)
+        new_candidates = len(jobs)
         jobs = classifier.impossible_filter(jobs)
         jobs = classifier.experience_filter(jobs)
         jobs = classifier.desc_red_flag_check(jobs)
@@ -727,7 +740,7 @@ class CareerWorkflowPipeline:
         ))
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
             "Classification", "efficiency_metrics", {
-                "avoidance_rate": cost_report.avoidance_rate,
+                "avoidance_rate": cost_report.llm_avoidance_rate,
                 "semantic_reuse": len(semantic_reused),
                 "deterministic_rejections": len(deterministic_rejected),
             }
@@ -760,7 +773,13 @@ class CareerWorkflowPipeline:
             )
 
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Classification", "classification_stats", {"passed_threshold": len(final_jobs)}
+            "Classification", "classification_stats", {
+                "passed_threshold": len(final_jobs),
+                "already_processed": already_processed,
+                "new_candidates": new_candidates,
+                "description_duplicates": enriched_before_dedup - len(enriched_candidates),
+                "llm_reviewed": len(llm_to_process)
+            }
         ))
 
         # print_pipeline_results(final_jobs)
@@ -1419,7 +1438,6 @@ class CareerWorkflowPipeline:
         stale_minutes = int(os.getenv("PIPELINE_LOCK_STALE_MINUTES", "720"))
         with PipelineLock(lock_path, stale_after_minutes=stale_minutes):
             result = self._run_unlocked()
-            self.print_observability_report(result)
             return result
 
     def _skip_remaining_pending_stages(

@@ -1,4 +1,4 @@
-import { useIntelligence, useDashboard } from '@/lib/hooks';
+import { useIntelligence, useViewModel } from '@/lib/hooks';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
@@ -52,7 +52,7 @@ function ProviderCard({ id, data }: { id: string; data: any }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="bg-muted/30 rounded p-2">
           <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Queries</p>
-          <p className="text-lg font-bold font-mono">{data.total_searches ?? 0}</p>
+          <p className="text-lg font-bold font-mono">{data.total_queries ?? 0}</p>
         </div>
         <div className="bg-muted/30 rounded p-2">
           <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Success</p>
@@ -259,12 +259,12 @@ function QueryBrowser({ queries }: { queries: any[] }) {
 
 export default function Search() {
   const { data, isLoading: siLoading } = useIntelligence();
-  const { data: dashboard, isLoading: dashLoading } = useDashboard();
+  const { data: viewmodel, isLoading: dashLoading } = useViewModel();
 
   const isLoading = siLoading || dashLoading;
 
   const { active_profiles = [], locations = [], total_queries = 0, queries = [] } = data || {};
-  const providerHealth: Record<string, any> = dashboard?.provider_health ?? {};
+  const providerHealth: Record<string, any> = viewmodel?.health?.providers ?? {};
 
   const tierCounts = useMemo(() => {
     const counts: Record<string, number> = {};

@@ -94,12 +94,21 @@ def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
         new_state.progress.jobs_classified = qualified
         new_state.decision_summary.qualified = qualified
         
+        # New classification details
+        if "already_processed" in event.payload:
+            new_state.decision_summary.already_processed = event.payload["already_processed"]
+        if "new_candidates" in event.payload:
+            new_state.decision_summary.new_candidates = event.payload["new_candidates"]
+        if "description_duplicates" in event.payload:
+            new_state.decision_summary.description_duplicates = event.payload["description_duplicates"]
+        if "llm_reviewed" in event.payload:
+            new_state.decision_summary.llm_reviewed = event.payload["llm_reviewed"]
+        
     elif event.event_type == "selection_stats":
         selected = event.payload.get("selected", new_state.statistics.selected)
         rejected = event.payload.get("rejected", new_state.statistics.rejected)
         new_state.statistics.selected = selected
         new_state.statistics.rejected = rejected
-        new_state.decision_summary.rejected = rejected
 
     elif event.event_type == "application_stats":
         applied = event.payload.get("applied", new_state.statistics.applied)
@@ -108,7 +117,6 @@ def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
         new_state.statistics.manual_queue = manual
         new_state.progress.jobs_applied = applied
         new_state.decision_summary.submitted = applied
-        new_state.decision_summary.manual_review = manual
 
     elif event.event_type == "inference_metrics":
         new_state.inference.requests = event.payload.get("requests", new_state.inference.requests)
@@ -117,13 +125,11 @@ def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
         new_state.inference.average_latency = event.payload.get("average_latency", new_state.inference.average_latency)
         new_state.inference.fallbacks = event.payload.get("fallback_count", new_state.inference.fallbacks)
         new_state.inference.failed_requests = event.payload.get("failed_requests", new_state.inference.failed_requests)
-        new_state.decision_summary.llm_reviewed = new_state.inference.requests
         
     elif event.event_type == "efficiency_metrics":
         new_state.efficiency.llm_avoidance_rate = event.payload.get("avoidance_rate", new_state.efficiency.llm_avoidance_rate)
         new_state.efficiency.semantic_reuse = event.payload.get("semantic_reuse", new_state.efficiency.semantic_reuse)
         new_state.efficiency.deterministic_rejections = event.payload.get("deterministic_rejections", new_state.efficiency.deterministic_rejections)
-        new_state.decision_summary.quota_skipped = new_state.efficiency.semantic_reuse + new_state.efficiency.deterministic_rejections
 
     elif event.event_type == "health_status":
         component = event.payload.get("component")

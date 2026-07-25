@@ -20,7 +20,7 @@ interface JobsState {
 export const useJobStore = create<JobsState>()(
   persist(
     (set) => ({
-      sorting: [{ id: 'last_updated_at', desc: true }],
+      sorting: [{ id: 'score', desc: true }],
       columnVisibility: {},
       filters: {},
       setSorting: (updater) => set((state) => ({ 
