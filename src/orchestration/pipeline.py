@@ -154,7 +154,7 @@ class CareerWorkflowPipeline:
         self._update_global_pipeline_state(current_stage="STARTING")
         
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Initialization", "run_initialized", {
+            "Initialization", "RunStarted", {
                 "run_id": self.context.run_id,
                 "profile": CANDIDATE_PROFILE.get("name", "Unknown"),
                 "mode": self.context.acquisition_mode,
@@ -284,7 +284,7 @@ class CareerWorkflowPipeline:
         self._persist_state()
         self._update_global_pipeline_state(current_stage=name)
 
-        # print(f"\n[PIPELINE] {name.upper()} STARTED")
+        self.exec_context.log(f"Pipeline Stage {name.upper()} STARTED")
 
         stage_record = {
             "stage": name,
@@ -339,7 +339,7 @@ class CareerWorkflowPipeline:
 
             self._persist_state()
 
-            # print(f"[PIPELINE] {name.upper()} FAILED: {type(error).__name__}: {error}")
+            self.exec_context.log(f"Pipeline Stage {name.upper()} FAILED: {type(error).__name__}: {error}", level="ERROR")
 
             return False
 
@@ -351,7 +351,7 @@ class CareerWorkflowPipeline:
 
         self._persist_state()
 
-        # print(f"[PIPELINE] {name.upper()} SUCCESS")
+        self.exec_context.log(f"Pipeline Stage {name.upper()} SUCCESS")
 
         return True
 
@@ -515,12 +515,10 @@ class CareerWorkflowPipeline:
         #     jobs=jobs,
         #     fetch_result=fetch_result,
         # )
-        self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Acquisition", "acquisition_stats", {"acquired": len(jobs)}
-        ))
+        self.exec_context.progress(acquired_count=len(jobs))
         for provider_name, health_status in getattr(fetch_result, "jobspy_health", {}).items():
             self.exec_context.bus.publish(self.exec_context.event_factory.create(
-                "Acquisition", "health_status", {
+                "Acquisition", "HealthUpdated", {
                     "component": "providers",
                     "provider_name": provider_name,
                     "status": health_status.get("status", "unknown"),
@@ -529,13 +527,13 @@ class CareerWorkflowPipeline:
             ))
 
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Initialization", "health_status", {"component": "sqlite", "status": "healthy"}
+            "Initialization", "HealthUpdated", {"component": "sqlite", "status": "healthy"}
         ))
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Initialization", "health_status", {"component": "browser", "status": "healthy"}
+            "Initialization", "HealthUpdated", {"component": "browser", "status": "healthy"}
         ))
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Initialization", "health_status", {"component": "artifacts", "status": "healthy"}
+            "Initialization", "HealthUpdated", {"component": "artifacts", "status": "healthy"}
         ))
 
         self.context.stage_results["acquisition"] = {
@@ -607,8 +605,7 @@ class CareerWorkflowPipeline:
         candidates = jobs
         candidates_before_suppression = len(candidates)
 
-        import sys
-        print(f"[PIPELINE DEBUG] About to enter enrich_jobs_with_details with {len(candidates)} candidates", file=sys.stderr, flush=True)
+        self.exec_context.log(f"Fetching details for {len(candidates)} candidates...")
 
         enriched_candidates = enrich_jobs_with_details(
             providers=self.context.providers,
@@ -618,7 +615,7 @@ class CareerWorkflowPipeline:
             run_dir=self.run_dir,
         )
         
-        print(f"[PIPELINE DEBUG] Exited enrich_jobs_with_details", file=sys.stderr, flush=True)
+        self.exec_context.log("Finished fetching job details.")
 
         enriched_before_dedup = len(enriched_candidates)
         enriched_candidates = deduplicate_enriched_jobs(enriched_candidates)
@@ -689,9 +686,9 @@ class CareerWorkflowPipeline:
                 vector_svc.add_vector(cid, dummy_vec, candidate)
                 llm_to_process.append(candidate)
 
-        # print(f"[PIPELINE DEBUG] About to enter ai_score_batch with {len(llm_to_process)} LLM candidates (bypassed {len(auto_apply_candidates)}, semantic reused {len(semantic_reused)})", file=sys.stderr, flush=True)
+        self.exec_context.log(f"Scoring {len(llm_to_process)} LLM candidates (bypassed {len(auto_apply_candidates)}, semantic reused {len(semantic_reused)})...")
         llm_scored_jobs = classifier.ai_score_batch(llm_to_process)
-        # print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
+        self.exec_context.log("Finished scoring candidates.")
 
         jobs = llm_scored_jobs + auto_apply_candidates + semantic_reused
         jobs = classifier.post_score_guard(jobs)
@@ -729,7 +726,7 @@ class CareerWorkflowPipeline:
         # Publish to EventBus for RuntimeStateManager
         metrics = self.inference_service.provider_manager.metrics.global_metrics
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Classification", "inference_metrics", {
+            "Classification", "InferenceMetrics", {
                 "requests": metrics.requests,
                 "total_tokens": metrics.total_tokens,
                 "total_cost": metrics.total_cost,
@@ -739,7 +736,7 @@ class CareerWorkflowPipeline:
             }
         ))
         self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Classification", "efficiency_metrics", {
+            "Classification", "EfficiencyMetrics", {
                 "avoidance_rate": cost_report.llm_avoidance_rate,
                 "semantic_reuse": len(semantic_reused),
                 "deterministic_rejections": len(deterministic_rejected),
@@ -772,15 +769,13 @@ class CareerWorkflowPipeline:
                 subtrack=str(result.get("subtrack") or ""),
             )
 
-        self.exec_context.bus.publish(self.exec_context.event_factory.create(
-            "Classification", "classification_stats", {
-                "passed_threshold": len(final_jobs),
-                "already_processed": already_processed,
-                "new_candidates": new_candidates,
-                "description_duplicates": enriched_before_dedup - len(enriched_candidates),
-                "llm_reviewed": len(llm_to_process)
-            }
-        ))
+        self.exec_context.progress(
+            passed_threshold=len(final_jobs),
+            already_processed=already_processed,
+            new_candidates=new_candidates,
+            description_duplicates=enriched_before_dedup - len(enriched_candidates),
+            llm_reviewed=len(llm_to_process)
+        )
 
         # print_pipeline_results(final_jobs)
 
@@ -1425,7 +1420,7 @@ class CareerWorkflowPipeline:
             self._update_global_pipeline_state(current_stage=None)
 
             status_str = self.status.value
-            event_type = "run_completed" if status_str == "SUCCESS" else "run_failed"
+            event_type = "RunCompleted" if status_str == "SUCCESS" else "RunFailed"
             self.exec_context.bus.publish(self.exec_context.event_factory.create(
                 "Finalization", event_type, {"status": status_str}
             ))

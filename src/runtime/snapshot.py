@@ -25,9 +25,15 @@ class SnapshotManager:
         
         self.snapshot_interval_sec = snapshot_interval_sec
         self._last_snapshot_time = 0.0
+        self._last_current_save_time = 0.0
 
     def save_current(self, model: RunViewModel):
-        """Always save the absolute latest state to current.json for UI polling."""
+        """Save the absolute latest state to current.json for UI polling, throttled to 500ms."""
+        now = time.monotonic()
+        if now - self._last_current_save_time < 0.5:
+            return
+            
+        self._last_current_save_time = now
         data = model.model_dump_json(indent=2)
         current_path = self.runtime_dir / "current.json"
         

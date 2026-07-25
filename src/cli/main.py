@@ -89,34 +89,41 @@ def run(
         test_mode=test
     )
     
-    pipeline.initialize_run()
     
     from src.orchestration.terminal_logger import TerminalLogger, StdoutInterceptorShim
+    # TerminalLogger and shim are wired to the bus before the thread starts so
+    # they receive ALL events including RunStarted (emitted by initialize_run()
+    # inside the pipeline thread). run_dir is known from __init__; the directory
+    # is created by initialize_run() when the thread calls _run_unlocked().
     terminal_logger = TerminalLogger(
-        pipeline.run_dir / "pipeline.log",
-        pipeline.exec_context.bus,
-        pipeline.exec_context.event_factory
+        pipeline.run_dir / "pipeline.log"
     )
-    shim = StdoutInterceptorShim(terminal_logger)
+    pipeline.exec_context.bus.subscribe(terminal_logger.handle_event)
+    shim = StdoutInterceptorShim(pipeline.exec_context.bus, pipeline.exec_context.event_factory)
     
     operator_console = OperatorConsole(pipeline.exec_context.state_manager, refresh_rate=0.5)
     
     def run_pipeline_thread():
-        shim.start()
         try:
             pipeline.run()
         except Exception as e:
-            pass
-        finally:
-            shim.stop()
-            terminal_logger.close()
+            import traceback
+            import sys
+            print(f"Pipeline thread failed: {e}", file=sys.__stderr__)
+            traceback.print_exc(file=sys.__stderr__)
             
     t = threading.Thread(target=run_pipeline_thread, daemon=True)
-    t.start()
     
-    # Run the rich console on the main thread
-    operator_console.start()
-    t.join()
+    shim.start()
+    try:
+        t.start()
+        # Run the rich console on the main thread
+        operator_console.start()
+        t.join()
+    finally:
+        shim.stop()
+        terminal_logger.close()
+
     
     console.print("[bold green]Run Complete.[/bold green]")
 

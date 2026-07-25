@@ -213,7 +213,7 @@ class OperatorConsole:
         return self.layout
 
     def start(self):
-        with Live(self.layout, refresh_per_second=1/self.refresh_rate, screen=True) as live:
+        with Live(self.layout, console=self.console, refresh_per_second=1/self.refresh_rate, screen=True) as live:
             try:
                 while True:
                     live.update(self._update_layout())

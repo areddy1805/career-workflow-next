@@ -3,6 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Any, List
+from datetime import datetime, timezone
 
 from .events import EventFactory
 from .event_bus import EventBus
@@ -199,10 +200,27 @@ class PipelineExecutionContext:
 
         event = self.event_factory.create(
             stage,
-            "StageFinished",
+            "StageCompleted",
             payload,
         )
 
         self.bus.publish(event)
 
         self.current_stage = None
+
+    def log(self, message: str, level: str = "INFO", source: str = "pipeline"):
+        """Emit a TerminalMessage event to the EventBus."""
+        timestamp = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "timestamp": timestamp,
+            "level": level,
+            "source": source,
+            "message": message
+        }
+        event = self.event_factory.create(self.current_stage or "System", "TerminalMessage", payload)
+        self.bus.publish(event)
+        
+    def progress(self, **kwargs):
+        """Emit a StageProgress event to the EventBus."""
+        event = self.event_factory.create(self.current_stage or "System", "StageProgress", kwargs)
+        self.bus.publish(event)

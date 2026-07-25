@@ -140,7 +140,7 @@ artifacts/videos/*
 artifacts/audits/*
 !artifacts/.gitkeep
 !artifacts/runs/.gitkeep
-
+*/artifacts
 
 # ==============================================================================
 # Temporary files & Dev agent metadata

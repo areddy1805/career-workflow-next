@@ -39,6 +39,6 @@ class RuntimeStateManager:
             self._snapshots.save_current(self._model)
             
             # Special case for final history
-            if event.event_type in ("run_completed", "run_failed"):
+            if event.event_type in ("RunCompleted", "RunFailed"):
                 self._snapshots.save_final(self._model)
 
