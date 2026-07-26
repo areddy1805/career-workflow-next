@@ -18,13 +18,13 @@ def test_pipeline_integration_routing():
             "description": f"Detailed job description for role {i} with Python, AWS, React skills."
         })
 
-    llm_candidates, auto_apply_candidates, rejected = runner.process_jobs(mock_jobs)
+    llm_candidates, auto_apply_candidates, rejected, budget_skipped = runner.process_jobs(mock_jobs)
     if rejected:
         print("SAMPLE REJECTION:", rejected[0]["rejection_reason"])
     
-    total_processed = len(llm_candidates) + len(auto_apply_candidates) + len(rejected)
+    total_processed = len(llm_candidates) + len(auto_apply_candidates) + len(rejected) + len(budget_skipped)
     assert total_processed == 1088
     
     # Assert LLM candidates are within budget (<200)
     assert len(llm_candidates) <= 200
-    print(f"\n[TEST WIRING RESULT] Acquired: 1088 -> LLM Candidates: {len(llm_candidates)} -> Auto Apply: {len(auto_apply_candidates)} -> Rejected: {len(rejected)}")
+    print(f"\n[TEST WIRING RESULT] Acquired: 1088 -> LLM Candidates: {len(llm_candidates)} -> Auto Apply: {len(auto_apply_candidates)} -> Budget Skipped: {len(budget_skipped)} -> Rejected: {len(rejected)}")

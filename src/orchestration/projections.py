@@ -91,6 +91,10 @@ class MetricsProjection:
 
             elif s == "Selection":
                 self.metrics["selected"] = c
+                # Update prefiltered to reflect losses during selection
+                # (e.g., diversity policy rejections) so the accounting
+                # identity holds: acquired = prefiltered + pre_app_rejected
+                self.metrics["prefiltered"] = c
 
     def get_metrics(self) -> Dict[str, int]:
         return self.metrics

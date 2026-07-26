@@ -204,9 +204,14 @@ def print_response_time(
 
 def build_report_snapshot(
     rows: list[dict],
+    submitted_this_run: int = 0,
 ) -> dict:
     """
     Build a serializable analytics snapshot for orchestration artifacts.
+
+    `submitted_this_run` is the number of applications actually submitted
+    during this pipeline run (from metrics), NOT the total in the ledger
+    which includes historical/pre-existing applications from reconciliation.
 
     Terminal formatting remains separate from report computation.
     """
@@ -219,7 +224,8 @@ def build_report_snapshot(
     return {
         "overview": {
             "total_applications": total,
-            "submitted": funnel["SUBMITTED"],
+            "submitted": submitted_this_run,
+            "submitted_historical": funnel["SUBMITTED"],
             "viewed": funnel["VIEWED"],
             "shortlisted": funnel["SHORTLISTED"],
             "interview": funnel["INTERVIEW"],

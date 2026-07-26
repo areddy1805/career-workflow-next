@@ -376,7 +376,7 @@ class JobFilterPipeline2:
     def __init__(
         self,
         daily_apply_limit: int = 500,
-        min_apply_score: int = 50,
+        min_apply_score: int = 75,
         ai_score_limit: int = 300,
         batch_size: int = 5,
         metrics: PipelineRunMetrics | None = None,

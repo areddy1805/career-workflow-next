@@ -74,8 +74,26 @@ class DeterministicPipelineRunner:
         llm_candidates = []
         auto_apply_candidates = []
         rejected_jobs = []
+        budget_skipped_jobs = []
 
+        # Group jobs by provider for fair budget allocation
+        from collections import defaultdict
+        provider_groups = defaultdict(list)
         for j_dict in raw_jobs:
+            pid = j_dict.get("provider_id", "unknown")
+            provider_groups[pid].append(j_dict)
+
+        # Interleave jobs from all providers round-robin for provider-neutral scoring order
+        interleaved_jobs = []
+        remaining = {pid: len(jobs) for pid, jobs in provider_groups.items()}
+        while any(remaining.values()):
+            for pid in list(remaining.keys()):
+                if remaining[pid] > 0:
+                    idx = len(provider_groups[pid]) - remaining[pid]
+                    interleaved_jobs.append(provider_groups[pid][idx])
+                    remaining[pid] -= 1
+
+        for j_dict in interleaved_jobs:
             job_obj = self.dict_to_job(j_dict)
             
             # 1. Normalization
@@ -161,14 +179,15 @@ class DeterministicPipelineRunner:
                     count_budget_pass += 1
                     llm_candidates.append(j_dict)
                 else:
-                    if calibrated_score >= 75.0:
-                        j_dict["llm_bypassed"] = True
-                        j_dict["ai_score"] = calibrated_score
-                        j_dict["ai_reason"] = f"Adaptive Budget Exceeded: Overlay Fallback ({self.overlay.display_name} - {score_bucket})"
-                        auto_apply_candidates.append(j_dict)
-                    else:
-                        j_dict["rejection_reason"] = f"Adaptive Budget Exceeded & Calibrated Score ({calibrated_score}) Below Fallback"
-                        rejected_jobs.append(j_dict)
+                    # Budget exhausted — do NOT silently convert to auto-apply.
+                    # Assign a BUDGET_SKIPPED status so downstream pipeline routes
+                    # these jobs to manual queue for user review, never auto-apply.
+                    j_dict["budget_skipped"] = True
+                    j_dict["ai_score"] = calibrated_score
+                    j_dict["score_budget_status"] = "BUDGET_SKIPPED"
+                    j_dict["ai_reason"] = f"Budget Exhausted: Not evaluated by LLM ({self.overlay.display_name} - {score_bucket}: {calibrated_score})"
+                    j_dict["rejection_reason"] = j_dict["ai_reason"]
+                    budget_skipped_jobs.append(j_dict)
 
         print("\n==================================================", file=sys.stderr)
         print(f"  RELEASE 3.1.7 OVERLAY TELEMETRY ({self.overlay.display_name})", file=sys.stderr)
@@ -183,7 +202,8 @@ class DeterministicPipelineRunner:
         print(f"After score threshold:       {count_score_pass}", file=sys.stderr)
         print(f"Submitted to LLM:            {len(llm_candidates)}", file=sys.stderr)
         print(f"Bypassed LLM (Auto-Apply):   {len(auto_apply_candidates)}", file=sys.stderr)
+        print(f"Budget Skipped (Manual):     {len(budget_skipped_jobs)}", file=sys.stderr)
         print(f"Rejected deterministically:  {len(rejected_jobs)}", file=sys.stderr)
         print("==================================================\n", file=sys.stderr, flush=True)
 
-        return llm_candidates, auto_apply_candidates, rejected_jobs
+        return llm_candidates, auto_apply_candidates, rejected_jobs, budget_skipped_jobs

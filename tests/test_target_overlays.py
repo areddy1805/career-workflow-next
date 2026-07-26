@@ -32,7 +32,7 @@ def test_target_profile_overlays():
         "description": "Customer-facing solution architecture, discovery workshops, rapid prototyping, and end-to-end integration of LLM and Angular/Node full-stack solutions."
     }
 
-    llm_fde, auto_fde, rej_fde = runner_fde.process_jobs([fde_job])
+    llm_fde, auto_fde, rej_fde, budget_fde = runner_fde.process_jobs([fde_job])
     processed_fde = (llm_fde + auto_fde)[0]
 
     assert processed_fde["active_target_overlay"] == "Forward Deployed Engineer (FDE)"
@@ -40,7 +40,7 @@ def test_target_profile_overlays():
     assert "Azure AI Engineer Associate" in processed_fde["evidence_explainability"]["verified_certifications"][0]
 
     # Run under Applied AI overlay
-    llm_ai, auto_ai, rej_ai = runner_ai.process_jobs([fde_job])
+    llm_ai, auto_ai, rej_ai, budget_ai = runner_ai.process_jobs([fde_job])
     processed_ai = (llm_ai + auto_ai)[0]
 
     assert processed_ai["active_target_overlay"] == "Applied AI Engineer"

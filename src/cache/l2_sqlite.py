@@ -22,7 +22,11 @@ class L2SQLiteCache:
         if record.get("expires_at"):
             try:
                 expires_at = datetime.fromisoformat(record["expires_at"])
-                if datetime.now(timezone.utc) > expires_at:
+                # Make naive datetimes aware (UTC) for comparison
+                now = datetime.now(timezone.utc)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if now > expires_at:
                     return None # Expired
             except ValueError:
                 pass
@@ -44,9 +48,8 @@ class L2SQLiteCache:
     ) -> None:
         expires_at = None
         if ttl_seconds:
-            expires_at = datetime.now(timezone.utc).fromtimestamp(
-                datetime.now(timezone.utc).timestamp() + ttl_seconds
-            ).isoformat()
+            from datetime import timedelta
+            expires_at = (datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)).isoformat()
 
         data = {
             "fingerprint": fingerprint,

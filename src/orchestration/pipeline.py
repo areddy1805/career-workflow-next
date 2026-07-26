@@ -450,7 +450,7 @@ class CareerWorkflowPipeline:
             "acquisition_mode": self.context.acquisition_mode,
             "llm_model": os.environ.get("OMLX_MODEL", "qwen3.5-4b"),
             "daily_apply_limit": int(os.environ.get("DAILY_APPLY_LIMIT", "500")),
-            "min_apply_score": int(os.environ.get("MIN_APPLY_SCORE", "50")),
+            "min_apply_score": int(os.environ.get("MIN_APPLY_SCORE", "75")),
             "ai_score_limit": int(os.environ.get("AI_SCORE_LIMIT", "300")),
             "batch_size": int(os.environ.get("BATCH_SIZE", "5")),
             "job_search_cache_ttl_days": int(
@@ -619,10 +619,18 @@ class CareerWorkflowPipeline:
         enriched_candidates = deduplicate_enriched_jobs(enriched_candidates)
         # Fire rejection events for jobs silently dropped by deduplicate_enriched_jobs
         # so that pre_app_rejected counter and rejection_histogram are accurate.
+        # Use a Counter to track how many times each fingerprint appears; only
+        # the first occurrence is kept, subsequent ones are duplicates.
+        from collections import Counter
+        fp_counts = Counter(description_fingerprint(j) for j in _before_dedup)
         kept_fps = {description_fingerprint(j) for j in enriched_candidates}
         for j in _before_dedup:
             fp = description_fingerprint(j)
-            if fp not in kept_fps:
+            if fp in kept_fps and fp_counts.get(fp, 0) > 1:
+                # Decrement so only the first surviving job passes this check
+                fp_counts[fp] -= 1
+                continue  # Keep this one — it's the first occurrence
+            if fp not in kept_fps or fp_counts.get(fp, 0) <= 0:
                 if not j.get("_rejection_recorded"):
                     j["rejection_stage"] = "Classification"
                     j["rejection_code"] = "DESCRIPTION_DUPLICATE"
@@ -657,7 +665,7 @@ class CareerWorkflowPipeline:
         health_monitor = HealthMonitor()
 
         runner = DeterministicPipelineRunner()
-        llm_candidates, auto_apply_candidates, deterministic_rejected = runner.process_jobs(jobs)
+        llm_candidates, auto_apply_candidates, deterministic_rejected, budget_skipped = runner.process_jobs(jobs)
 
         for r_job in deterministic_rejected:
             if not r_job.get("_rejection_recorded"):
@@ -705,14 +713,14 @@ class CareerWorkflowPipeline:
         llm_scored_jobs = classifier.ai_score_batch(llm_to_process)
         print(f"[PIPELINE DEBUG] Exited ai_score_batch", file=sys.stderr, flush=True)
 
-        jobs = llm_scored_jobs + auto_apply_candidates + semantic_reused
+        jobs = llm_scored_jobs + auto_apply_candidates + semantic_reused + budget_skipped
         jobs = classifier.post_score_guard(jobs)
         jobs = classifier.rank(jobs)
 
         # Release 3.3: Learning Ledger & Cost Engine Analytics
         cost_report = CostEngine.calculate_metrics(
             total_jobs=len(jobs) + len(deterministic_rejected),
-            bypassed_jobs=len(auto_apply_candidates) + len(semantic_reused),
+            bypassed_jobs=len(auto_apply_candidates) + len(semantic_reused) + len(budget_skipped),
             metrics=self.inference_service.provider_manager.metrics.global_metrics
         )
         # Preserve cost report for observability display
@@ -1301,8 +1309,10 @@ class CareerWorkflowPipeline:
 
     def report(self) -> None:
         rows = self.context.ledger.analytics_rows()
-
-        snapshot = build_report_snapshot(rows)
+        # submitted_this_run comes from the metrics projection (event-sourced counters),
+        # NOT from PipelineRunMetrics which tracks different concepts.
+        run_submitted = self.metrics_proj.get_metrics().get("submitted", 0)
+        snapshot = build_report_snapshot(rows, submitted_this_run=run_submitted)
 
         self.context.report_snapshot = snapshot
 
@@ -1474,7 +1484,7 @@ class CareerWorkflowPipeline:
 
 
         counts = self.metrics_proj.get_metrics()
-        c_res = self.context.stage_results.get("classification", {})
+        # c_res was previously read here but is no longer needed
         
         cache_metrics = {}
         if self.context.cache_manager:
@@ -1497,10 +1507,10 @@ class CareerWorkflowPipeline:
             run_id=self.context.run_id,
             status=self.status.value,
             acquired=counts["acquired"],
-            summary_ranked=c_res.get("prefiltered", 0),
-            detailed=c_res.get("detail_candidates", 0),
-            scored=c_res.get("classified", 0),
-            ranked=c_res.get("classified", 0),
+            summary_ranked=counts.get("prefiltered", 0),
+            detailed=counts.get("detail_candidates", 0),
+            scored=counts.get("classified", 0),
+            ranked=counts.get("classified", 0),
             selected=counts["selected"],
             attempted=counts["attempted"],
             submitted=counts["submitted"],

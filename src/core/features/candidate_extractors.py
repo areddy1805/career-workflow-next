@@ -28,6 +28,10 @@ class CandidateFeatureSuite:
         registry.register(FeatureDefinition(id="company_quality", name="Company Quality", family="Market", category="Company", version="3.0.0", weight=10.0))
         registry.register(FeatureDefinition(id="product_vs_service", name="Product vs Service Company", family="Market", category="Company", version="3.0.0", weight=8.0))
 
+        # Release 3.1.8: AI Role Confidence — distinguishes AI roles from general SWE
+        registry.register(FeatureDefinition(id="ai_role_confidence", name="AI Role Confidence", family="Eligibility", category="AI", version="3.1.8", weight=15.0))
+        registry.register(FeatureDefinition(id="swe_penalty", name="General SWE Penalty", family="Risk", category="AI", version="3.1.8", weight=-12.0))
+
     @staticmethod
     def get_candidate_extractor_map(intel: CandidateIntelligence, overlay: TargetProfileOverlay) -> Dict[str, Any]:
         return {
@@ -40,7 +44,9 @@ class CandidateFeatureSuite:
             "rag_relevance": lambda meta, prev: CandidateFeatureSuite._calc_rag_relevance(meta),
             "fde_consulting_score": lambda meta, prev: CandidateFeatureSuite._calc_fde_consulting(meta, intel, overlay),
             "company_quality": lambda meta, prev: CandidateFeatureSuite._calc_company_quality(meta),
-            "product_vs_service": lambda meta, prev: CandidateFeatureSuite._calc_product_vs_service(meta)
+            "product_vs_service": lambda meta, prev: CandidateFeatureSuite._calc_product_vs_service(meta),
+            "ai_role_confidence": lambda meta, prev: CandidateFeatureSuite._calc_ai_role_confidence(meta),
+            "swe_penalty": lambda meta, prev: CandidateFeatureSuite._calc_swe_penalty(meta),
         }
 
     @staticmethod
@@ -144,3 +150,79 @@ class CandidateFeatureSuite:
     @staticmethod
     def _calc_product_vs_service(meta: JobMetadata) -> FeatureResult:
         return FeatureResult("product_vs_service", "3.0.0", 8.0, value=0.8, confidence=75, state="PRESENT", reason="Product engineering company indicator")
+
+    @staticmethod
+    def _calc_ai_role_confidence(meta: JobMetadata) -> FeatureResult:
+        """
+        Release 3.1.8: Measures how strongly the job metadata indicates
+        a genuine AI/ML engineering role rather than general SWE.
+        Uses the concatenated technologies + frameworks + ai_keywords
+        from the metadata extraction pipeline.
+        """
+        tech_text = " ".join(meta.technologies.value + meta.frameworks.value).lower()
+        ai_kws = meta.ai_keywords.value
+        ai_kw_text = " ".join(ai_kws).lower() if ai_kws else ""
+
+        ai_tech_kw = ["tensorflow", "pytorch", "langchain", "openai", "huggingface",
+                      "transformers", "keras", "jax", "onnx", "mlflow", "kubeflow",
+                      "weaviate", "pinecone", "chromadb", "llamaindex", "autogen",
+                      "crewai", "langgraph", "vector", "embedding"]
+        ai_role_kw = ["llm", "rag", "generative ai", "gen ai", "genai", "artificial intelligence",
+                      "machine learning", "deep learning", "nlp", "computer vision",
+                      "agentic", "prompt engineering", "ai agent", "ai evaluation",
+                      "model deployment", "mlops", "ai/ml", "data science"]
+
+        has_ai_kw = any(kw in ai_kw_text for kw in ai_role_kw)
+        has_ai_tech = any(t in tech_text for t in ai_tech_kw)
+        has_ai_basic = len(ai_kws) > 0
+
+        if has_ai_kw and (has_ai_tech or has_ai_basic):
+            val = 1.0
+            reason = f"Strong AI role signal: {len(ai_kws)} AI keywords + AI tech stack"
+        elif has_ai_kw:
+            val = 0.7
+            reason = f"Moderate AI role signal: AI keywords present ({len(ai_kws)})"
+        elif has_ai_basic:
+            val = 0.4
+            reason = "Weak AI role signal: basic AI keyword match only"
+        else:
+            val = 0.1
+            reason = "No AI role signal detected from metadata"
+
+        return FeatureResult("ai_role_confidence", "3.1.8", 15.0, value=val, confidence=90, state="PRESENT", reason=reason)
+
+    @staticmethod
+    def _calc_swe_penalty(meta: JobMetadata) -> FeatureResult:
+        """
+        Release 3.1.8: Applies a penalty when the job uses general SWE
+        technologies without AI specialization. Penalizes roles like
+        .NET full-stack, support, field engineer when scored under
+        the Applied AI Engineer overlay.
+        """
+        tech_text = " ".join(meta.technologies.value + meta.frameworks.value).lower()
+        ai_kw_text = " ".join(meta.ai_keywords.value).lower() if meta.ai_keywords.value else ""
+
+        ai_indicators = ["machine learning", "deep learning", "llm", "nlp",
+                        "data science", "generative ai", "genai", "artificial intelligence",
+                        "computer vision", "prompt engineering", "agentic",
+                        "tensorflow", "pytorch", "langchain", "openai", "huggingface"]
+        swe_indicators = [".net", "c#", "asp.net", "entity framework", "winforms",
+                         "sql server", "vb.net", "sharepoint", "dynamics",
+                         "support", "field service", "desktop support",
+                         "technical support", "customer success",
+                         "business development", "implementation"]
+
+        has_ai = any(kw in ai_kw_text for kw in ai_indicators)
+        has_swe_only = any(kw in tech_text for kw in swe_indicators)
+
+        if has_swe_only and not has_ai:
+            val = 1.0
+            reason = "General SWE technologies without AI specialization"
+        elif has_swe_only and has_ai:
+            val = 0.3
+            reason = "Hybrid SWE+AI technology stack"
+        else:
+            val = 0.0
+            reason = "No general SWE penalty applied"
+
+        return FeatureResult("swe_penalty", "3.1.8", -12.0, value=val, confidence=85, state="PRESENT", reason=reason)

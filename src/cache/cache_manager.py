@@ -86,6 +86,7 @@ class CacheManager:
             
         layer_hit = None
         record = None
+        start = time.monotonic()
         
         # Check L1
         if decision.layer in ["L1", "L1+L2"]:
@@ -101,12 +102,24 @@ class CacheManager:
                 # Promote to L1
                 if decision.layer == "L1+L2":
                     self.llm_l1.set(fingerprint, record)
+        
+        # Track hit/miss metrics
+        elapsed_ms = (time.monotonic() - start) * 1000
+        with self._metrics_lock:
+            if record:
+                self.metrics["llm_hits"] += 1
+            else:
+                self.metrics["llm_misses"] += 1
+            self.metrics["total_lookup_time_ms"] += elapsed_ms
+            self.metrics["lookups"] += 1
                     
         return record, layer_hit
         
     def llm_set(self, fingerprint: str, data: dict, decision: CacheDecision) -> None:
         if not decision.enabled:
             return
+            
+        start = time.monotonic()
             
         if decision.layer in ["L1", "L1+L2"]:
             self.llm_l1.set(fingerprint, data)
@@ -124,3 +137,8 @@ class CacheManager:
                 category=data.get("category"),
                 ttl_seconds=decision.ttl
             )
+        
+        elapsed_ms = (time.monotonic() - start) * 1000
+        with self._metrics_lock:
+            self.metrics["total_save_time_ms"] += elapsed_ms
+            self.metrics["saves"] += 1

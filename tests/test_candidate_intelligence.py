@@ -41,7 +41,7 @@ def test_canonical_candidate_intelligence_audit_and_scoring():
         }
     ]
 
-    llm, auto_apply, rejected = runner.process_jobs(mock_jobs)
+    llm, auto_apply, rejected, budget_skipped = runner.process_jobs(mock_jobs)
     
     assert len(mock_jobs) == len(llm) + len(auto_apply) + len(rejected)
     
