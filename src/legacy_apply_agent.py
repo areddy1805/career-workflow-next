@@ -1999,6 +1999,8 @@ def run_application_batch(
             print_status_failed(exc)
 
             failed_count += 1
+            if exec_context:
+                exec_context.fail(job, str(exc))
 
             if ledger is not None:
                 failure = classify_application_exception(exc)

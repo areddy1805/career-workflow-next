@@ -681,3 +681,36 @@ def test_zero_run_limit_blocks_all_application_attempts(
     assert client.external_checks == []
     assert summary.run_limit_reached == 1
     assert summary.applied == 0
+
+
+def test_application_execution_failure_emits_exec_context_fail(
+    monkeypatch,
+) -> None:
+    from unittest.mock import Mock
+
+    job = FakeJob(job_id="1")
+    client = FakeBatchClient()
+    exec_context = Mock()
+
+    def fake_process(**kwargs):
+        raise RuntimeError("Network error during application")
+
+    monkeypatch.setattr(
+        apply_agent,
+        "process_job_application",
+        fake_process,
+    )
+
+    summary = run_application_batch(
+        providers={"naukri": client},
+        jobs=[job],
+        score_map={"1": {"score": 90}},
+        questionnaire_resolver=FakeResolver(),
+        applied_jobs_set=set(),
+        sleep_fn=lambda _: None,
+        exec_context=exec_context,
+    )
+
+    assert summary.failed == 1
+    exec_context.fail.assert_called_once_with(job, "Network error during application")
+
