@@ -28,8 +28,7 @@ def should_fetch_details(job: dict, provider: Any) -> bool:
 
     Returns ``False`` when:
     * The provider is ``None`` or has ``supports_detail_fetch == False``.
-    * The job already carries a non-empty ``description`` (acquisition
-      already provided enough information).
+    * The job ``job_id`` starts with ``"jobspy_"`` (cross-provider guard).
     """
     if provider is None:
         return False
@@ -39,9 +38,10 @@ def should_fetch_details(job: dict, provider: Any) -> bool:
     if not supports:
         return False
 
-    # If the job already has a description, skip enrichment
-    description = job.get("description", "") or ""
-    if description.strip():
+    # Cross-provider guard: job IDs from other providers should not be
+    # passed to a detail-fetch-capable provider that doesn't own them.
+    job_id = str(job.get("job_id") or "").strip()
+    if job_id.startswith("jobspy_"):
         return False
 
     return True

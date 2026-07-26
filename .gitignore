@@ -108,6 +108,7 @@ frontend/frontend.log
 
 data/*
 !data/.gitkeep
+backups/
 
 *.db
 *.sqlite

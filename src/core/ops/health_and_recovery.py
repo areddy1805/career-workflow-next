@@ -28,19 +28,6 @@ class HealthMonitor:
         status = "HEALTHY" if self.error_count < self.error_threshold else "DEGRADED"
         return HealthStatus(status=status, active_errors=self.error_count, error_threshold=self.error_threshold, recommendation="SYSTEM_HEALTHY")
 
-class AutoRecoveryManager:
-    """
-    Release 3.4 Phase 15: Automatic Recovery Manager.
-    Automatically resets transient connection state and falls back to deterministic rules if errors spike.
-    """
-    @staticmethod
-    def execute_recovery() -> Dict[str, Any]:
-        return {
-            "recovery_status": "SUCCESS",
-            "action_taken": "RESET_TRANSIENT_POOLS_AND_FALLBACK_TO_DETERMINISTIC_CACHE",
-            "timestamp": time.time()
-        }
-
 class PerformanceBenchmarkSuite:
     """
     Release 3.4 Phase 16: Performance Benchmark Suite.

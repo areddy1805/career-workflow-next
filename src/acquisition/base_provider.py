@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol, TYPE_CHECKING, runtime_checkable
 

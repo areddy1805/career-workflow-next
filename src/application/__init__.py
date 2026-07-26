@@ -3,7 +3,6 @@ from .detector import ATSDetector
 from .capability import ApplicationCapabilities, ApplicationMode
 from .result import RoutingResult
 from .models import RoutingStrategy, ATSType
-from .interfaces import ApplicationEngine
 
 __all__ = [
     "ApplicationRouter",
@@ -13,5 +12,4 @@ __all__ = [
     "RoutingResult",
     "RoutingStrategy",
     "ATSType",
-    "ApplicationEngine",
 ]

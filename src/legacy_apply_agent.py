@@ -1693,6 +1693,16 @@ def run_application_batch(
             # enqueue for browser-assisted manual application (future)
             job_id = str(job.job_id)
             score_result = score_map.get(job_id, {})
+
+            # Ensure the job carries the external apply URL so the queue
+            # stores the correct destination rather than falling back to
+            # a Naukri placeholder URL.
+            if resolution.apply_url:
+                if isinstance(job, dict):
+                    job["apply_url"] = resolution.apply_url
+                else:
+                    job.apply_url = resolution.apply_url
+
             manual_action_queue.enqueue_external_apply(
                 job=job,
                 score=int(
