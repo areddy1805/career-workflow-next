@@ -64,6 +64,13 @@ class ApplicationLedger:
         path: str = "data/application_ledger.db",
     ):
         self.path = path
+        self._conn: sqlite3.Connection | None = None
+
+        if path == ":memory:":
+            # In-memory databases require a single persistent connection —
+            # each new connection creates a fresh database.
+            self._conn = sqlite3.connect(":memory:", isolation_level="EXCLUSIVE")
+            self._conn.row_factory = sqlite3.Row
 
         Path(path).parent.mkdir(
             parents=True,
@@ -75,6 +82,16 @@ class ApplicationLedger:
     @contextmanager
     def _connect(self):
         # Enforce strict transactions for single source of truth
+        if self._conn is not None:
+            # Persistent in-memory connection — reuse without close.
+            try:
+                yield self._conn
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            return
+
         conn = sqlite3.connect(self.path, isolation_level="EXCLUSIVE")
         conn.row_factory = sqlite3.Row
 
@@ -112,6 +129,8 @@ class ApplicationLedger:
                     server_status_at TEXT,
                     lifecycle_stage TEXT NOT NULL DEFAULT 'UNKNOWN',
                     lifecycle_updated_at TEXT,
+                    resume_profile TEXT NOT NULL DEFAULT 'generic',
+                    provider_id TEXT NOT NULL DEFAULT 'unknown',
                     submitted_at TEXT,
                     viewed_at TEXT,
                     shortlisted_at TEXT,
@@ -347,17 +366,41 @@ class ApplicationLedger:
                     END,
 
                     status = CASE
+                        -- Never downgrade terminal/applied states
                         WHEN applications.status IN (
                             'applied',
                             'already_applied',
-                            'server_history'
+                            'server_history',
+                            'EXPIRED'
                         )
                         AND excluded.status IN (
                             'qualified',
                             'dry_run_suppressed',
                             'run_limit_suppressed',
                             'skipped_local',
-                            'already_applied'
+                            'already_applied',
+                            'DISCOVERED',
+                            'CLASSIFIED',
+                            'SCORED',
+                            'ELIGIBLE'
+                        )
+                        THEN applications.status
+                        -- DEFERRED_QUOTA should not be downgraded by pre-apply states
+                        WHEN applications.status IN (
+                            'DEFERRED_QUOTA',
+                            'PLANNED',
+                            'APPLYING'
+                        )
+                        AND excluded.status IN (
+                            'qualified',
+                            'dry_run_suppressed',
+                            'run_limit_suppressed',
+                            'skipped_local',
+                            'already_applied',
+                            'DISCOVERED',
+                            'CLASSIFIED',
+                            'SCORED',
+                            'ELIGIBLE'
                         )
                         THEN applications.status
                         ELSE excluded.status

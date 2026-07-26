@@ -149,9 +149,12 @@ class PipelineExecutionContext:
         self._record_decision(job, "APPLIED", reason=outcome, meta={"explanation": explanation})
         self.complete(job)
 
-    def defer(self, job: Any, reason: str):
-        self.emit_job_event(job, "JobDeferred", {"reason": reason})
-        self._record_decision(job, "DEFERRED", reason=reason)
+    def defer(self, job: Any, reason: str, explanation: str = ""):
+        payload = {"reason": reason}
+        if explanation:
+            payload["explanation"] = explanation
+        self.emit_job_event(job, "JobDeferred", payload)
+        self._record_decision(job, "DEFERRED", reason=reason, meta={"explanation": explanation})
 
     def skip(self, job: Any, reason: str, code: str = None):
         self.emit_job_event(
