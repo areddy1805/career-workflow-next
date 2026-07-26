@@ -23,27 +23,26 @@ What does NOT belong here
 
 Architecture note
 -----------------
-No BaseProvider class is introduced.  JobSpyProvider is a plain class that
-matches the informal contract expected by fetch_jobspy_jobs() in apply_agent.py:
-
-    provider.is_enabled() -> bool
-    provider.is_site_available(site: str) -> bool
-    provider.search(keyword, location, site) -> list[Job]
-    provider.record_challenge(site: str) -> None
-    provider.record_success(site: str, latency: float) -> None
-    provider.record_failure(site: str) -> None
-    provider.health_summary() -> dict
+JobSpyProvider satisfies AcquisitionProvider from src.acquisition.base_provider.
+The provider owns all adaptive acquisition logic (rolling yield, degraded-site
+detection, per-site cooldowns).  fetch_jobs() is the framework entry point;
+fetch_jobspy_jobs() in acquisition_service.py is a backward-compatible shim
+that delegates to it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
 import urllib.parse
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+
+from colorama import Fore, Style
 
 from src.exceptions.exceptions import (
     JobSpyChallengeError,
@@ -54,8 +53,57 @@ from src.exceptions.exceptions import (
 from src.models.models import Job
 from src.search.challenge_cooldown import SearchChallengeCooldown
 from src.acquisition.providers.jobspy_planner import JobSpySearchPlanner
+from src.acquisition.base_provider import (
+    AcquisitionProvider,  # noqa: F401  (used for isinstance checks at runtime)
+    CapabilityLevel,
+    ProviderCapabilities,
+    ProviderRunMetrics,
+)
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Private helpers used by JobSpyProvider.fetch_jobs()
+# ---------------------------------------------------------------------------
+
+
+class _RollingYieldTracker:
+    """
+    Tracks the rolling new-job yield ratio over a sliding window of queries.
+
+    ``record(new_jobs, total_jobs)`` is called after each query.
+    ``current_yield()`` returns the ratio of new (non-duplicate) jobs to total
+    fetched jobs over the last ``window_size`` queries, expressed as %.
+    When the ratio drops below the adaptive threshold the provider stops.
+    """
+
+    def __init__(self, window_size: int = 25) -> None:
+        self.window_size = window_size
+        self.history: deque[tuple[int, int]] = deque(maxlen=window_size)
+
+    def record(self, new_jobs: int, total_jobs: int) -> None:
+        self.history.append((new_jobs, total_jobs))
+
+    def current_yield(self) -> float:
+        if not self.history:
+            return 100.0
+        total_new = sum(n for n, _ in self.history)
+        total_all = sum(t for _, t in self.history)
+        return (total_new / total_all * 100.0) if total_all else 0.0
+
+    def has_enough_data(self) -> bool:
+        return len(self.history) == self.window_size
+
+
+def _compute_job_hash(job: "Job") -> str:
+    """Stable MD5 hash over (title, company, location, url) for deduplication."""
+    title = (getattr(job, "title", "") or "").lower().strip()
+    company = (getattr(job, "company", "") or "").lower().strip()
+    loc = (getattr(job, "location", "") or "").lower().strip()
+    link = (getattr(job, "apply_url", "") or "").lower().strip()
+    return hashlib.md5(f"{title}::{company}::{loc}::{link}".encode("utf-8")).hexdigest()
+
 
 # ---------------------------------------------------------------------------
 # Supported sites
@@ -268,6 +316,35 @@ class JobSpyProvider:
         self.planner = JobSpySearchPlanner(config.profiles)
 
     # ------------------------------------------------------------------
+    # AcquisitionProvider identity
+    # ------------------------------------------------------------------
+
+    @property
+    def provider_name(self) -> str:
+        """Stable string identity for this provider.  Always ``"jobspy"``."""
+        return "jobspy"
+
+    @property
+    def provider_version(self) -> str:
+        """Semver-style version string.  Bump when the normalizer schema changes."""
+        return "1.0.0"
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Capability declaration for JobSpy."""
+        return ProviderCapabilities(
+            acquisition=CapabilityLevel.FULL,
+            technology_filter=CapabilityLevel.NONE,  # keyword-only search
+            location_filter=CapabilityLevel.FULL,
+            remote_filter=CapabilityLevel.PARTIAL,    # is_remote bool, not filter
+            seniority_filter=CapabilityLevel.NONE,
+            salary_data=CapabilityLevel.PARTIAL,      # provider-dependent
+            company_filter=CapabilityLevel.NONE,
+            pagination=CapabilityLevel.NONE,          # results_wanted cap
+            incremental=CapabilityLevel.NONE,
+        )
+
+    # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
@@ -325,6 +402,283 @@ class JobSpyProvider:
     def health_summary(self) -> dict:
         """Return health stats for all configured sites."""
         return {site: h.to_dict() for site, h in self._health.items()}
+
+    def fetch_jobs(self, search_tracks: list[dict]) -> list[Job]:
+        """
+        Implements ``AcquisitionProvider.fetch_jobs()``.
+
+        Performs adaptive, multi-site acquisition across all configured JobSpy
+        sites.  Internally manages per-site challenge cooldowns, rolling yield
+        tracking, and degraded-provider detection.  The console output and
+        summary table produced here replace the output previously in
+        ``fetch_jobspy_jobs()`` in ``acquisition_service.py``.
+
+        On partial failure (one site/query errors) the remaining queries
+        continue.  Never raises.
+        """
+        if not self.is_enabled():
+            return []
+
+        cfg = self.config
+        t_run_start = time.perf_counter()
+
+        metrics = ProviderRunMetrics(
+            provider=self.provider_name,
+            provider_version=self.provider_version,
+        )
+
+        print("\n=== JOBSPY CONFIG ===")
+        print(f"Enabled : {self.is_enabled()}")
+        print(f"Sites   : {cfg.sites}")
+        print(f"Cooldown: {cfg.cooldown_seconds}")
+        print("=====================\n")
+
+        # Extract unique locations from the generic search tracks
+        locations = list(
+            {q.get("location", "") for q in search_tracks if q.get("location")}
+        )
+        if not locations:
+            locations = ["Remote"]
+
+        planned_queries = self.generate_planned_searches(locations)
+
+        if not planned_queries and search_tracks:
+            from src.acquisition.providers.jobspy_planner import JobSpyQuery
+
+            for site in cfg.sites:
+                for q in search_tracks:
+                    planned_queries.append(
+                        JobSpyQuery(
+                            keyword=q.get("keyword", ""),
+                            location=q.get("location", ""),
+                            track=q.get("track", ""),
+                            provider=site,
+                            search_profile=q.get("search_profile", "unknown"),
+                            layer=q.get("matched_technology", ""),
+                        )
+                    )
+
+        input_count = len(planned_queries)
+        if cfg.benchmarking_mode:
+            print(
+                f"{Fore.YELLOW}*** BENCHMARKING MODE — INTERLEAVING AND LIMITING TO 10 QUERIES ***"
+                f"{Style.RESET_ALL}"
+            )
+            by_provider: dict[str, list] = {}
+            for q in planned_queries:
+                by_provider.setdefault(q.provider, []).append(q)
+            interleaved: list = []
+            max_len = max(len(lst) for lst in by_provider.values()) if by_provider else 0
+            for idx in range(max_len):
+                for pname in ["indeed", "linkedin", "google"]:
+                    if pname in by_provider and idx < len(by_provider[pname]):
+                        interleaved.append(by_provider[pname][idx])
+            planned_queries = interleaved[:10]
+
+        logger.info(
+            "JobSpy Provider Enabled: %s | input queries: %d | budget queries: %d",
+            self.is_enabled(), input_count, len(planned_queries),
+        )
+
+        _line = f"{Fore.WHITE}{'─' * 68}{Style.RESET_ALL}"
+        print(f"\n{_line}")
+        print(
+            f"  {Fore.CYAN}{Style.BRIGHT}"
+            f"FETCHING JOBSPY JOBS  ({len(planned_queries)} budgeted queries)"
+            f"{Style.RESET_ALL}"
+        )
+        print(_line)
+
+        seen_hashes: set[str] = set()
+        all_jobs: list[Job] = []
+
+        results_per_site: dict[str, int] = {site: 0 for site in cfg.sites}
+        duplicates_removed: int = 0
+        queries_skipped: int = 0
+        queries_executed: int = 0
+
+        # Adaptive acquisition
+        adaptive_cfg = getattr(cfg, "adaptive_acquisition", {})
+        window_size = adaptive_cfg.get("rolling_window_size", 25)
+        min_yield = adaptive_cfg.get("min_yield_percent", 3.0)
+
+        provider_trackers: dict[str, _RollingYieldTracker] = {
+            site: _RollingYieldTracker(window_size) for site in cfg.sites
+        }
+        stopped_providers: set[str] = set()
+        consecutive_zero_or_fail: dict[str, int] = {site: 0 for site in cfg.sites}
+        self.degraded_providers: set[str] = set()
+
+        query_analytics: list[dict] = []
+
+        for i, query in enumerate(planned_queries, 1):
+            site = query.provider
+            keyword = query.keyword
+            location = query.location
+
+            if site in self.degraded_providers:
+                logger.info("Skipped %r on %s — provider DEGRADED.", keyword, site)
+                queries_skipped += 1
+                metrics.tracks_failed += 1
+                continue
+
+            if site in stopped_providers:
+                logger.info("Skipped %r on %s — adaptive stop.", keyword, site)
+                queries_skipped += 1
+                continue
+
+            if not self.is_site_available(site):
+                logger.info("Skipped %r on %s — cooldown active.", keyword, site)
+                queries_skipped += 1
+                continue
+
+            metrics.tracks_processed += 1
+            queries_executed += 1
+            t_query = time.perf_counter()
+            success_query = False
+
+            try:
+                print(f"\nCalling JobSpy: {site} | {keyword} | {location}")
+                jobs = self.search(keyword=keyword, location=location, site=site)
+                for job in jobs[:3]:
+                    print(f"  -> {job.title} | {job.company} | {job.location}")
+                success_query = len(jobs) > 0
+            except Exception as exc:
+                print(
+                    f"  {Fore.RED}[JOBSPY:{site.upper()}]{Style.RESET_ALL} "
+                    f"{keyword!r} @ {location!r}  →  {exc}"
+                )
+                consecutive_zero_or_fail[site] += 1
+                if consecutive_zero_or_fail[site] >= 3:
+                    self.degraded_providers.add(site)
+                    logger.warning("Provider '%s' marked DEGRADED.", site)
+                metrics.tracks_failed += 1
+                continue
+
+            if success_query:
+                consecutive_zero_or_fail[site] = 0
+            else:
+                consecutive_zero_or_fail[site] += 1
+                if consecutive_zero_or_fail[site] >= 3:
+                    self.degraded_providers.add(site)
+                    logger.warning("Provider '%s' marked DEGRADED.", site)
+
+            latency = time.perf_counter() - t_query
+
+            new_jobs: list[Job] = []
+            for job in jobs:
+                job_hash = _compute_job_hash(job)
+                if job_hash in seen_hashes:
+                    print(f"Duplicate skipped: {job.title} at {job.company}")
+                    duplicates_removed += 1
+                    continue
+                seen_hashes.add(job_hash)
+                results_per_site[site] += 1
+                setattr(job, "acquisition_source", "live")
+                setattr(job, "search_track", query.track)
+                setattr(job, "search_query", keyword)
+                setattr(job, "search_profile", query.search_profile)
+                setattr(job, "matched_technology", query.layer)
+                new_jobs.append(job)
+
+            all_jobs.extend(new_jobs)
+
+            tracker = provider_trackers[site]
+            tracker.record(len(new_jobs), len(jobs))
+
+            query_analytics.append(
+                {
+                    "query": keyword,
+                    "provider": site,
+                    "jobs_found": len(jobs),
+                    "new_jobs": len(new_jobs),
+                    "runtime": latency,
+                }
+            )
+
+            print(
+                f"  {Fore.CYAN}[{site.upper():<8}]{Style.RESET_ALL}  "
+                f"{keyword[:30]:<30}  "
+                f"{Fore.GREEN}{len(new_jobs):>3} new{Style.RESET_ALL}  "
+                f"({len(all_jobs)} total)"
+            )
+
+            if tracker.has_enough_data():
+                current_yield = tracker.current_yield()
+                if current_yield < min_yield:
+                    print(
+                        f"  {Fore.RED}[ADAPTIVE STOP]{Style.RESET_ALL} {site.upper()} "
+                        f"rolling yield {current_yield:.1f}% (<{min_yield}%). Stopping."
+                    )
+                    stopped_providers.add(site)
+
+            if cfg.cooldown_seconds > 0:
+                time.sleep(cfg.cooldown_seconds)
+
+        print(
+            f"\n  {Fore.CYAN}JobSpy total unique jobs: "
+            f"{Style.BRIGHT}{len(all_jobs)}{Style.RESET_ALL}"
+        )
+
+        failures = sum(
+            h.get("failed_searches", 0) for h in self.health_summary().values()
+        )
+        print("\n" + "=" * 57)
+        print("JOBSPY SUMMARY")
+        print("=" * 57)
+        print("Provider          JobSpy")
+        print("Sites")
+        for site in cfg.sites:
+            if site in self.degraded_providers:
+                status = "degraded"
+            elif site in stopped_providers:
+                status = "stopped"
+            elif not self.is_site_available(site):
+                status = "cooldown"
+            else:
+                status = "active"
+            print(f"  {site.capitalize():<14} ({status})")
+
+        print(f"Queries Planned   {input_count}")
+        print(f"Queries Executed  {queries_executed}")
+        print(f"Queries Skipped   {queries_skipped}")
+        print("Results by Site")
+        for site in cfg.sites:
+            print(f"  {site.capitalize():<14} {results_per_site[site]}")
+        print(f"Duplicates        {duplicates_removed}")
+        print(f"Failures          {failures}")
+        print(f"Final Jobs        {len(all_jobs)}")
+
+        if queries_executed > 0:
+            total_time = sum(a["runtime"] for a in query_analytics)
+            total_found = sum(a["jobs_found"] for a in query_analytics)
+            overall_yield = (len(all_jobs) / total_found * 100) if total_found else 0
+            print(f"Overall Yield     {overall_yield:.1f}%")
+            print(f"Average Runtime   {total_time / queries_executed:.2f}s per search")
+            sorted_analytics = sorted(
+                query_analytics, key=lambda x: x["new_jobs"], reverse=True
+            )
+            print("Top 3 Queries (by new jobs):")
+            for a in sorted_analytics[:3]:
+                if a["new_jobs"] > 0:
+                    print(
+                        f"  {a['query'][:20]:<20} | {a['provider']:<8} | {a['new_jobs']} new"
+                    )
+        else:
+            print("Skipped reason    No valid sites or keywords configured")
+        print("=" * 57)
+
+        logger.info(
+            "JobSpy acquisition: executed=%d skipped=%d jobs=%d",
+            queries_executed, queries_skipped, len(all_jobs),
+        )
+
+        # Emit canonical metrics
+        metrics.jobs_fetched = len(all_jobs)
+        metrics.provider_duration_ms = (time.perf_counter() - t_run_start) * 1000
+        metrics.emit()
+
+        return all_jobs
 
     def search(
         self,

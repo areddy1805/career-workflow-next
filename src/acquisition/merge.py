@@ -25,11 +25,14 @@ def _normalise_for_dedup(text: str) -> str:
 
 def merge_jobs(
     naukri_jobs: list,
-    jobspy_jobs: list,
+    additional_jobs: list,
     provider_priority: list[str],
 ) -> list:
     """
-    Merge Naukri and JobSpy job lists into a single deduplicated list.
+    Merge Naukri and additional provider job lists into a deduplicated list.
+
+    ``additional_jobs`` contains jobs from any secondary provider (JobSpy,
+    HiringCafe, …).  The deduplication algorithm is provider-agnostic.
 
     Deduplication strategy (three tiers, per JOBSPY_DISCOVERY.md §7):
 
@@ -45,7 +48,7 @@ def merge_jobs(
     apply links and richer metadata.  provider_priority merely determines
     which metadata wins if both are present for the same duplicate.
     """
-    if not jobspy_jobs:
+    if not additional_jobs:
         return list(naukri_jobs)
 
     def _provider_rank(job) -> int:
@@ -105,9 +108,9 @@ def merge_jobs(
                 return f"source:{site}"
         return "source:naukri"
 
-    for jobspy_job in jobspy_jobs:
-        url = _canonical_url(jobspy_job)
-        key = _identity_key(jobspy_job)
+    for additional_job in additional_jobs:
+        url = _canonical_url(additional_job)
+        key = _identity_key(additional_job)
         dup_idx: int | None = None
 
         # Tier 1 — canonical URL
@@ -129,7 +132,7 @@ def merge_jobs(
         if dup_idx is None:
             # Genuinely new job — add it
             new_idx = len(merged)
-            merged.append(jobspy_job)
+            merged.append(additional_job)
             if url:
                 url_index[url] = new_idx
             key_index[key] = new_idx
@@ -138,14 +141,14 @@ def merge_jobs(
         # Duplicate — resolve by provider_priority
         existing_job = merged[dup_idx]
         winning_job = (
-            jobspy_job
-            if _provider_rank(jobspy_job) < _provider_rank(existing_job)
+            additional_job
+            if _provider_rank(additional_job) < _provider_rank(existing_job)
             else existing_job
         )
 
         # Merge source tags so analytics can measure crossover coverage
         existing_tags = list(getattr(existing_job, "tags", []) or [])
-        new_tag = _source_tag(jobspy_job)
+        new_tag = _source_tag(additional_job)
         if new_tag not in existing_tags:
             existing_tags.append(new_tag)
 
@@ -159,10 +162,10 @@ def merge_jobs(
         logger.debug(
             "Duplicate resolved: %r vs %r → kept %r (priority %d vs %d)",
             getattr(existing_job, "job_id", ""),
-            getattr(jobspy_job, "job_id", ""),
+            getattr(additional_job, "job_id", ""),
             getattr(winning_job, "job_id", ""),
             _provider_rank(existing_job),
-            _provider_rank(jobspy_job),
+            _provider_rank(additional_job),
         )
 
     return merged

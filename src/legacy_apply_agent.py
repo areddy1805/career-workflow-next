@@ -71,6 +71,7 @@ from src.cache.fingerprint import compute_detail_fetch_fingerprint
 from src.acquisition.config import load_acquisition_config
 from src.acquisition.acquisition_service import fetch_jobspy_jobs
 from src.acquisition.merge import merge_jobs
+from src.acquisition.base_provider import AcquisitionProvider
 from src.acquisition.providers.jobspy_provider import (
     JobSpyConfig,
     JobSpyProvider,
@@ -556,6 +557,9 @@ class JobFetchResult:
     search_requests_attempted: int = 0
     pages_stopped_low_yield: int = 0
     stop_reasons: dict[str, int] = field(default_factory=dict)
+    # Keyed by provider_name (e.g. "jobspy", "hiringcafe")
+    secondary_provider_health: dict = field(default_factory=dict)
+    # Backward-compat alias — mirrors secondary_provider_health["jobspy"]
     jobspy_health: dict = field(default_factory=dict)
 
 
@@ -1012,44 +1016,56 @@ def acquire_jobs(
         setattr(job, "provider_id", "naukri")
 
     # ---------------------------------------------------------------
-    # JobSpy additive acquisition
+    # Secondary provider acquisition
     #
-    # Note: Does not mutate fetch_result since JobSpy does not run under
-    # the Naukri challenge constraints.
+    # Any registered provider that satisfies AcquisitionProvider is
+    # executed here.  No provider-specific code lives in this loop.
     #
-    # Failure of JobSpy never affects Naukri.
+    # Adding a new provider requires only:
+    #   1. Registering it in provider_factory.py
+    #   2. Adding its configuration to search_strategy.yaml
     # ---------------------------------------------------------------
 
-    jobspy_jobs = []
-    if not run_jobspy:
-        print("Skipping JobSpy acquisition (disabled or not initialized).")
-    else:
-        jobspy_provider = providers["jobspy"]
+    additional_jobs: list = []
+    _secondary = {k: v for k, v in providers.items() if k != "naukri"}
 
-        # Reuse identical search queries generated for Naukri.
+    if _secondary:
         planner = SearchPlanner()
         search_tracks = planner.generate_queries()
-        print("Calling fetch_jobspy_jobs()")
-        jobspy_jobs = fetch_jobspy_jobs(
-            provider=jobspy_provider,
-            search_tracks=search_tracks,
-        )
-        print(f"JobSpy returned {len(jobspy_jobs)} jobs")
-        jobspy_queries = sum(
-            h.get("total_searches", 0)
-            for h in jobspy_provider.health_summary().values()
-        )
-        fetch_result.search_requests_attempted += jobspy_queries
 
-        health_summary = {}
-        degraded = getattr(jobspy_provider, "degraded_providers", set())
-        for site, h in jobspy_provider.health_summary().items():
-            site_status = "degraded" if site in degraded else "active"
-            health_summary[site] = {"status": site_status, **h}
-        fetch_result.jobspy_health = health_summary
+        for _provider_name, _provider in _secondary.items():
+            if not isinstance(_provider, AcquisitionProvider):
+                logger.warning(
+                    "Provider %r does not implement AcquisitionProvider — skipping.",
+                    _provider_name,
+                )
+                continue
+            if not _provider.is_enabled():
+                print(f"  Skipping provider {_provider_name!r} (disabled).")
+                continue
 
-    for job in jobspy_jobs:
-        setattr(job, "provider_id", "jobspy")
+            print(f"  Running provider: {_provider_name!r}")
+            _p_jobs: list = _provider.fetch_jobs(search_tracks)
+            for _job in _p_jobs:
+                setattr(_job, "provider_id", _provider_name)
+            additional_jobs.extend(_p_jobs)
+
+            _p_health = _provider.health_summary()
+            fetch_result.secondary_provider_health[_provider_name] = _p_health
+
+            # Count secondary searches against the budget counter
+            _p_searches = sum(
+                v for k, v in _p_health.items()
+                if isinstance(v, int) and ("searches" in k or "tracks" in k)
+            )
+            fetch_result.search_requests_attempted += _p_searches
+
+            print(f"  {_provider_name!r} returned {len(_p_jobs)} jobs")
+
+        # Backward-compat alias for code that reads fetch_result.jobspy_health
+        fetch_result.jobspy_health = fetch_result.secondary_provider_health.get(
+            "jobspy", {}
+        )
 
     provider_priority = acq_config.get(
         "provider_priority",
@@ -1058,16 +1074,16 @@ def acquire_jobs(
 
     jobs = merge_jobs(
         naukri_jobs=naukri_jobs,
-        jobspy_jobs=jobspy_jobs,
+        additional_jobs=additional_jobs,
         provider_priority=provider_priority,
     )
 
     print(f"Merged {len(jobs)} jobs")
 
     logger.info(
-        "Acquisition merge: naukri=%d jobspy=%d merged=%d",
+        "Acquisition merge: naukri=%d secondary=%d merged=%d",
         len(naukri_jobs),
-        len(jobspy_jobs),
+        len(additional_jobs),
         len(jobs),
     )
 

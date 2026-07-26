@@ -3,6 +3,7 @@ from colorama import Fore, Style
 from src.client.naukri_client import NaukriLoginClient
 from src.client.job_client import NaukriJobClient
 from src.acquisition.providers.jobspy_provider import JobSpyProvider, JobSpyConfig
+from src.acquisition.providers.hiringcafe_provider import HiringCafeProvider, HiringCafeConfig
 from src.acquisition.config import load_acquisition_config
 
 
@@ -22,15 +23,20 @@ def initialize_providers(provider_mode: str = "all", test_mode: bool = False) ->
     acq_config = load_acquisition_config()
     jobspy_raw = acq_config.get("providers", {}).get("jobspy", {})
     naukri_raw = acq_config.get("providers", {}).get("naukri", {})
+    hiringcafe_raw = acq_config.get("providers", {}).get("hiringcafe", {})
 
     naukri_enabled = naukri_raw.get("enabled", True)
     jobspy_enabled = jobspy_raw.get("enabled", False)
+    hiringcafe_enabled = hiringcafe_raw.get("enabled", False)
 
     run_naukri = (provider_mode == "naukri") or (
         provider_mode == "all" and naukri_enabled
     )
     run_jobspy = (provider_mode == "jobspy") or (
         provider_mode == "all" and jobspy_enabled
+    )
+    run_hiringcafe = (provider_mode == "hiringcafe") or (
+        provider_mode == "all" and hiringcafe_enabled
     )
 
     providers = {}
@@ -41,6 +47,7 @@ def initialize_providers(provider_mode: str = "all", test_mode: bool = False) ->
     print(f"\nMode        : {provider_mode}\n")
     print(f"Naukri      : {'Enabled' if run_naukri else 'Disabled'}\n")
     print(f"JobSpy      : {'Enabled' if run_jobspy else 'Disabled'}\n")
+    print(f"HiringCafe  : {'Enabled' if run_hiringcafe else 'Disabled'}\n")
     print("=" * 58 + "\n")
 
     if run_naukri:
@@ -65,6 +72,18 @@ def initialize_providers(provider_mode: str = "all", test_mode: bool = False) ->
             print(
                 f"\n  {Fore.YELLOW}"
                 f"JobSpy config parse error: {exc}"
+                f"{Style.RESET_ALL}"
+            )
+
+    if run_hiringcafe:
+        try:
+            hiringcafe_cfg = HiringCafeConfig.from_dict(hiringcafe_raw)
+            hiringcafe_cfg.enabled = True
+            providers["hiringcafe"] = HiringCafeProvider(hiringcafe_cfg)
+        except Exception as exc:
+            print(
+                f"\n  {Fore.YELLOW}"
+                f"HiringCafe config parse error: {exc}"
                 f"{Style.RESET_ALL}"
             )
 

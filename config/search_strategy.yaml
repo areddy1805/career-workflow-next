@@ -21,6 +21,7 @@ strategy:
 acquisition:
   provider_priority:
     - naukri
+    - hiringcafe
     - indeed
     - linkedin
     - google
@@ -120,6 +121,48 @@ acquisition:
               - "AI Engineer"
               - "Applied AI"
           negative_keywords: []
+
+    # ---------------------------------------------------------------
+    # HiringCafe — unauthenticated SSR scraping provider
+    #
+    # Requires no credentials.  The buildId is resolved dynamically from
+    # the homepage on each acquisition run and is refreshed automatically
+    # on 404 (stale buildId after a deployment).
+    #
+    # Set enabled: true to activate.  No other code changes required.
+    # ---------------------------------------------------------------
+    hiringcafe:
+      enabled: true
+
+      # HTTP request timeout per page fetch, in seconds.
+      timeout_seconds: 15
+
+      # Max retry attempts per page on 404 (stale buildId) or network error.
+      max_retries: 3
+
+      # Exponential backoff factor for network retries.
+      # Delay = backoff_factor * 2^attempt  (e.g. 0s, 0.5s, 1s)
+      backoff_factor: 0.5
+
+      # User-Agent header sent with every request.
+      user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+      # Max simultaneous connections in the httpx connection pool.
+      connection_pool_size: 5
+
+      # Seconds to wait between consecutive search track requests.
+      cooldown_seconds: 1.0
+
+      # Maximum pages to fetch per search track.  null = unlimited (paginate
+      # until ssrIsLastPage is true).  Set a positive integer to cap depth.
+      max_pages: null
+
+      # Optional default filter values applied when the SearchPlanner track
+      # does not specify remote/seniority and the provider supports them.
+      # Leave empty to fetch all results without filtering.
+      search_state_defaults:
+        workplaceTypes: []      # e.g. ["REMOTE"] or ["HYBRID", "ONSITE"]
+        seniorityLevels: []     # e.g. ["SENIOR", "STAFF", "PRINCIPAL"]
 
 job_policy:
   max_posting_age_days: 30
