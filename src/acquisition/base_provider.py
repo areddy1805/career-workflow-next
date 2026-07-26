@@ -169,9 +169,10 @@ class AcquisitionProvider(Protocol):
     All other providers (JobSpy, HiringCafe, …) are interchangeable through
     this contract.
 
-    This protocol is intentionally narrow — it covers **acquisition only**.
+    This protocol covers **acquisition** and **detail enrichment** only.
     Application capabilities (resume upload, native apply, ATS integration)
-    are provider-specific and must not be prematurely standardised here.
+    are separate concerns expressed through ``ApplicationCapabilities``
+    in the ``src.application`` layer.
 
     Protocol members
     ----------------
@@ -187,6 +188,13 @@ class AcquisitionProvider(Protocol):
     capabilities : ProviderCapabilities
         Frozen capability declaration.  Inspected by SearchStateBuilders
         to avoid emitting unsupported filter fields.
+
+    supports_detail_fetch : bool
+        Whether this provider can fetch per-job detail payloads beyond
+        what ``fetch_jobs()`` already extracts.  Providers that populate
+        ``description``, ``apply_url``, ``location``, and ``company``
+        during acquisition should return ``False`` to avoid unnecessary
+        API calls.
 
     is_enabled() -> bool
         Fast check — must not perform network I/O.
@@ -214,6 +222,11 @@ class AcquisitionProvider(Protocol):
     @property
     def capabilities(self) -> ProviderCapabilities:
         ...  # noqa: D102
+
+    @property
+    def supports_detail_fetch(self) -> bool:
+        """Whether this provider can fetch per-job detail payloads."""
+        ...
 
     def is_enabled(self) -> bool:
         ...  # noqa: D102

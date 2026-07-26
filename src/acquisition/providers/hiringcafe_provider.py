@@ -60,6 +60,7 @@ from src.acquisition.base_provider import (
     ProviderCapabilities,
     ProviderRunMetrics,
 )
+from src.application.capability import ApplicationCapabilities, ApplicationMode
 from src.exceptions.exceptions import (
     HiringCafeBuildIdError,
     HiringCafeConfigError,
@@ -720,6 +721,21 @@ class HiringCafeProvider:
         )
 
     # ------------------------------------------------------------------
+    # Detail-fetch and application capabilities
+    # ------------------------------------------------------------------
+
+    @property
+    def supports_detail_fetch(self) -> bool:
+        """HiringCafe acquisition already populates description, apply_url,
+        location, salary, and company — no separate detail fetch needed."""
+        return False
+
+    @property
+    def application_capabilities(self) -> ApplicationCapabilities:
+        """HiringCafe provides external apply URLs for manual queue routing."""
+        return ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+
+    # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
 
@@ -771,17 +787,36 @@ class HiringCafeProvider:
         )
 
         all_jobs: list[Job] = []
+        num_tracks = len(search_tracks)
 
-        for track in search_tracks:
+        for idx, track in enumerate(search_tracks, start=1):
             metrics.tracks_processed += 1
             self._health.total_tracks += 1
+            track_start = time.perf_counter()
+
+            keyword = track.get("keyword", "?")
+            location = track.get("location", "?")
+
+            print(
+                f"  [{idx}/{num_tracks}] {keyword[:30].ljust(30)}  |  "
+                f"{location[:12].ljust(12)}",
+                end="",
+                flush=True,
+            )
 
             try:
                 search_state = self._search_state_builder.build(track)
                 track_jobs = self._fetch_track(search_state, metrics)
                 all_jobs.extend(track_jobs)
                 self._health.successful_tracks += 1
+                duration = time.perf_counter() - track_start
+                print(
+                    f"  {len(track_jobs):>3} jobs  ({duration:.1f}s)"
+                    f"  total={len(all_jobs)}"
+                )
             except (HiringCafeNetworkError, HiringCafeParseError) as exc:
+                duration = time.perf_counter() - track_start
+                print(f"  FAILED ({duration:.1f}s)")
                 logger.warning(
                     "HiringCafe track failed (keyword=%r): %s",
                     track.get("keyword"),
@@ -790,6 +825,8 @@ class HiringCafeProvider:
                 metrics.tracks_failed += 1
                 self._health.failed_tracks += 1
             except Exception as exc:
+                duration = time.perf_counter() - track_start
+                print(f"  ERROR ({duration:.1f}s)")
                 logger.error(
                     "HiringCafe unexpected error for track %r: %s",
                     track.get("keyword"),
@@ -810,6 +847,20 @@ class HiringCafeProvider:
         metrics.http_latency_ms = self._health.http_latency_ms_total
         metrics.provider_duration_ms = (time.perf_counter() - t_run) * 1000
         metrics.emit()
+
+        # Print HiringCafe acquisition summary
+        t_total = (time.perf_counter() - t_run) * 1000
+        print()
+        print(f"  {'─' * 54}")
+        print(f"  {'HiringCafe Acquisition Summary':^54}")
+        print(f"  {'─' * 54}")
+        print(f"  {'Tracks Processed':<30}  {metrics.tracks_processed:>6}")
+        print(f"  {'Tracks Failed':<30}  {metrics.tracks_failed:>6}")
+        print(f"  {'Pages Fetched':<30}  {metrics.pages_fetched:>6}")
+        print(f"  {'Jobs Retrieved':<30}  {metrics.jobs_fetched:>6}")
+        print(f"  {'Normalization Failures':<30}  {metrics.normalization_failures:>6}")
+        print(f"  {'Runtime':<30}  {t_total / 1000:.1f}s")
+        print(f"  {'─' * 54}")
 
         logger.info(
             "HiringCafe acquisition: tracks=%d pages=%d jobs=%d "

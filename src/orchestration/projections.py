@@ -68,7 +68,7 @@ class MetricsProjection:
                 self.metrics["ats_queue"] += 1
             elif strategy == "GENERIC_CAREER_SITE":
                 self.metrics["generic_queue"] += 1
-            elif strategy == "MANUAL_REVIEW":
+            elif strategy in ("MANUAL_REVIEW", "MANUAL_QUEUE"):
                 self.metrics["manual_queue"] += 1
             elif strategy == "UNSUPPORTED":
                 self.metrics["unsupported"] += 1

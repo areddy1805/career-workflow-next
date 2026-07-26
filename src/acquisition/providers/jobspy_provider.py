@@ -59,6 +59,7 @@ from src.acquisition.base_provider import (
     ProviderCapabilities,
     ProviderRunMetrics,
 )
+from src.application.capability import ApplicationCapabilities, ApplicationMode
 
 logger = logging.getLogger(__name__)
 
@@ -345,6 +346,20 @@ class JobSpyProvider:
         )
 
     # ------------------------------------------------------------------
+    # Detail-fetch and application capabilities
+    # ------------------------------------------------------------------
+
+    @property
+    def supports_detail_fetch(self) -> bool:
+        """JobSpy acquisition already extracts description, apply_url, etc."""
+        return False
+
+    @property
+    def application_capabilities(self) -> ApplicationCapabilities:
+        """JobSpy provides external apply URLs for manual queue routing."""
+        return ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+
+    # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
@@ -538,16 +553,22 @@ class JobSpyProvider:
             success_query = False
 
             try:
-                print(f"\nCalling JobSpy: {site} | {keyword} | {location}")
+                print(
+                    f"  [{i}/{len(planned_queries)}] "
+                    f"{Fore.CYAN}{site.upper():<8}{Style.RESET_ALL}  "
+                    f"{keyword[:30]:<30}  "
+                    f"{location[:12]:<12}",
+                    end="",
+                    flush=True,
+                )
                 jobs = self.search(keyword=keyword, location=location, site=site)
+                latency = time.perf_counter() - t_query
                 for job in jobs[:3]:
-                    print(f"  -> {job.title} | {job.company} | {job.location}")
+                    print(f"    -> {job.title} | {job.company} | {job.location}")
                 success_query = len(jobs) > 0
             except Exception as exc:
-                print(
-                    f"  {Fore.RED}[JOBSPY:{site.upper()}]{Style.RESET_ALL} "
-                    f"{keyword!r} @ {location!r}  →  {exc}"
-                )
+                latency = time.perf_counter() - t_query
+                print(f"  FAILED  ({latency:.1f}s)")
                 consecutive_zero_or_fail[site] += 1
                 if consecutive_zero_or_fail[site] >= 3:
                     self.degraded_providers.add(site)
@@ -563,13 +584,11 @@ class JobSpyProvider:
                     self.degraded_providers.add(site)
                     logger.warning("Provider '%s' marked DEGRADED.", site)
 
-            latency = time.perf_counter() - t_query
-
             new_jobs: list[Job] = []
             for job in jobs:
                 job_hash = _compute_job_hash(job)
                 if job_hash in seen_hashes:
-                    print(f"Duplicate skipped: {job.title} at {job.company}")
+                    print(f"    Duplicate skipped: {job.title} at {job.company}")
                     duplicates_removed += 1
                     continue
                 seen_hashes.add(job_hash)
@@ -583,6 +602,13 @@ class JobSpyProvider:
 
             all_jobs.extend(new_jobs)
 
+            # Print per-query result line
+            print(
+                f"  {len(new_jobs):>3} new"
+                f"  ({latency:.1f}s)"
+                f"  total={len(all_jobs)}"
+            )
+
             tracker = provider_trackers[site]
             tracker.record(len(new_jobs), len(jobs))
 
@@ -594,13 +620,6 @@ class JobSpyProvider:
                     "new_jobs": len(new_jobs),
                     "runtime": latency,
                 }
-            )
-
-            print(
-                f"  {Fore.CYAN}[{site.upper():<8}]{Style.RESET_ALL}  "
-                f"{keyword[:30]:<30}  "
-                f"{Fore.GREEN}{len(new_jobs):>3} new{Style.RESET_ALL}  "
-                f"({len(all_jobs)} total)"
             )
 
             if tracker.has_enough_data():

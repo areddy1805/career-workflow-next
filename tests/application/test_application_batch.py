@@ -8,6 +8,7 @@ from src.application.outcome import (
     ApplicationStatus,
 )
 from src.application.policy import ApplicationPolicy
+from src.application.capability import ApplicationCapabilities, ApplicationMode
 
 
 @dataclass
@@ -43,13 +44,15 @@ class FakeBatchClient:
         external_job_ids: set[str] | None = None,
     ):
         self.external_job_ids = external_job_ids or set()
-        self.external_checks: list[str] = []
+
+    # Provider capability declarations
+    supports_detail_fetch = True
+    application_capabilities = ApplicationCapabilities(mode=ApplicationMode.AUTO)
 
     def is_external_apply(
         self,
         job_id: str,
     ) -> bool:
-        self.external_checks.append(job_id)
 
         return job_id in self.external_job_ids
 
@@ -104,7 +107,6 @@ def test_local_applied_job_is_skipped_without_network_call(
     assert summary.applied == 0
     assert summary.failed == 0
 
-    assert client.external_checks == []
     assert process_calls == []
     assert sleep_calls == []
 
@@ -121,7 +123,8 @@ def test_external_job_is_skipped() -> None:
     summary = run_application_batch(
         providers={"naukri": client},
         jobs=[job],
-        score_map={"1": {}},
+        # Simulate detail enrichment having set is_external_apply in meta
+        score_map={"1": {"is_external_apply": True}},
         questionnaire_resolver=FakeResolver(),
         applied_jobs_set=set(),
         sleep_fn=sleep_calls.append,
@@ -131,7 +134,6 @@ def test_external_job_is_skipped() -> None:
     assert summary.applied == 0
     assert summary.failed == 0
 
-    assert client.external_checks == ["1"]
     assert sleep_calls == []
 
 
@@ -346,7 +348,6 @@ def test_policy_rejected_job_never_reaches_application_boundary(
     assert summary.failed == 0
 
     assert process_calls == []
-    assert client.external_checks == []
     assert sleep_calls == []
 
 
@@ -399,7 +400,6 @@ def test_dry_run_job_never_reaches_application_boundary(
     assert summary.failed == 0
 
     assert process_calls == []
-    assert client.external_checks == []
     assert sleep_calls == []
 
 
@@ -454,7 +454,6 @@ def test_policy_allowed_live_job_reaches_application_boundary(
     assert summary.dry_run_skipped == 0
 
     assert process_calls == ["1"]
-    assert client.external_checks == ["1"]
 
 
 def test_per_run_limit_prevents_additional_application_attempts(
@@ -506,11 +505,6 @@ def test_per_run_limit_prevents_additional_application_attempts(
     )
 
     assert process_calls == [
-        "1",
-        "2",
-    ]
-
-    assert client.external_checks == [
         "1",
         "2",
     ]
@@ -569,7 +563,6 @@ def test_failed_application_attempt_does_not_consume_submission_quota(
 
     assert process_calls == ["1", "2"]
 
-    assert client.external_checks == ["1", "2"]
 
     assert summary.failed == 2
     assert summary.applied == 0
@@ -613,7 +606,7 @@ def test_external_job_does_not_consume_run_quota(
         providers={"naukri": client},
         jobs=jobs,
         score_map={
-            "1": {"score": 90},
+            "1": {"score": 90, "is_external_apply": True},
             "2": {"score": 90},
         },
         questionnaire_resolver=FakeResolver(),
@@ -625,11 +618,6 @@ def test_external_job_does_not_consume_run_quota(
         ),
         sleep_fn=lambda _: None,
     )
-
-    assert client.external_checks == [
-        "1",
-        "2",
-    ]
 
     assert process_calls == ["2"]
 
@@ -678,7 +666,6 @@ def test_zero_run_limit_blocks_all_application_attempts(
     )
 
     assert process_calls == []
-    assert client.external_checks == []
     assert summary.run_limit_reached == 1
     assert summary.applied == 0
 
