@@ -57,26 +57,29 @@ class CostEngine:
         reasoning_tokens = metrics.reasoning_tokens
 
         # Derived Analytics: Savings calculation
-        # To estimate theoretical savings, we infer an average token cost based on what was actually spent.
-        total_tokens = input_tokens + output_tokens + reasoning_tokens
-        avg_tokens_per_call = (total_tokens / llm_calls) if llm_calls > 0 else 400
-        
+        # Hypothetical cost if all classified jobs went to LLM without bypasses.
+        # Use the actual per-token averages from the LLM call(s) that were made.
         pricing = cls.get_pricing_from_config(metrics.provider or "deepseek")
         input_per_1k = pricing.get("input_per_1k", 0.00014)
         output_per_1k = pricing.get("output_per_1k", 0.00028)
-        
-        # Hypothetical cost if all acquired jobs went to LLM without filtering
-        hypothetical_llm_calls = total_jobs
-        hyp_input_tokens = hypothetical_llm_calls * avg_tokens_per_call
-        hyp_output_tokens = hypothetical_llm_calls * 100
-        hypothetical_cost = ((hyp_input_tokens / 1000.0) * input_per_1k) + ((hyp_output_tokens / 1000.0) * output_per_1k)
+        reasoning_per_1k = pricing.get("reasoning_per_1k", output_per_1k)
+
+        hyp_input_tokens = total_jobs * (input_tokens / max(llm_calls, 1))
+        hyp_output_tokens = total_jobs * (output_tokens / max(llm_calls, 1))
+        hyp_reasoning_tokens = total_jobs * (reasoning_tokens / max(llm_calls, 1))
+        hypothetical_cost = (
+            (hyp_input_tokens / 1000.0) * input_per_1k
+            + (hyp_output_tokens / 1000.0) * output_per_1k
+            + (hyp_reasoning_tokens / 1000.0) * reasoning_per_1k
+        )
 
         saved_cost = max(0.0, hypothetical_cost - actual_cost)
         reduction_pct = (saved_cost / hypothetical_cost * 100.0) if hypothetical_cost > 0 else 0.0
 
-        # LLM Avoidance Rate
-        qualified_jobs = total_jobs # or the jobs that made it past the initial deterministic filters
-        avoidance_rate = (1.0 - (llm_calls / qualified_jobs)) if qualified_jobs > 0 else 0.0
+        # LLM Avoidance Rate — fraction of LLM-eligible jobs that bypassed inference
+        qualified_jobs = max(total_jobs, 1)
+        avoided = min(bypassed_jobs, qualified_jobs)
+        avoidance_rate = avoided / qualified_jobs
 
         return CostReport(
             total_jobs_processed=total_jobs,

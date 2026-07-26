@@ -179,7 +179,7 @@ class OperatorConsole:
         efficiency.add_column()
         e = model.efficiency
         efficiency.add_row(Text("Efficiency", style="bold bright_black"))
-        efficiency.add_row(_stat_row("Avoidance", f"{e.llm_avoidance_rate:.1f}%", "bold bright_green"))
+        efficiency.add_row(_stat_row("Avoidance", f"{e.llm_avoidance_rate:.1%}", "bold bright_green"))
         efficiency.add_row(_stat_row("Cache Hits", str(e.cache_hits)))
         efficiency.add_row(_stat_row("Sem. Reuse", str(e.semantic_reuse)))
         efficiency.add_row(_stat_row("Det. Rej.", str(e.deterministic_rejections)))

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.client.naukri_client import NaukriLoginClient
+from src.application.capability import ApplicationCapabilities, ApplicationMode
 from src.config.constants import (
     APPLY_JOB_URL,
     CHATBOT_RESPOND_URL,
@@ -147,6 +148,16 @@ class NaukriJobClient:
         from monitor_applications import reconcile_application_history
 
         return reconcile_application_history(client=self._client, ledger=ledger)
+
+    @property
+    def supports_detail_fetch(self) -> bool:
+        """Naukri can fetch per-job detail payloads via the Naukri API."""
+        return True
+
+    @property
+    def application_capabilities(self) -> ApplicationCapabilities:
+        """Naukri supports native (auto) application via its own session."""
+        return ApplicationCapabilities(mode=ApplicationMode.AUTO)
 
     # ----------------------------------------------------------------------------------
     # Internal helpers

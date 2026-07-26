@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import csv
-import html
 import logging
 import os
 import re
 import time
-import concurrent.futures
-import threading
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -17,9 +14,6 @@ from dotenv import load_dotenv
 
 from src.application.resume_router import ResumeRouter
 from config.candidate_profile import CANDIDATE_PROFILE
-from src.application.router import ApplicationRouter
-from src.application.capability import ProviderCapabilities
-from src.application.models import RoutingStrategy
 from src.application.adaptive_strategy import (
     AdaptiveStrategyConfig,
     build_adaptive_strategy,
@@ -65,12 +59,12 @@ from src.search.challenge_cooldown import SearchChallengeCooldown
 from src.search.job_search_cache import JobSearchCache
 from src.utils.questionnaire_telemetry import log_unresolved_questions
 from src.cache.cache_manager import CacheManager
-from src.cache.fingerprint import compute_detail_fetch_fingerprint
 
 # JobSpy acquisition — additive, isolated from Naukri path.
 from src.acquisition.config import load_acquisition_config
 from src.acquisition.acquisition_service import fetch_jobspy_jobs
 from src.acquisition.merge import merge_jobs
+from src.acquisition.base_provider import AcquisitionProvider
 from src.acquisition.providers.jobspy_provider import (
     JobSpyConfig,
     JobSpyProvider,
@@ -420,9 +414,12 @@ def print_fetch_progress(
     page: int,
     fetched: int,
     new: int,
+    search_index: int = 0,
+    search_total: int = 0,
+    duration_ms: float = 0.0,
+    total_so_far: int = 0,
 ) -> None:
-    # Prints a single progress line per search query showing how many jobs
-    # were returned and how many were new (not seen in earlier queries).
+    """Print a single progress line per search query."""
     loc = location or "All India"
 
     kw_display = keyword[:30].ljust(30)
@@ -430,18 +427,29 @@ def print_fetch_progress(
 
     new_color = Fore.GREEN if new > 0 else Fore.WHITE
 
+    # Compact single-line format with search progress and timing
+    index = f"[{search_index}/{search_total}]" if search_total else ""
+    timing = f" ({duration_ms:.1f}s)" if duration_ms else ""
+    accum = f"  total={total_so_far}" if total_so_far else ""
+
     print(
         f"  {Fore.WHITE}"
-        f"[{kw_display} | "
-        f"{loc_display} | "
-        f"exp={exp} | "
-        f"p{page}]"
+        f"{index}"
+        f"{Style.RESET_ALL}"
+        f"  {kw_display}"
+        f"{Fore.WHITE}|"
+        f"{Style.RESET_ALL}"
+        f"  {loc_display}"
+        f"| exp={exp}"
+        f" | p{page}"
         f"{Style.RESET_ALL}"
         f"  {Fore.WHITE}"
-        f"{fetched:>3} fetched  "
+        f"{fetched:>3} fetched"
         f"{new_color}"
-        f"{new:>3} new"
+        f"  {new:>3} new"
         f"{Style.RESET_ALL}"
+        f"{timing}"
+        f"{accum}"
     )
 
 
@@ -556,6 +564,9 @@ class JobFetchResult:
     search_requests_attempted: int = 0
     pages_stopped_low_yield: int = 0
     stop_reasons: dict[str, int] = field(default_factory=dict)
+    # Keyed by provider_name (e.g. "jobspy", "hiringcafe")
+    secondary_provider_health: dict = field(default_factory=dict)
+    # Backward-compat alias — mirrors secondary_provider_health["jobspy"]
     jobspy_health: dict = field(default_factory=dict)
 
 
@@ -606,6 +617,7 @@ def fetch_all_jobs(
     if RESULTS_PER_PAGE < 1:
         raise ValueError("SEARCH_RESULTS_PER_PAGE must be at least 1")
 
+    search_index = 0
     seen_ids: set[str] = set()
     all_jobs = []
 
@@ -615,6 +627,8 @@ def fetch_all_jobs(
     stop_reasons: dict[str, int] = {}
     min_new_yield = int(os.getenv("SEARCH_MIN_NEW_JOBS_PER_PAGE", "2"))
     low_yield_patience = int(os.getenv("SEARCH_LOW_YIELD_PATIENCE", "1"))
+
+    total_searches = len(SEARCH_TRACKS) * len(EXPERIENCE_LEVELS) * PAGES
 
     print_section_title(
         f"fetching jobs  "
@@ -635,6 +649,8 @@ def fetch_all_jobs(
             consecutive_low_yield = 0
 
             for page in range(1, PAGES + 1):
+                search_index += 1
+                query_start = time.perf_counter()
                 try:
                     search_requests_attempted += 1
 
@@ -657,6 +673,7 @@ def fetch_all_jobs(
                     )
 
                     if jobs and page_signature == previous_page_signature:
+                        duration = time.perf_counter() - query_start
                         print_fetch_progress(
                             query["keyword"],
                             query["location"],
@@ -664,6 +681,10 @@ def fetch_all_jobs(
                             page,
                             fetched=len(jobs),
                             new=0,
+                            search_index=search_index,
+                            search_total=total_searches,
+                            duration_ms=duration,
+                            total_so_far=len(all_jobs),
                         )
                         break
 
@@ -721,6 +742,8 @@ def fetch_all_jobs(
 
                     all_jobs.extend(new_jobs)
 
+                    duration = time.perf_counter() - query_start
+
                     print_fetch_progress(
                         query["keyword"],
                         query["location"],
@@ -728,6 +751,10 @@ def fetch_all_jobs(
                         page,
                         fetched=len(jobs),
                         new=len(new_jobs),
+                        search_index=search_index,
+                        search_total=total_searches,
+                        duration_ms=duration,
+                        total_so_far=len(all_jobs),
                     )
 
                     if not jobs or len(jobs) < RESULTS_PER_PAGE:
@@ -780,6 +807,17 @@ def fetch_all_jobs(
         f"{len(all_jobs)}"
         f"{Style.RESET_ALL}"
     )
+
+    # Print Naukri acquisition summary
+    print()
+    print(f"  {'─' * 54}")
+    print(f"  {'Naukri Acquisition Summary':^54}")
+    print(f"  {'─' * 54}")
+    print(f"  {'Total Searches':<30}  {search_requests_attempted:>6}")
+    print(f"  {'Pages Stopped (Low Yield)':<30}  {pages_stopped_low_yield:>6}")
+    print(f"  {'Challenge Encountered':<30}  {str(challenge_encountered):>6}")
+    print(f"  {'Jobs Collected':<30}  {len(all_jobs):>6}")
+    print(f"  {'─' * 54}")
 
     return JobFetchResult(
         jobs=all_jobs,
@@ -1012,44 +1050,56 @@ def acquire_jobs(
         setattr(job, "provider_id", "naukri")
 
     # ---------------------------------------------------------------
-    # JobSpy additive acquisition
+    # Secondary provider acquisition
     #
-    # Note: Does not mutate fetch_result since JobSpy does not run under
-    # the Naukri challenge constraints.
+    # Any registered provider that satisfies AcquisitionProvider is
+    # executed here.  No provider-specific code lives in this loop.
     #
-    # Failure of JobSpy never affects Naukri.
+    # Adding a new provider requires only:
+    #   1. Registering it in provider_factory.py
+    #   2. Adding its configuration to search_strategy.yaml
     # ---------------------------------------------------------------
 
-    jobspy_jobs = []
-    if not run_jobspy:
-        print("Skipping JobSpy acquisition (disabled or not initialized).")
-    else:
-        jobspy_provider = providers["jobspy"]
+    additional_jobs: list = []
+    _secondary = {k: v for k, v in providers.items() if k != "naukri"}
 
-        # Reuse identical search queries generated for Naukri.
+    if _secondary:
         planner = SearchPlanner()
         search_tracks = planner.generate_queries()
-        print("Calling fetch_jobspy_jobs()")
-        jobspy_jobs = fetch_jobspy_jobs(
-            provider=jobspy_provider,
-            search_tracks=search_tracks,
-        )
-        print(f"JobSpy returned {len(jobspy_jobs)} jobs")
-        jobspy_queries = sum(
-            h.get("total_searches", 0)
-            for h in jobspy_provider.health_summary().values()
-        )
-        fetch_result.search_requests_attempted += jobspy_queries
 
-        health_summary = {}
-        degraded = getattr(jobspy_provider, "degraded_providers", set())
-        for site, h in jobspy_provider.health_summary().items():
-            site_status = "degraded" if site in degraded else "active"
-            health_summary[site] = {"status": site_status, **h}
-        fetch_result.jobspy_health = health_summary
+        for _provider_name, _provider in _secondary.items():
+            if not isinstance(_provider, AcquisitionProvider):
+                logger.warning(
+                    "Provider %r does not implement AcquisitionProvider — skipping.",
+                    _provider_name,
+                )
+                continue
+            if not _provider.is_enabled():
+                print(f"  Skipping provider {_provider_name!r} (disabled).")
+                continue
 
-    for job in jobspy_jobs:
-        setattr(job, "provider_id", "jobspy")
+            print(f"  Running provider: {_provider_name!r}")
+            _p_jobs: list = _provider.fetch_jobs(search_tracks)
+            for _job in _p_jobs:
+                setattr(_job, "provider_id", _provider_name)
+            additional_jobs.extend(_p_jobs)
+
+            _p_health = _provider.health_summary()
+            fetch_result.secondary_provider_health[_provider_name] = _p_health
+
+            # Count secondary searches against the budget counter
+            _p_searches = sum(
+                v for k, v in _p_health.items()
+                if isinstance(v, int) and ("searches" in k or "tracks" in k)
+            )
+            fetch_result.search_requests_attempted += _p_searches
+
+            print(f"  {_provider_name!r} returned {len(_p_jobs)} jobs")
+
+        # Backward-compat alias for code that reads fetch_result.jobspy_health
+        fetch_result.jobspy_health = fetch_result.secondary_provider_health.get(
+            "jobspy", {}
+        )
 
     provider_priority = acq_config.get(
         "provider_priority",
@@ -1058,16 +1108,16 @@ def acquire_jobs(
 
     jobs = merge_jobs(
         naukri_jobs=naukri_jobs,
-        jobspy_jobs=jobspy_jobs,
+        additional_jobs=additional_jobs,
         provider_priority=provider_priority,
     )
 
     print(f"Merged {len(jobs)} jobs")
 
     logger.info(
-        "Acquisition merge: naukri=%d jobspy=%d merged=%d",
+        "Acquisition merge: naukri=%d secondary=%d merged=%d",
         len(naukri_jobs),
-        len(jobspy_jobs),
+        len(additional_jobs),
         len(jobs),
     )
 
@@ -1194,6 +1244,7 @@ class ApplicationRunSummary:
     run_limit_reached: int
     failed: int
     manual_review: int
+    skipped_external: int = 0
     applied_jobs: list = field(default_factory=list)
 
 
@@ -1355,63 +1406,6 @@ def process_job_application(
     )
 
 
-def _extract_job_detail_description(detail: dict) -> str:
-    """
-    Extract and normalize the full JD from the Naukri detail payload.
-
-    The client intentionally returns raw JSON, so extraction remains outside
-    the transport layer.
-    """
-
-    job_data = detail.get("job") or {}
-
-    raw_description = (
-        job_data.get("jobDescription")
-        or job_data.get("description")
-        or detail.get("jobDescription")
-        or detail.get("description")
-        or ""
-    )
-
-    if not isinstance(raw_description, str):
-        return ""
-
-    text = html.unescape(raw_description)
-
-    text = re.sub(
-        r"<br\s*/?>",
-        "\n",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"</p\s*>",
-        "\n",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"<[^>]+>",
-        " ",
-        text,
-    )
-
-    text = re.sub(
-        r"[ \t]+",
-        " ",
-        text,
-    )
-
-    text = re.sub(
-        r"\n\s*\n+",
-        "\n\n",
-        text,
-    )
-
-    return text.strip()
-
 
 def enrich_jobs_with_details(
     providers: dict,
@@ -1424,160 +1418,19 @@ def enrich_jobs_with_details(
     Fetch each candidate's detail payload concurrently and enrich the normalized
     classifier job with its full description.
 
-    JobSpy jobs (job_id starting with "jobspy_") are skipped for Naukri
-    detail enrichment because they use a different provider and the Naukri
-    detail API will simply 404 on their IDs.  They retain whatever
-    description the JobSpy adapter already extracted.
-
-    Failed detail fetches are retained with their existing search-result
-    description rather than silently deleting potentially valid candidates.
+    Delegates to ``src.application.enrichment.fetch_and_enrich()`` for the
+    actual fetch loop.  This shim exists to preserve the call site signature
+    in the pipeline and may be inlined in a future release.
     """
+    from src.application.enrichment import fetch_and_enrich
 
-    metrics_lock = threading.Lock()
-
-    from src.orchestration.diagnostics import ExecutionMonitor
-    from pathlib import Path
-
-    rd = Path(run_dir) if run_dir else Path("artifacts/runs/diagnostics_fallback")
-    monitor = ExecutionMonitor(name="detail_fetch", total_tasks=len(jobs), run_dir=rd)
-    monitor.start()
-
-    def _fetch_detail(job_tuple: tuple[int, dict]) -> dict:
-        index, job = job_tuple
-        job_id = str(job.get("job_id") or "").strip()
-
-        if not job_id:
-            return job
-
-        if job_id.startswith("jobspy_"):
-            return job
-
-        provider_id = job.get("provider_id", "naukri")
-        provider = providers.get(provider_id)
-
-        if not provider:
-            return job
-
-        monitor.task_started(task_id=job_id)
-
-        try:
-            monitor.task_phase("network")
-            detail = None
-            fingerprint = None
-
-            if cache_manager:
-                fingerprint = compute_detail_fetch_fingerprint(provider_id, job_id, "")
-                start_time = time.perf_counter()
-                record = cache_manager.detail.get(fingerprint)
-                cache_manager.track_lookup((time.perf_counter() - start_time) * 1000)
-
-                if record:
-                    import json
-
-                    try:
-                        monitor.task_phase("parsing")
-                        detail = json.loads(record["content"])
-                        with metrics_lock:
-                            cache_manager.metrics["detail_hits"] += 1
-                    except json.JSONDecodeError:
-                        pass
-                else:
-                    with metrics_lock:
-                        cache_manager.metrics["detail_misses"] += 1
-            elif detail_cache is not None:
-                detail = detail_cache.get(job_id)
-
-            if detail is None:
-                detail = provider.get_job_details(job_id)
-                if detail:
-                    monitor.task_phase("persistence")
-                    if cache_manager and fingerprint:
-                        import json
-
-                        start_time = time.perf_counter()
-                        cache_manager.detail.set(
-                            fingerprint=fingerprint,
-                            provider=provider_id,
-                            job_id=job_id,
-                            content=json.dumps(detail),
-                        )
-                        cache_manager.track_save(
-                            (time.perf_counter() - start_time) * 1000
-                        )
-                    elif detail_cache is not None:
-                        with metrics_lock:
-                            detail_cache[job_id] = detail
-
-            monitor.task_phase("extraction")
-            full_description = _extract_job_detail_description(detail)
-
-            if full_description:
-                job["description"] = full_description
-
-            job_data = detail.get("job") or {}
-
-            # Preserve richer location/work-mode evidence for the eligibility gate.
-            detail_location = (
-                job_data.get("location")
-                or job_data.get("locations")
-                or job_data.get("locationText")
-                or detail.get("location")
-            )
-            if detail_location:
-                if isinstance(detail_location, (list, tuple)):
-                    detail_location = ", ".join(map(str, detail_location))
-                job["location"] = str(detail_location)
-
-            work_mode = (
-                job_data.get("workMode")
-                or job_data.get("work_mode")
-                or job_data.get("workModeText")
-                or detail.get("workMode")
-            )
-            if work_mode:
-                job["work_mode"] = str(work_mode)
-
-            job["is_external_apply"] = job_data.get("responseManager") == "companyUrl"
-
-            monitor.task_completed(success=True)
-            return job
-
-        except Exception as exc:
-            logger.warning(
-                "Job detail enrichment failed: " "job_id=%s error=%s",
-                job_id,
-                exc,
-            )
-
-            job["detail_enrichment_failed"] = True
-            monitor.task_completed(success=False)
-            return job
-
-    enriched_jobs = []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {
-            executor.submit(_fetch_detail, (index, job)): index
-            for index, job in enumerate(jobs, start=1)
-        }
-
-        results = [None] * len(jobs)
-        for future in concurrent.futures.as_completed(futures):
-            idx = futures[future]
-            try:
-                results[idx - 1] = future.result()
-            except Exception as e:
-                original_job = jobs[idx - 1]
-                original_job["detail_enrichment_failed"] = True
-                results[idx - 1] = original_job
-
-    monitor.stop()
-
-    for res in results:
-        if res is not None:
-            enriched_jobs.append(res)
-
-    return enriched_jobs
+    return fetch_and_enrich(
+        jobs=jobs,
+        providers=providers,
+        detail_cache=detail_cache,
+        cache_manager=cache_manager,
+        run_dir=run_dir,
+    )
 
 
 def run_application_batch(
@@ -1812,82 +1665,75 @@ def run_application_batch(
         # Application Routing Engine
         # ----------------------------------------------------------
 
-        try:
-            provider_id = getattr(job, "provider_id", "naukri")
-            jc = providers.get(provider_id)
+        from src.application.resolver import ApplicationResolutionService, ApplicationMode
 
-            if not jc:
-                raise ValueError(
-                    f"Provider '{provider_id}' is not configured "
-                    "in providers dictionary"
-                )
+        provider_id = getattr(job, "provider_id", "naukri")
+        jc = providers.get(provider_id)
+        resolution = ApplicationResolutionService.resolve(job, jc, meta=meta)
 
-            is_external = meta.get("is_external_apply")
-            if is_external is None:
-                is_external = jc.is_external_apply(job.job_id)
+        if resolution.mode == ApplicationMode.AUTO:
+            # Proceed to native application execution below
+            pass
 
-            capabilities = ProviderCapabilities(
-                native_apply=not is_external,  # Naukri natively supports it, but this job might be external
-                returns_external_url=True,
-                requires_authentication=True,
-                supports_resume_upload=True,
-                supports_questionnaires=True,
+        elif resolution.mode == ApplicationMode.EXTERNAL:
+            manual_queue_count += 1
+
+            _record_app_reject(
+                job, "MANUAL_QUEUE", resolution.reasoning
             )
-
-            external_url = getattr(job, "apply_link", None) if is_external else None
-
-            route_result = ApplicationRouter.route(job, capabilities, external_url)
-
-            if route_result.strategy != RoutingStrategy.NATIVE_APPLY:
-                if route_result.strategy == RoutingStrategy.EXTERNAL_ATS:
-                    ats_queue_count += 1
-                elif route_result.strategy == RoutingStrategy.GENERIC_CAREER_SITE:
-                    generic_queue_count += 1
-                elif route_result.strategy == RoutingStrategy.MANUAL_REVIEW:
-                    manual_queue_count += 1
-                elif route_result.strategy == RoutingStrategy.UNSUPPORTED:
-                    unsupported_count += 1
-
-                _record_app_reject(
-                    job, route_result.strategy.name, route_result.reasoning
-                )
-                if exec_context:
-                    exec_context.route(
-                        job,
-                        strategy=route_result.strategy.name,
-                        reason=route_result.reasoning,
-                    )
-                if ledger is not None:
-                    ledger.record(job, route_result.strategy.name.lower(), meta=meta)
-
-                # enqueue for manual review or future queue workers
-                job_id = str(job.job_id)
-                score_result = score_map.get(job_id, {})
-                manual_action_queue.enqueue_external_apply(
-                    job=job,
-                    score=int(
-                        score_result.get("score", score_result.get("ai_score", 0)) or 0
-                    ),
-                    reason=str(
-                        score_result.get("ai_detail", score_result.get("ai_reason", ""))
-                        or ""
-                    ),
-                    run_id=run_id,
-                )
-                continue
-
-        except Exception as exc:
-            print_status_failed(exc)
-
-            failed_count += 1
             if exec_context:
-                exec_context.fail(job, str(exc))
+                exec_context.route(
+                    job,
+                    strategy="MANUAL_QUEUE",
+                    reason=resolution.reasoning,
+                )
             if ledger is not None:
-                ledger.record(job, "detail_check_failed", meta=meta, error=str(exc))
+                ledger.record(job, "manual_queue", meta=meta)
+
+            # enqueue for browser-assisted manual application (future)
+            job_id = str(job.job_id)
+            score_result = score_map.get(job_id, {})
+
+            # Ensure the job carries the external apply URL so the queue
+            # stores the correct destination rather than falling back to
+            # a Naukri placeholder URL.
+            if resolution.apply_url:
+                if isinstance(job, dict):
+                    job["apply_url"] = resolution.apply_url
+                else:
+                    job.apply_url = resolution.apply_url
+
+            manual_action_queue.enqueue_external_apply(
+                job=job,
+                score=int(
+                    score_result.get("score", score_result.get("ai_score", 0)) or 0
+                ),
+                reason=str(
+                    score_result.get("ai_detail", score_result.get("ai_reason", ""))
+                    or ""
+                ),
+                run_id=run_id,
+            )
+            continue
+
+        else:  # ApplicationMode.NONE
+            unsupported_count += 1
+
+            _record_app_reject(
+                job, "UNSUPPORTED", resolution.reasoning
+            )
+            if exec_context:
+                exec_context.route(
+                    job,
+                    strategy="UNSUPPORTED",
+                    reason=resolution.reasoning,
+                )
+            if ledger is not None:
+                ledger.record(job, "unsupported", meta=meta)
             continue
 
         # ----------------------------------------------------------
-        # Application execution
+        # Application execution (AUTO mode only)
         # ----------------------------------------------------------
 
         try:
@@ -2023,6 +1869,24 @@ def run_application_batch(
 
     if exec_context:
         exec_context.finish_stage()
+
+    # ------------------------------------------------------------------
+    # Application Summary
+    # ------------------------------------------------------------------
+
+    from src.application.enrichment import print_application_summary
+
+    print_application_summary(
+        submitted=applied_count,
+        manual_queue=manual_queue_count,
+        already_applied=already_applied_count,
+        skipped=skipped_local_count,
+        unsupported=unsupported_count,
+        policy_rejected=policy_rejected_count,
+        failed=failed_count,
+        manual_review=manual_review_count,
+        total_selected=total_candidates,
+    )
 
     return ApplicationRunSummary(
         total_candidates=total_candidates,

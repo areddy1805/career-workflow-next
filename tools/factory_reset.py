@@ -24,11 +24,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DIRECTORIES_TO_CLEAR = [
     "artifacts/runs",
+    "artifacts/audits",
     "logs",
     "scheduler_logs",
     "data/responses",
     "data/ui_runtime",
     "data/cache",
+    "data/regression_corpus",
+    "frontend/data",
+    "frontend/artifacts/runs",
 ]
 
 # We use explicit globs/paths for files in data/ to avoid accidentally
@@ -39,6 +43,8 @@ FILES_TO_DELETE = [
     "data/job_decision_ledger.db*",
     "data/workflow_queue.db*",
     "data/manual_jobs.db*",
+    # Naukri parameter database
+    "nkparams.db",
     # Caches
     "data/job_search_cache.json",
     "data/score_cache.json",
@@ -47,7 +53,10 @@ FILES_TO_DELETE = [
     "data/search_challenge_state.json",
     "data/provider_health_history.json",
     "data/questionnaire_telemetry.csv",
-    # Legacy State Files (may exist from older versions)
+    "data/review_state.json",
+    # Benchmark artifacts
+    "artifacts/benchmark.json",
+    # Legacy State Files
     "data/runtime_state.json",
     "data/scheduler_state.json",
     "data/pipeline_state.json",
@@ -60,10 +69,12 @@ FILES_TO_DELETE = [
 # Directories that must exist for the application to start properly
 REQUIRED_DIRECTORIES = [
     "artifacts/runs",
+    "artifacts/audits",
     "logs",
     "data/responses",
     "data/ui_runtime",
     "data/cache",
+    "frontend/artifacts/runs",
 ]
 
 # Specifically called out as preserved for the summary report

@@ -194,11 +194,30 @@ class ManualActionQueue:
                 "job_url",
                 "",
             )
+            or self._value(
+                job,
+                "apply_url",
+                "",
+            )
+            or self._value(
+                job,
+                "apply_link",
+                "",
+            )
             or ""
         )
 
         if not url:
             url = "https://www.naukri.com/" f"job-listings-{job_id}"
+
+        provider_id = str(
+            self._value(
+                job,
+                "provider_id",
+                "",
+            )
+            or ""
+        )
 
         for row in rows:
             if str(row.get("job_id")) != job_id:
@@ -210,6 +229,7 @@ class ManualActionQueue:
                 "title": title,
                 "company": company,
                 "url": url,
+                "provider_id": provider_id,
                 "score": int(score or 0),
                 "reason": reason,
                 "source": source,
@@ -238,6 +258,7 @@ class ManualActionQueue:
         rows.append(
             {
                 "job_id": job_id,
+                "provider_id": provider_id,
                 "title": title,
                 "company": company,
                 "url": url,

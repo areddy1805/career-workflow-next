@@ -129,9 +129,12 @@ class WorkflowQueue:
     # ------------------------------------------------------------------
 
     def _get_item(self, conn: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
-        return conn.execute(
-            "SELECT * FROM workflow_items WHERE job_id = ?", (job_id,)
-        ).fetchone()
+        try:
+            return conn.execute(
+                "SELECT * FROM workflow_items WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
 
     def _upsert_item(
         self, conn: sqlite3.Connection, job_id: str, **fields: Any
@@ -499,10 +502,14 @@ class WorkflowQueue:
 
         # Fetch all SQLite rows in one query
         with self._connect() as conn:
-            db_rows = {
-                row["job_id"]: row
-                for row in conn.execute("SELECT * FROM workflow_items").fetchall()
-            }
+            try:
+                db_rows = {
+                    row["job_id"]: row
+                    for row in conn.execute("SELECT * FROM workflow_items").fetchall()
+                }
+            except sqlite3.OperationalError:
+                # Table may not exist if DB was reset while server is running
+                db_rows = {}
 
         merged = [
             self._merge_row(maq_row, db_rows.get(str(maq_row.get("job_id"))))

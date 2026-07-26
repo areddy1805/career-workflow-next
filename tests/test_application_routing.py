@@ -1,7 +1,7 @@
 import pytest
 from src.models.models import Job
 from src.application.models import RoutingStrategy, ATSType
-from src.application.capability import ProviderCapabilities
+from src.application.capability import ApplicationCapabilities, ApplicationMode
 from src.application.result import RoutingResult
 from src.application.detector import ATSDetector
 from src.application.router import ApplicationRouter
@@ -81,25 +81,12 @@ class TestApplicationRouter:
         )
 
     def test_native_apply(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=True,
-            returns_external_url=False,
-            requires_authentication=True,
-            supports_resume_upload=True,
-            supports_questionnaires=True,
-        )
-
+        caps = ApplicationCapabilities(mode=ApplicationMode.AUTO)
         result = ApplicationRouter.route(basic_job, caps)
         assert result.strategy == RoutingStrategy.NATIVE_APPLY
 
     def test_native_apply_with_external_override(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=True,
-            returns_external_url=True,
-            requires_authentication=True,
-            supports_resume_upload=True,
-            supports_questionnaires=True,
-        )
+        caps = ApplicationCapabilities(mode=ApplicationMode.AUTO)
 
         # Although it supports native apply, we explicitly pass an external URL
         result = ApplicationRouter.route(
@@ -109,13 +96,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.GREENHOUSE
 
     def test_external_ats(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=False,
-            returns_external_url=True,
-            requires_authentication=False,
-            supports_resume_upload=False,
-            supports_questionnaires=False,
-        )
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
         basic_job.apply_url = "https://jobs.lever.co/techcorp/123"
 
         result = ApplicationRouter.route(basic_job, caps)
@@ -123,13 +104,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.LEVER
 
     def test_generic_career_site(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=False,
-            returns_external_url=True,
-            requires_authentication=False,
-            supports_resume_upload=False,
-            supports_questionnaires=False,
-        )
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
         basic_job.apply_url = "https://techcorp.com/careers/123"
 
         result = ApplicationRouter.route(basic_job, caps)
@@ -137,13 +112,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.UNKNOWN
 
     def test_manual_review_unknown_site(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=False,
-            returns_external_url=True,
-            requires_authentication=False,
-            supports_resume_upload=False,
-            supports_questionnaires=False,
-        )
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
         basic_job.apply_url = (
             "https://techcorp.com/apply/123"  # missing "careers" or "jobs"
         )
@@ -153,14 +122,14 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.UNKNOWN
 
     def test_manual_review_no_url(self, basic_job):
-        caps = ProviderCapabilities(
-            native_apply=False,
-            returns_external_url=False,
-            requires_authentication=False,
-            supports_resume_upload=False,
-            supports_questionnaires=False,
-        )
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
         basic_job.apply_url = None
 
         result = ApplicationRouter.route(basic_job, caps)
         assert result.strategy == RoutingStrategy.MANUAL_REVIEW
+
+    def test_unsupported(self, basic_job):
+        caps = ApplicationCapabilities(mode=ApplicationMode.NONE)
+
+        result = ApplicationRouter.route(basic_job, caps)
+        assert result.strategy == RoutingStrategy.UNSUPPORTED

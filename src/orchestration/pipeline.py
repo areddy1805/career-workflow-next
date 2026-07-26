@@ -31,6 +31,7 @@ from src.application.adaptive_strategy import (
 from src.application.diversity import (
     DiversityPolicy,
     deduplicate_enriched_jobs,
+    description_fingerprint,
     diversify_jobs,
     exclude_job_ids,
 )
@@ -614,7 +615,25 @@ class CareerWorkflowPipeline:
         print(f"[PIPELINE DEBUG] Exited enrich_jobs_with_details", file=sys.stderr, flush=True)
 
         enriched_before_dedup = len(enriched_candidates)
+        _before_dedup = enriched_candidates
         enriched_candidates = deduplicate_enriched_jobs(enriched_candidates)
+        # Fire rejection events for jobs silently dropped by deduplicate_enriched_jobs
+        # so that pre_app_rejected counter and rejection_histogram are accurate.
+        kept_fps = {description_fingerprint(j) for j in enriched_candidates}
+        for j in _before_dedup:
+            fp = description_fingerprint(j)
+            if fp not in kept_fps:
+                if not j.get("_rejection_recorded"):
+                    j["rejection_stage"] = "Classification"
+                    j["rejection_code"] = "DESCRIPTION_DUPLICATE"
+                    j["rejection_reason"] = "Exact description duplicate removed after enrichment"
+                    j["_rejection_recorded"] = True
+                    self.context.rejected_jobs.append(j)
+                    self.exec_context.reject(
+                        j,
+                        reason="Exact description duplicate removed after enrichment",
+                        code="DESCRIPTION_DUPLICATE",
+                    )
 
         jobs = enriched_candidates
         jobs = classifier.full_description_red_flag_check(jobs)
@@ -696,6 +715,8 @@ class CareerWorkflowPipeline:
             bypassed_jobs=len(auto_apply_candidates) + len(semantic_reused),
             metrics=self.inference_service.provider_manager.metrics.global_metrics
         )
+        # Preserve cost report for observability display
+        self.context.cost_report = cost_report
 
         for result in jobs:
             result["score"] = result.get("ai_score", result.get("score", 0))
@@ -1665,12 +1686,16 @@ class CareerWorkflowPipeline:
             # --- Phase 5: Cost Analytics ---
             from src.core.learning.cost_engine import CostEngine
             
-            # Calculate Derived Cost Analytics
-            cost_report = CostEngine.calculate_metrics(
-                total_jobs=projection.get('acquired', 0),
-                bypassed_jobs=0,
-                metrics=global_metrics
-            )
+            # Use the cost report computed during classification (which has
+            # accurate bypass counts) rather than recomputing with hardcoded zeros.
+            cost_report = getattr(self.context, "cost_report", None)
+            if cost_report is None:
+                classified_count = projection.get('classified', 0) or len(self.context.classified_jobs or [])
+                cost_report = CostEngine.calculate_metrics(
+                    total_jobs=classified_count,
+                    bypassed_jobs=0,
+                    metrics=global_metrics
+                )
             
             print("\nCost Analytics")
             print(f"Cloud Cost")

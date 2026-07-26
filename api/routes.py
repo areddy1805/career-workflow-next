@@ -110,7 +110,7 @@ def _ensure_api_contract(job: dict[str, Any]) -> None:
             raw_url = f"https://www.glassdoor.com{path}"
         elif "ziprecruiter" in source:
             raw_url = f"https://www.ziprecruiter.com{path}"
-        else:
+        elif source and source not in ("", "external_apply", "manual_review", "other"):
             raw_url = f"https://{source}.com{path}"
 
     job["apply_url"] = raw_url
@@ -178,12 +178,23 @@ def get_jobs() -> list[dict[str, Any]]:
 
 @router.get("/jobs/{job_id}")
 def get_job_details(job_id: str) -> dict[str, Any]:
-    df = read_applications()
+    try:
+        df = read_applications()
+    except Exception:
+        raise HTTPException(status_code=503, detail="Application ledger unavailable")
+
+    if df.empty or "job_id" not in df.columns:
+        raise HTTPException(status_code=404, detail="Job not found")
+
     job_df = df[df["job_id"] == job_id]
     if job_df.empty:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    events_df = read_application_events(job_id)
+    try:
+        events_df = read_application_events(job_id)
+    except Exception:
+        events_df = pd.DataFrame()
+
     cache_dict = get_job_cache_dict()
     enriched_job = df_to_dict(job_df)[0]
 
@@ -206,6 +217,8 @@ def get_runs() -> list[dict[str, Any]]:
 @router.get("/runs/{run_id}")
 def get_run_details(run_id: str) -> dict[str, Any]:
     df = run_history(limit=100)
+    if df.empty or "run_id" not in df.columns:
+        raise HTTPException(status_code=404, detail="Run not found")
     run_df = df[df["run_id"] == run_id]
     if run_df.empty:
         raise HTTPException(status_code=404, detail="Run not found")

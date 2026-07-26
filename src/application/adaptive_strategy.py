@@ -380,8 +380,11 @@ def _candidate_adaptive_score(
     priority = str(meta.get("priority") or "")
     subtrack = str(meta.get("subtrack") or "")
 
-    days_old = int(meta.get("days_old", 7))
-    exp_min = int(meta.get("experience_min", 0))
+    _days_old = meta.get("days_old")
+    days_old = int(_days_old) if _days_old is not None else 7
+    
+    _exp_min = meta.get("experience_min")
+    exp_min = int(_exp_min) if _exp_min is not None else 0
 
     bonus = 0.0
 

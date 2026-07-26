@@ -115,3 +115,67 @@ class JobSpyConfigError(JobSpyProviderError):
     """
 
     pass
+
+
+# -----------------------------------------------------------------------
+# HiringCafe exception hierarchy
+#
+# Mirrors the JobSpy taxonomy in structure.  All exceptions carry a
+# `provider` attribute fixed to "hiringcafe" so callers can distinguish
+# provider origin without string inspection.
+#
+# HiringCafeProviderError     — base class
+#   HiringCafeBuildIdError    — homepage unreachable / buildId extraction failure
+#   HiringCafeNetworkError    — timeout / connection failure
+#   HiringCafeParseError      — bad JSON / missing pageProps schema
+#   HiringCafeConfigError     — invalid configuration at startup
+# -----------------------------------------------------------------------
+
+
+class HiringCafeProviderError(Exception):
+    """Base exception for all HiringCafe provider errors."""
+
+    provider: str = "hiringcafe"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(f"[HIRINGCAFE] {message}")
+
+
+class HiringCafeBuildIdError(HiringCafeProviderError):
+    """
+    Raised when the homepage is unreachable or the buildId cannot be
+    extracted from the HTML.  Triggers an automatic retry after a fresh
+    homepage fetch.
+    """
+
+    pass
+
+
+class HiringCafeNetworkError(HiringCafeProviderError):
+    """
+    Raised on connection timeouts or network-level failures during a
+    paginated data fetch.  The failed page/track is skipped; acquisition
+    continues with the next track.  No cooldown is applied.
+    """
+
+    pass
+
+
+class HiringCafeParseError(HiringCafeProviderError):
+    """
+    Raised when the API response body is not valid JSON or is missing
+    the expected ``pageProps`` structure.  Logs a telemetry alert.
+    Falls back to whatever hits are available.
+    """
+
+    pass
+
+
+class HiringCafeConfigError(HiringCafeProviderError):
+    """
+    Raised when HiringCafe configuration is invalid (e.g. out-of-range
+    timeout, non-positive max_retries). Detected at provider
+    initialisation time.
+    """
+
+    pass
