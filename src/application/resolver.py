@@ -99,7 +99,11 @@ class ApplicationResolutionService:
                 is_external_flag = meta.get("is_external_apply")
             if isinstance(is_external_flag, dict):
                 is_external_flag = is_external_flag.get("is_external_apply")
-            if apply_url or is_external_flag:
+            if is_external_flag:
+                # Only the enrichment-level is_external_apply flag (from
+                # responseManager == "companyUrl") determines external routing.
+                # The Job.apply_url is always populated with the Naukri internal
+                # jdURL and must NOT be used as an external-routing signal.
                 return ApplicationResolution(
                     provider_id=provider_id,
                     mode=ApplicationMode.EXTERNAL,
