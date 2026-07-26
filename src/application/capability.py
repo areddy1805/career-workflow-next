@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 
 class ApplicationMode(Enum):
@@ -25,15 +26,17 @@ class ApplicationMode(Enum):
 class ApplicationCapabilities:
     """Describes what application modes a provider supports.
 
-    Each provider declares its capabilities via an ``ApplicationCapabilities``
-    instance so callers can route jobs without resorting to ``hasattr`` or
-    ``isinstance`` checks.
+    Each provider declares its capabilities so callers can route jobs
+    without resorting to ``hasattr`` or ``isinstance`` checks.
 
-    Fields
-    ------
+    Parameters
+    ----------
     mode : ApplicationMode
-        The primary application mode this provider supports.
-        Defaults to ``NONE`` so discovery-only providers automatically opt out.
+        The primary application mode (default ``NONE``).
+    daily_quota : int | None
+        Maximum applications per day, or ``None`` for unlimited
+        (default ``None``).
     """
 
     mode: ApplicationMode = ApplicationMode.NONE
+    daily_quota: Optional[int] = None

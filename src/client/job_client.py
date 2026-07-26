@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 
 from src.client.naukri_client import NaukriLoginClient
 from src.application.capability import ApplicationCapabilities, ApplicationMode
@@ -18,6 +18,7 @@ from src.exceptions.exceptions import (
 )
 from src.models.models import Job
 from src.utils.nkparam_generator import generate_nkparam
+from src.orchestration.capacity import ProviderCapacity
 
 
 class CircuitBreakerOpenException(RuntimeError):
@@ -157,7 +158,49 @@ class NaukriJobClient:
     @property
     def application_capabilities(self) -> ApplicationCapabilities:
         """Naukri supports native (auto) application via its own session."""
-        return ApplicationCapabilities(mode=ApplicationMode.AUTO)
+        return ApplicationCapabilities(
+            mode=ApplicationMode.AUTO,
+            daily_quota=50,
+        )
+
+    def discover_capacity(self) -> "ProviderCapacity":
+        """Discover current application capacity from the Naukri platform.
+
+        Makes a lightweight call to the history endpoint to determine
+        remaining quota without consuming an application slot.  Falls
+        back to a conservative estimate if the provider is unreachable.
+        """
+        try:
+            headers = self._session._build_headers(auth=True)
+            res = self._session.get(HISTORY_URL, headers=headers, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                quota = (
+                    data.get("quotaDetails")
+                    or data.get("data", {}).get("quotaDetails", {})
+                )
+                if quota:
+                    daily_quota = int(quota.get("dailyQuota", 50))
+                    daily_applied = int(quota.get("dailyApplied", 0))
+                    remaining = max(0, daily_quota - daily_applied)
+                    from src.orchestration.capacity import ProviderCapacity as PC
+                    return PC(
+                        provider_id="naukri",
+                        supports_auto_apply=True,
+                        daily_quota=daily_quota,
+                        remaining_quota=remaining,
+                    )
+        except Exception:
+            pass
+
+        # Conservative fallback: use known Naukri default of 50/day
+        from src.orchestration.capacity import ProviderCapacity as PC
+        return PC(
+            provider_id="naukri",
+            supports_auto_apply=True,
+            daily_quota=50,
+            remaining_quota=50,
+        )
 
     # ----------------------------------------------------------------------------------
     # Internal helpers
