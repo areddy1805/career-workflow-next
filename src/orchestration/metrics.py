@@ -39,6 +39,15 @@ class PipelineRunMetrics:
     total_cache_lookup_time_ms: float = 0.0
     total_cache_save_time_ms: float = 0.0
 
+    # Application Orchestrator V2 Metrics
+    deferred_count: int = 0
+    quota_used: int = 0
+    quota_remaining: int = 0
+    pool_size: int = 0
+    deferred_avg_score: float = 0.0
+    deferred_highest_score: float = 0.0
+    quota_exhausted_gracefully: bool = False
+
     def record_rejection(self, reason: str):
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
 
@@ -53,6 +62,20 @@ class PipelineRunMetrics:
 
     def add_application_time(self, duration: float):
         self.application_time += duration
+
+    def update_from_plan(self, plan) -> None:
+        """Update metrics from an ApplicationPlan."""
+        self.deferred_count = plan.summary.deferred if plan.summary else 0
+        self.pool_size = plan.summary.total_pool if plan.summary else 0
+        self.quota_used = plan.summary.planned if plan.summary else 0
+        deferred_scores = [
+            d.opportunity.score for d in (plan.deferred or [])
+            if hasattr(d, 'opportunity') and hasattr(d.opportunity, 'score')
+        ]
+        if deferred_scores:
+            self.deferred_avg_score = sum(deferred_scores) / len(deferred_scores)
+            self.deferred_highest_score = max(deferred_scores)
+        self.quota_exhausted_gracefully = self.deferred_count > 0
 
 
 def instrument_stage(stage_name: str):
