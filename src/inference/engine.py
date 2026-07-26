@@ -129,8 +129,10 @@ class InferenceEngine:
         latency_ms = (time.perf_counter() - start_exec) * 1000
         prompt_tokens = exec_metrics.get("prompt_tokens", 0)
         completion_tokens = exec_metrics.get("completion_tokens", 0)
+        reasoning_tokens = exec_metrics.get("reasoning_tokens", 0)
         cost_usd = exec_metrics.get("cost_usd", 0.0)
         provider_name = exec_metrics.get("provider", "router")
+        vendor_name = exec_metrics.get("vendor", "openai")
         model_name = exec_metrics.get("model", "router_model")
 
         self._emit(InferenceCompletedEvent(
@@ -143,8 +145,10 @@ class InferenceEngine:
             timestamp=time.time(),
             model=model_name,
             provider=provider_name,
+            vendor=vendor_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
             latency_ms=latency_ms,
             cost_usd=cost_usd
         ))

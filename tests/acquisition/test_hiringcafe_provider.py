@@ -308,12 +308,16 @@ class TestClient:
         resp = MagicMock(spec=httpx.Response)
         resp.status_code = status
         resp.is_success = (200 <= status < 300)
+        resp.headers = {"content-type": "application/json"}
         if json_data is not None:
             resp.json.return_value = json_data
         else:
             resp.json.side_effect = ValueError("not json")
         if body is not None:
             resp.text = body
+        else:
+            resp.text = "test body"
+        resp.content = b"test body"
         client._session.get.return_value = resp
 
     def test_fetch_page_success(self, default_config: HiringCafeConfig) -> None:

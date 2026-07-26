@@ -106,6 +106,8 @@ class HiringCafeConfig:
     # Optional YAML-configured defaults for filter fields.
     # Example: {"workplaceTypes": ["REMOTE"], "seniorityLevels": ["SENIOR"]}
     search_state_defaults: dict = field(default_factory=dict)
+    # Print Request -> Response -> Normalization for one page if true.
+    verification_mode: bool = False
 
     def __post_init__(self) -> None:
         if self.timeout_seconds < 1:
@@ -144,20 +146,21 @@ def _wrap_as_list(v: str) -> list[str]:
     return [v] if v else []
 
 
+def _transform_technology(v: str) -> str:
+    return "" if v == "role_only" else v
+
 # Keys mapped here will be included if the value is non-empty.
 # The capability attribute name is used to gate technology/remote/seniority
 # fields — if the capability is NONE the field is omitted.
 _FIELD_MAP: dict[str, tuple[str, Callable[[str], Any]]] = {
     "keyword":            ("searchQuery",            _identity),
-    "matched_technology": ("technologyKeywordsQuery", _identity),
-    "location":           ("locations",              _wrap_as_list),
+    "matched_technology": ("technologyKeywordsQuery", _transform_technology),
 }
 
 # Maps hiringcafe_api_key -> ProviderCapabilities attribute that must be
 # != CapabilityLevel.NONE for the field to be emitted.
 _FIELD_CAPABILITY_GATE: dict[str, str] = {
     "technologyKeywordsQuery": "technology_filter",
-    "locations":               "location_filter",
 }
 
 
@@ -176,7 +179,7 @@ class _BuildIdResolver:
     This resolver simply returns the latest value on each call.
     """
 
-    _HOMEPAGE_URL = "https://hiring.cafe/"
+    _HOMEPAGE_URL = "https://hiringcafe.com/"
 
     def __init__(self, config: HiringCafeConfig) -> None:
         self._timeout = config.timeout_seconds
@@ -293,6 +296,11 @@ class _SearchStateBuilder:
             if default_val:
                 state[api_key] = default_val
 
+        logger.debug("HiringCafe SearchState (dict): %s", state)
+        logger.debug(
+            "HiringCafe SearchState (JSON): %s",
+            json.dumps(state, separators=(",", ":")),
+        )
         return state
 
 
@@ -311,7 +319,7 @@ class _Client:
     Uses a shared ``httpx.Client`` for connection reuse across pages.
     """
 
-    _BASE_URL = "https://hiring.cafe"
+    _BASE_URL = "https://hiringcafe.com"
     _DATA_PATH = "/_next/data/{build_id}/index.json"
 
     def __init__(self, config: HiringCafeConfig) -> None:
@@ -340,12 +348,23 @@ class _Client:
         path = self._DATA_PATH.format(build_id=build_id)
         url = f"{self._BASE_URL}{path}?page={page}&searchState={encoded_state}"
 
+        logger.info("HiringCafe Request URL (decoded): %s?page=%d&searchState=%s", f"{self._BASE_URL}{path}", page, search_state_str)
+        logger.debug("HiringCafe Request: GET %s headers=%s", url, self._session.headers)
+
         try:
             response = self._session.get(url)
         except httpx.TimeoutException as exc:
             raise HiringCafeNetworkError(f"Request timed out: {url}") from exc
         except httpx.NetworkError as exc:
             raise HiringCafeNetworkError(f"Network error: {exc}") from exc
+
+        logger.debug(
+            "HiringCafe Response: status=%d content_type=%r size=%d preview=%r",
+            response.status_code,
+            response.headers.get("content-type"),
+            len(response.content),
+            response.text[:1000] if response.text else "",
+        )
 
         if response.status_code == 404:
             raise HiringCafeBuildIdError(
@@ -365,8 +384,15 @@ class _Client:
         try:
             return response.json()
         except Exception as exc:
+            debug_path = f"/tmp/hiringcafe_err_{int(time.time())}.txt"
+            with open(debug_path, "w") as f:
+                f.write(response.text)
             raise HiringCafeParseError(
-                f"Failed to parse JSON response from {url}: {exc}"
+                f"Failed to parse JSON response. HTTP {response.status_code}, "
+                f"Content-Type: {response.headers.get('content-type')}. "
+                f"BuildId: {build_id}. SearchState: {search_state_str}. "
+                f"Request URL: {url}. "
+                f"Dumped response to {debug_path}. Exception: {exc}."
             ) from exc
 
     def close(self) -> None:
@@ -414,10 +440,23 @@ class _Paginator:
                 break
 
             data = self._fetch(search_state, page)
+            
+            if "pageProps" not in data:
+                raise HiringCafeParseError("Response JSON missing 'pageProps' key. Schema may have changed.")
+                
+            page_props = data["pageProps"]
+            if "ssrHits" not in page_props:
+                raise HiringCafeParseError("Response JSON 'pageProps' missing 'ssrHits' key.")
+                
+            if "ssrIsLastPage" not in page_props:
+                raise HiringCafeParseError("Response JSON 'pageProps' missing 'ssrIsLastPage' key.")
+
+            hits = page_props["ssrHits"]
+            logger.info("HiringCafe fetched page %d: %d jobs", page, len(hits))
+
             yield data
 
-            page_props = data.get("pageProps") or {}
-            if page_props.get("ssrIsLastPage", True):
+            if page_props["ssrIsLastPage"]:
                 break
             page += 1
 
@@ -519,11 +558,15 @@ class _Normalizer:
         job_info: dict = raw_hit.get("job_information") or {}
         v5: dict = raw_hit.get("v5_processed_job_data") or {}
         company_data: dict = raw_hit.get("enriched_company_data") or {}
-        source: dict = raw_hit.get("source") or {}
+        
+        # source might be a string (e.g. "workday") or a dict in older schemas
+        source_val = raw_hit.get("source")
+        source: dict = source_val if isinstance(source_val, dict) else {}
 
         # Title (prefer v5 enriched data)
         title_raw = (
-            v5.get("title")
+            v5.get("core_job_title")
+            or v5.get("title")
             or job_info.get("title")
             or source.get("job_title")
             or ""
@@ -540,10 +583,15 @@ class _Normalizer:
         company = str(company_raw).strip() or "N/A"
 
         # Location + remote suffix
-        location = str(v5.get("location") or source.get("location") or "").strip()
+        location = str(
+            v5.get("formatted_workplace_location")
+            or v5.get("location")
+            or source.get("location")
+            or ""
+        ).strip()
         if not location:
             location = "N/A"
-        remote_type = str(v5.get("remote_type") or "").lower()
+        remote_type = str(v5.get("workplace_type") or v5.get("remote_type") or "").lower()
         if "remote" in remote_type:
             if location == "N/A":
                 location = "Remote"
@@ -891,6 +939,15 @@ class HiringCafeProvider:
             for raw_hit in hits:
                 try:
                     job = self._normalizer.normalize(raw_hit)
+                    
+                    if self.config.verification_mode and len(jobs) == 0:
+                        print("\n=== VERIFICATION MODE: REQUEST ===")
+                        print(f"SearchState: {json.dumps(search_state)}")
+                        print("\n=== VERIFICATION MODE: RESPONSE HIT ===")
+                        print(json.dumps(raw_hit, indent=2))
+                        print("\n=== VERIFICATION MODE: NORMALIZED JOB ===")
+                        print(job)
+                        
                     if job is not None:
                         setattr(job, "acquisition_source", "live")
                         jobs.append(job)
@@ -899,10 +956,15 @@ class HiringCafeProvider:
                         self._health.normalization_failures += 1
                 except Exception as exc:
                     logger.warning(
-                        "HiringCafe normalization error: %s", exc
+                        "HiringCafe normalization error: %s\nHit schema keys: %s", 
+                        exc, list(raw_hit.keys())
                     )
                     metrics.normalization_failures += 1
                     self._health.normalization_failures += 1
+                    
+            if self.config.verification_mode:
+                logger.info("HiringCafe verification mode active, stopping after 1 page.")
+                break
 
         return jobs
 

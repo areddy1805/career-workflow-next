@@ -155,13 +155,13 @@ acquisition:
 
       # Maximum pages to fetch per search track.  null = unlimited (paginate
       # until ssrIsLastPage is true).  Set a positive integer to cap depth.
-      max_pages: null
+      max_pages: 5
 
       # Optional default filter values applied when the SearchPlanner track
       # does not specify remote/seniority and the provider supports them.
       # Leave empty to fetch all results without filtering.
       search_state_defaults:
-        workplaceTypes: []      # e.g. ["REMOTE"] or ["HYBRID", "ONSITE"]
+        workplaceTypes: ["Remote"]
         seniorityLevels: []     # e.g. ["SENIOR", "STAFF", "PRINCIPAL"]
 
 job_policy:
