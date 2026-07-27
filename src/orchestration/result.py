@@ -31,6 +31,7 @@ class PipelineResult:
     run_limit_reached: int = 0
     failed: int = 0
     manual_review: int = 0
+    deferred: int = 0  # V2: opportunities deferred due to quota/constraint
     pre_app_rejected: int = 0
 
     started_at: datetime | None = None

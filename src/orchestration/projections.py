@@ -26,6 +26,7 @@ class MetricsProjection:
             "run_limit_reached": 0,
             "failed": 0,
             "manual_review": 0,
+            "deferred": 0,
             "pre_app_rejected": 0,
         }
 
@@ -72,6 +73,8 @@ class MetricsProjection:
                 self.metrics["manual_queue"] += 1
             elif strategy == "UNSUPPORTED":
                 self.metrics["unsupported"] += 1
+        elif t == "JobDeferred":
+            self.metrics["deferred"] += 1
 
         elif t == "StageFinished":
             s = event.stage

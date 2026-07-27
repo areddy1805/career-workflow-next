@@ -49,6 +49,7 @@ class PipelineContext:
     # Application
     application_summary: Any | None = None
     application_results: list[Any] = field(default_factory=list)
+    application_plan: Any | None = None  # V2 ApplicationPlan from CapacityPlanner
     ledger_run_id: str | None = None
 
     # Reconciliation
