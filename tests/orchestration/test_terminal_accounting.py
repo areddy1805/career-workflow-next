@@ -87,15 +87,16 @@ def test_terminal_accounting_validator():
     pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
     result = PipelineResult(
         run_id="test", status="SUCCESS",
-        acquired=10, summary_ranked=0, detailed=0, scored=0, ranked=0, selected=5, attempted=0,
+        acquired=10, summary_ranked=0, detailed=0, scored=0, ranked=0, selected=3, attempted=0,
         submitted=1, already_applied=1, ats_queue=0, generic_queue=0, manual_queue=0,
-        unsupported=0, policy_rejected=0, failed=1, manual_review=1, skipped_local=1,
+        unsupported=0, policy_rejected=0, failed=1, manual_review=1, skipped_local=0,
         run_limit_reached=0, dry_run_skipped=0, pre_app_rejected=5, started_at=None, completed_at=None,
         stage_results={}, errors=[]
     )
     
-    # 5 selected = 1+1+1+1+1 (submitted, already_applied, failed, manual_review, skipped_local)
-    # 10 acquired = 5 selected + 5 rejected before application
+    # 3 selected = 1+1+1 (submitted, already_applied, failed) — V2 AUTO accounting
+    # manual_review and ats_queue are non-AUTO queues, not counted in selected
+    # 10 acquired = 3 selected + 5 pre_app_rejected + 2 non-auto routed
     pipeline.context.rejected_jobs = [
         {"stage": "Classification", "job_id": str(i)} for i in range(5)
     ]
@@ -104,10 +105,10 @@ def test_terminal_accounting_validator():
     pipeline._validate_artifacts(result)
     
     # Test selected mismatch
-    result.submitted = 2 # This makes breakdown = 6, but selected = 5
+    result.submitted = 2 # This makes breakdown = 4, but selected = 3
     with pytest.raises(RuntimeError) as exc:
         pipeline._validate_artifacts(result)
-    assert "Application accounting mismatch" in str(exc.value)
+    assert "V2 AUTO accounting mismatch" in str(exc.value)
     
     # Test pre-app rejection mismatch
     result.submitted = 1 # Back to 5
@@ -167,5 +168,5 @@ def test_missing_terminal_outcome_detection():
     
     with pytest.raises(RuntimeError) as exc:
         pipeline._validate_artifacts(result)
-    assert "Application accounting mismatch: selected(1) != breakdown(0)" in str(exc.value)
+    assert "V2 AUTO accounting mismatch: selected(1) != submitted+failed(0)" in str(exc.value)
 

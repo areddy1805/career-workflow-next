@@ -732,8 +732,8 @@ class HiringCafeProvider:
 
     @property
     def application_capabilities(self) -> ApplicationCapabilities:
-        """HiringCafe provides external apply URLs for manual queue routing."""
-        return ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        """HiringCafe provides external-apply URLs for manual queue routing."""
+        return ApplicationCapabilities(mode=ApplicationMode.MANUAL_REVIEW)
 
     # ------------------------------------------------------------------
     # Construction

@@ -23,6 +23,7 @@ from src.orchestration.capacity import CapacityModel
 from src.orchestration.explanation import DecisionExplanation
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.priority_engine import RankedOpportunity
+from src.application.capability import ApplicationMode
 
 
 @dataclass
@@ -132,6 +133,16 @@ class CapacityPlanner:
     ) -> ApplicationPlan:
         """Produce an ApplicationPlan from a ranked pool.
 
+        Partitioning
+        ------------
+        - ``AUTO`` mode: budget and constraints apply.  These consume the
+          daily auto-apply budget.
+        - ``MANUAL_REVIEW``, ``ATS``, ``EXTERNAL_BROWSER``: routed directly
+          to the planned list with their respective mode.  DO NOT consume the
+          daily budget and bypass constraint evaluation — they will be
+          dispatched to their respective queues by the scheduler.
+        - ``NONE``: skipped (unsupported).
+
         Parameters
         ----------
         ranked_pool : list of RankedOpportunity
@@ -147,15 +158,56 @@ class CapacityPlanner:
         planned: List[PlannedApplication] = []
         deferred: List[DeferredOpportunity] = []
 
-        # Track scheduling state
+        # Track scheduling state (budget-tracked modes only)
         company_counts: Dict[str, int] = {}
         resume_counts: Dict[str, int] = {}
         provider_counts: Dict[str, int] = {}
         budget_used = 0
 
+        # Set of modes that consume the daily auto-apply budget
+        _BUDGET_MODES = {"AUTO", "auto"}
+
         for ro in ranked_pool:
             opp = ro.opportunity
 
+            # Determine the mode string to assign
+            app_mode = opp.application_mode
+            if app_mode == ApplicationMode.AUTO:
+                mode_str = "AUTO"
+            elif app_mode == ApplicationMode.MANUAL_REVIEW:
+                mode_str = "MANUAL_REVIEW"
+            elif app_mode == ApplicationMode.ATS:
+                mode_str = "ATS"
+            elif app_mode == ApplicationMode.EXTERNAL_BROWSER:
+                mode_str = "EXTERNAL_BROWSER"
+            else:
+                # NONE or unknown → skip (unsupported)
+                deferred.append(DeferredOpportunity(
+                    opportunity=opp,
+                    explanation=DecisionExplanation(
+                        final_score=ro.final_score,
+                        summary=f"Unsupported application mode: {app_mode.value if app_mode else 'none'}",
+                        applied=False,
+                        deferred_reason=f"Unsupported mode: {app_mode.value if app_mode else 'none'}",
+                    ),
+                ))
+                continue
+
+            # ── Non-budget modes: route directly, no constraint evaluation ──
+            if mode_str not in _BUDGET_MODES:
+                planned.append(PlannedApplication(
+                    opportunity=opp,
+                    mode=mode_str,
+                    explanation=DecisionExplanation(
+                        final_score=ro.final_score,
+                        components=dict(ro.explanation.components) if ro.explanation else {},
+                        summary=f"Routed ({mode_str}): rank #{len(planned) + 1}",
+                        applied=True,
+                    ),
+                ))
+                continue
+
+            # ── AUTO (budget-tracked) mode ──────────────────────────────
             # Check if daily budget is exhausted before evaluating constraints
             if budget_used >= self._model.daily_budget:
                 deferred.append(DeferredOpportunity(
@@ -227,7 +279,6 @@ class CapacityPlanner:
                 continue
 
             # All constraints passed — plan this opportunity
-            mode = "AUTO" if not opp.is_external else "EXTERNAL"
             explanation = DecisionExplanation(
                 final_score=ro.final_score,
                 components=dict(ro.explanation.components) if ro.explanation else {},
@@ -236,7 +287,7 @@ class CapacityPlanner:
             )
             planned.append(PlannedApplication(
                 opportunity=opp,
-                mode=mode,
+                mode="AUTO",
                 explanation=explanation,
             ))
 

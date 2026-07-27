@@ -8,17 +8,27 @@ from typing import Optional
 class ApplicationMode(Enum):
     """Describes how a provider-based job application should be handled.
 
-    AUTO     — the provider natively supports applying via its own API/session
-               (e.g. Naukri Easy Apply).  The pipeline can auto-submit.
-    EXTERNAL — the job must be applied for on an external site (ATS, company
-               career page).  The pipeline enqueues it for the manual/browser-
-               assisted workflow.
-    NONE     — the provider does not support any application channel for this
-               job.  The job is routed to the unsupported bucket.
+    AUTO            — the provider natively supports applying via its own
+                      API/session (e.g. Naukri Easy Apply).  The pipeline can
+                      auto-submit.  Consumes the daily budget.
+    MANUAL_REVIEW   — the job must be reviewed and applied for manually by the
+                      user (e.g. via a portal like HiringCafe or LinkedIn where
+                      the pipeline can open the link but not auto-submit).
+                      Does NOT consume the daily auto-apply budget.
+    ATS             — the job is hosted on an ATS (Greenhouse, Lever, Ashby,
+                      Workday).  The pipeline enqueues it for the browser-
+                      assisted workflow.  Does NOT consume the budget.
+    EXTERNAL_BROWSER — the job must be applied for on an external company
+                       career page via browser automation.  Does NOT consume
+                       the budget.
+    NONE            — the provider does not support any application channel for
+                      this job.  The job is routed to the unsupported bucket.
     """
 
     AUTO = "auto"
-    EXTERNAL = "external"
+    MANUAL_REVIEW = "manual_review"
+    ATS = "ats"
+    EXTERNAL_BROWSER = "external_browser"
     NONE = "none"
 
 

@@ -922,6 +922,11 @@ class CareerWorkflowPipeline:
                 continue
             score_data = self.context.score_map.get(job_id, {})
             opp = ApplicationOpportunity.from_job(job, status="CLASSIFIED")
+            # Resolve application mode from job metadata (provider-independent)
+            from src.application.resolver import ApplicationResolutionService
+            resolution = ApplicationResolutionService.resolve_from_job(job)
+            opp.application_mode = resolution.mode
+            opp.apply_url = resolution.apply_url or opp.apply_url
             opp.score = float(score_data.get("score", score_data.get("ai_score", 0)) or 0)
             opp.meta = score_data
             opportunities.append(opp)
@@ -986,7 +991,10 @@ class CareerWorkflowPipeline:
 
         # AUTO jobs → selected_jobs (passed to apply stage)
         auto_job_ids = {p.opportunity.job_id for p in plan.planned if p.mode == "AUTO"}
-        external_job_ids = {p.opportunity.job_id for p in plan.planned if p.mode == "EXTERNAL"}
+        non_auto_job_ids = {
+            p.opportunity.job_id for p in plan.planned
+            if p.mode in ("MANUAL_REVIEW", "ATS", "EXTERNAL", "EXTERNAL_BROWSER")
+        }
 
         selected_jobs = [
             jobs_by_id[jid] for jid in auto_job_ids
@@ -995,34 +1003,19 @@ class CareerWorkflowPipeline:
 
         self.context.selected_jobs = selected_jobs
 
-        # Enqueue EXTERNAL jobs to manual action queue
-        manual_action_queue = ManualActionQueue(
-            os.getenv("MANUAL_ACTION_QUEUE_PATH", "data/manual_action_queue.json")
-        )
+        # Non-AUTO jobs are recorded here for artifact tracking; the
+        # ApplicationScheduler will handle actual dispatch in apply().
         for p in plan.planned:
-            if p.mode != "EXTERNAL":
+            if p.mode == "AUTO":
                 continue
             opp = p.opportunity
-            manual_action_queue.enqueue_external_apply(
-                job=opp,
-                score=int(opp.score),
-                reason=p.explanation.summary if p.explanation else "External apply",
-                run_id=self.context.run_id,
-            )
-            self.exec_context.route(
-                job=opp,
-                strategy="MANUAL_QUEUE",
-                reason=p.explanation.summary if p.explanation else "External apply",
-            )
-            if ledger is not None:
-                ledger.record(opp, "manual_queue", meta=opp.meta)
             self.context.rejected_jobs.append({
                 "job_id": opp.job_id,
                 "title": opp.title,
                 "company": opp.company,
-                "stage": "Application",
-                "code": "MANUAL_QUEUE",
-                "reason": p.explanation.summary if p.explanation else "External apply",
+                "stage": "Selection",
+                "code": p.mode,
+                "reason": p.explanation.summary if p.explanation else f"Routed: {p.mode}",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
@@ -1230,7 +1223,7 @@ class CareerWorkflowPipeline:
             failed=len(summary.errors),
         )
 
-        attempted = summary.auto_applied + summary.external_queued + len(summary.errors)
+        attempted = summary.auto_applied + summary.external_queued + summary.manual_review + summary.ats_queued + len(summary.errors)
 
         self.context.stage_results["application"] = {
             "total_candidates": len(plan.planned) + len(plan.deferred),
@@ -1239,15 +1232,15 @@ class CareerWorkflowPipeline:
             "already_applied": 0,
             "skipped_local": 0,
             "native_applied": summary.auto_applied,
-            "ats_queue": 0,
+            "ats_queue": summary.ats_queued,
             "generic_queue": 0,
-            "manual_queue": summary.external_queued,
+            "manual_queue": summary.external_queued + summary.manual_review,
             "unsupported": 0,
             "policy_rejected": 0,
             "dry_run_skipped": 0,
             "run_limit_reached": 0,
             "failed": len(summary.errors),
-            "manual_review": 0,
+            "manual_review": summary.manual_review,
             "deferred": summary.deferred,
             "auto_applied": summary.auto_applied,
             "external_queued": summary.external_queued,

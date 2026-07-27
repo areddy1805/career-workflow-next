@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from src.application.capability import ApplicationMode
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -50,6 +52,10 @@ class ApplicationOpportunity:
         External apply URL, if applicable.
     is_external : bool
         Whether this is an external-apply job.
+    application_mode : ApplicationMode
+        Provider-independent application mode that determines how this
+        opportunity is routed (AUTO = budget-tracked native apply,
+        MANUAL_REVIEW/ATS/EXTERNAL_BROWSER = queued, no budget consumed).
     meta : dict
         Arbitrary metadata for extensibility.
     explanation : str | None
@@ -69,6 +75,7 @@ class ApplicationOpportunity:
     resume_profile: str = "generic"
     apply_url: Optional[str] = None
     is_external: bool = False
+    application_mode: ApplicationMode = ApplicationMode.AUTO
     meta: Dict[str, Any] = field(default_factory=dict)
     explanation: Optional[str] = None
 
@@ -87,6 +94,7 @@ class ApplicationOpportunity:
             "resume_profile": self.resume_profile,
             "apply_url": self.apply_url,
             "is_external": self.is_external,
+            "application_mode": self.application_mode.value,
             "explanation": self.explanation,
         }
 
@@ -117,4 +125,5 @@ class ApplicationOpportunity:
             resume_profile=resume_profile,
             apply_url=str(getattr(job, "apply_url", "") or None) or None,
             is_external=bool(getattr(job, "is_external_apply", False)),
+            application_mode=getattr(job, "application_mode", ApplicationMode.AUTO),
         )

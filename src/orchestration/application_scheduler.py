@@ -32,6 +32,10 @@ class ExecutionSummary:
         Number of AUTO-mode applications executed.
     external_queued : int
         Number of EXTERNAL-mode applications queued.
+    manual_review : int
+        Number of MANUAL_REVIEW-mode applications queued.
+    ats_queued : int
+        Number of ATS-mode applications queued.
     deferred : int
         Number of opportunities deferred.
     errors : list
@@ -41,6 +45,8 @@ class ExecutionSummary:
     total_planned: int = 0
     auto_applied: int = 0
     external_queued: int = 0
+    manual_review: int = 0
+    ats_queued: int = 0
     deferred: int = 0
     errors: List[str] = field(default_factory=list)
 
@@ -103,6 +109,10 @@ class ApplicationScheduler:
                 self._execute_one(planned, run_id)
                 if planned.mode == "AUTO":
                     summary.auto_applied += 1
+                elif planned.mode == "MANUAL_REVIEW":
+                    summary.manual_review += 1
+                elif planned.mode == "ATS":
+                    summary.ats_queued += 1
                 else:
                     summary.external_queued += 1
             except Exception as exc:
@@ -142,7 +152,11 @@ class ApplicationScheduler:
         """Execute a single planned application."""
         if planned.mode == "AUTO":
             self._execute_auto(planned, run_id)
-        elif planned.mode == "EXTERNAL":
+        elif planned.mode == "MANUAL_REVIEW":
+            self._execute_manual_review(planned, run_id)
+        elif planned.mode == "ATS":
+            self._execute_ats(planned, run_id)
+        elif planned.mode in ("EXTERNAL", "EXTERNAL_BROWSER"):
             self._execute_external(planned, run_id)
 
     def _execute_auto(self, planned: PlannedApplication, run_id: str) -> None:
@@ -191,4 +205,62 @@ class ApplicationScheduler:
                 planned.opportunity,
                 strategy="MANUAL_QUEUE",
                 reason=planned.explanation.summary if planned.explanation else "External apply",
+            )
+
+    def _execute_manual_review(self, planned: PlannedApplication, run_id: str) -> None:
+        """Execute a MANUAL_REVIEW-mode application (enqueue for manual review)."""
+        opp = planned.opportunity
+        reason = planned.explanation.summary if planned.explanation else "Manual review"
+        self._repo.mark_status(
+            opp.job_id,
+            "MANUAL_REVIEW",
+            explanation=reason,
+        )
+        if self._enqueue_fn:
+            self._enqueue_fn(
+                job=opp,
+                score=int(planned.explanation.final_score if planned.explanation else 0),
+                reason=f"Manual review: {reason}",
+                run_id=run_id,
+            )
+        if self._exec_context:
+            self._exec_context.route(
+                opp,
+                strategy="MANUAL_REVIEW",
+                reason=reason,
+            )
+        if self._ledger:
+            self._ledger.record(
+                opp,
+                "MANUAL_REVIEW",
+                meta={"mode": "MANUAL_REVIEW", "reason": reason},
+            )
+
+    def _execute_ats(self, planned: PlannedApplication, run_id: str) -> None:
+        """Execute an ATS-mode application (enqueue for ATS-assisted workflow)."""
+        opp = planned.opportunity
+        reason = planned.explanation.summary if planned.explanation else "ATS apply"
+        self._repo.mark_status(
+            opp.job_id,
+            "ATS_QUEUED",
+            explanation=reason,
+        )
+        if self._enqueue_fn:
+            self._enqueue_fn(
+                job=opp,
+                score=int(planned.explanation.final_score if planned.explanation else 0),
+                reason=f"ATS apply: {reason}",
+                run_id=run_id,
+            )
+        if self._exec_context:
+            self._exec_context.route(
+                opp,
+                strategy="EXTERNAL_ATS",
+                reason=reason,
+            )
+        if self._ledger:
+            self._ledger.record(
+                opp,
+                "ATS_QUEUED",
+                meta={"mode": "ATS", "reason": reason},
             )

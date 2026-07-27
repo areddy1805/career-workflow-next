@@ -17,6 +17,7 @@ from src.orchestration.capacity_planner import CapacityPlanner, ApplicationPlan,
 from src.orchestration.explanation import DecisionExplanation
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.priority_engine import PriorityEngine, RankedOpportunity
+from src.application.capability import ApplicationMode
 
 
 def _make_opp(
@@ -27,6 +28,7 @@ def _make_opp(
     resume_profile: str = "AI",
     provider_id: str = "naukri",
     is_external: bool = False,
+    application_mode: ApplicationMode | None = None,
 ) -> ApplicationOpportunity:
     now = datetime.now(timezone.utc)
     return ApplicationOpportunity(
@@ -41,6 +43,9 @@ def _make_opp(
         age_days=age_days,
         resume_profile=resume_profile,
         is_external=is_external,
+        application_mode=application_mode or (
+            ApplicationMode.EXTERNAL_BROWSER if is_external else ApplicationMode.AUTO
+        ),
     )
 
 
@@ -142,11 +147,11 @@ class TestCapacityPlannerEdgeCases:
     def test_external_apply_mode(self):
         model = CapacityModel(daily_budget=50)
         planner = CapacityPlanner(model, [QualityConstraint(min_score=0)])
-        pool = [_make_opp("ext", score=95, is_external=True)]
+        pool = [_make_opp("ext", score=95, is_external=True, application_mode=ApplicationMode.EXTERNAL_BROWSER)]
         ranked = _rank(pool)
         plan = planner.plan(ranked)
         assert len(plan.planned) == 1
-        assert plan.planned[0].mode == "EXTERNAL"
+        assert plan.planned[0].mode == "EXTERNAL_BROWSER"
 
     def test_auto_apply_mode(self):
         model = CapacityModel(daily_budget=50)

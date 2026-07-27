@@ -1675,7 +1675,11 @@ def run_application_batch(
             # Proceed to native application execution below
             pass
 
-        elif resolution.mode == ApplicationMode.EXTERNAL:
+        elif resolution.mode in (
+            ApplicationMode.EXTERNAL_BROWSER,
+            ApplicationMode.MANUAL_REVIEW,
+            ApplicationMode.ATS,
+        ):
             manual_queue_count += 1
 
             _record_app_reject(
