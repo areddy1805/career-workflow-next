@@ -2,112 +2,27 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 from .events import PipelineEvent
+from .job_lifecycle import JobLifecycleStore
 
 
-class MetricsProjection:
-    def __init__(self):
-        self.metrics = {
-            "acquired": 0,
-            "prefiltered": 0,
-            "detail_candidates": 0,
-            "classified": 0,
-            "selected": 0,
-            "attempted": 0,
-            "submitted": 0,
-            "already_applied": 0,
-            "skipped_local": 0,
-            "native_applied": 0,
-            "ats_queue": 0,
-            "generic_queue": 0,
-            "manual_queue": 0,
-            "unsupported": 0,
-            "policy_rejected": 0,
-            "dry_run_skipped": 0,
-            "run_limit_reached": 0,
-            "failed": 0,
-            "manual_review": 0,
-            "deferred": 0,
-            "pre_app_rejected": 0,
-        }
+def projection_metrics_from_lifecycle(lifecycle: JobLifecycleStore) -> dict[str, int]:
+    """Compute projection metrics from the canonical lifecycle store.
 
-    def __call__(self, event: PipelineEvent):
-        t = event.event_type
-        d = event.payload
-        code = d.get("code")
-        stage = event.stage
-
-        if t == "JobAcquired":
-            self.metrics["acquired"] += 1
-        elif t == "JobSelected":
-            self.metrics["selected"] += 1
-        elif t == "JobApplied":
-            self.metrics["submitted"] += 1
-            self.metrics["native_applied"] += 1
-            self.metrics["attempted"] += 1
-        elif t == "JobRejected":
-            if stage != "Application":
-                self.metrics["pre_app_rejected"] += 1
-                
-            if code == "ALREADY_APPLIED":
-                self.metrics["already_applied"] += 1
-            elif code == "POLICY_REJECTED":
-                self.metrics["policy_rejected"] += 1
-            elif code == "APPLICATION_QUOTA":
-                self.metrics["run_limit_reached"] += 1
-        elif t == "JobSkipped":
-            if code in ("LOCAL_SKIPPED", "ALREADY_APPLIED"):
-                self.metrics["skipped_local"] += 1
-            elif code == "DRY_RUN":
-                self.metrics["dry_run_skipped"] += 1
-        elif t == "JobFailed":
-            if stage == "Application":
-                self.metrics["failed"] += 1
-                self.metrics["attempted"] += 1
-        elif t == "JobRouted":
-            strategy = d.get("strategy")
-            if strategy == "EXTERNAL_ATS":
-                self.metrics["ats_queue"] += 1
-            elif strategy == "GENERIC_CAREER_SITE":
-                self.metrics["generic_queue"] += 1
-            elif strategy in ("MANUAL_REVIEW", "MANUAL_QUEUE"):
-                self.metrics["manual_queue"] += 1
-            elif strategy == "UNSUPPORTED":
-                self.metrics["unsupported"] += 1
-        elif t == "JobDeferred":
-            self.metrics["deferred"] += 1
-
-        elif t == "StageFinished":
-            s = event.stage
-
-            if "output_count" not in d:
-                raise RuntimeError(f"StageFinished({s}) missing output_count")
-
-            c = int(d["output_count"])
-
-            if s == "Acquisition":
-                self.metrics["acquired"] = c
-
-            elif s == "Classification":
-                self.metrics["classified"] = c
-                self.metrics["detail_candidates"] = c
-                self.metrics["prefiltered"] = c
-
-            elif s == "Selection":
-                self.metrics["selected"] = c
-                # Update prefiltered to reflect losses during selection
-                # (e.g., diversity policy rejections) so the accounting
-                # identity holds: acquired = prefiltered + pre_app_rejected
-                self.metrics["prefiltered"] = c
-
-    def get_metrics(self) -> Dict[str, int]:
-        return self.metrics
-
-    def flush(self, run_dir: Path):
-        with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
-            json.dump(self.metrics, f, indent=2)
+    Replaces the old MetricsProjection which maintained independent
+    mutable counters.  Every number is derived from ``lifecycle.count()``
+    or ``lifecycle.count_by_states()``.
+    """
+    return lifecycle.compute_metrics()
 
 
 class ExplorerProjection:
+    """Stage-level explorer visualization.
+
+    Tracks per-stage removed_job summaries for the Pipeline Explorer UI.
+    This is a VISUALIZATION projection, not a state accumulator.
+    Job state comes from JobLifecycleStore.
+    """
+
     def __init__(self, fingerprint: dict):
         self.fingerprint = fingerprint
         self.stages_summary = []

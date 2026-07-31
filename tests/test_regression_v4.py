@@ -239,86 +239,74 @@ def test_ai_vs_swe_scoring_discrimination():
 # Test 4: Pipeline Accounting Identity
 # =========================================================================
 
-def test_pipeline_accounting_identity():
-    """Verify the accounting identity holds:
-    acquired = prefiltered + pre_app_rejected
+def test_lifecycle_accounting_identity():
+    """Verify the accounting identity using the canonical JobLifecycleStore.
+    
+    Every acquired job must be in exactly one state.  The sum of ALL states
+    (terminal, routed, deferred, in-flight) must equal acquired.
     """
-    from src.orchestration.projections import MetricsProjection
-    from src.orchestration.events import PipelineEvent
+    from src.orchestration.job_lifecycle import JobLifecycleStore, JobState, TERMINAL_STATES, QUEUED_STATES
 
-    projector = MetricsProjection()
+    store = JobLifecycleStore(":memory:")
 
-    # Simulate a pipeline run with known counts
-    # Acquire 100 jobs
+    # Simulate a pipeline run: 100 acquired, 10 pre-app rejected, 3 deferred, 
+    # 2 routed (manual), 1 routed (ats), 1 routed (external), 1 submitted, 1 failed
+    # Remaining: 81 still in ACQUIRED or ELIGIBLE (in-flight)
+    
     for i in range(100):
-        projector(PipelineEvent(
-            schema_version=1, event_id=f"evt_acq_{i}", sequence=i,
-            event_type="JobAcquired",
-            stage="Acquisition",
-            run_id="test_run",
-            pipeline_job_id=f"job_{i}",
-            timestamp="2026-07-26T00:00:00",
-            payload={"title": f"Job {i}", "company": "Test"}
-        ))
-
-    # Reject 10 during Classification (impossible filter, etc.)
+        store.create(f"job_{i}")
+    
     for i in range(10):
-        projector(PipelineEvent(
-            schema_version=1, event_id=f"evt_rej_{i}", sequence=100+i,
-            event_type="JobRejected",
-            stage="Classification",
-            run_id="test_run",
-            pipeline_job_id=f"rejected_{i}",
-            timestamp="2026-07-26T00:00:00",
-            payload={"code": "NON_SOFTWARE_ROLE", "reason": "Not software role"}
-        ))
+        store.transition(f"job_{i}", JobState.PRE_APPLICATION_REJECTED, reason="Not software role")
+    for i in range(10, 13):
+        store.transition(f"job_{i}", JobState.ELIGIBLE, reason="Passed filters")
+    for i in range(13, 16):
+        store.transition(f"job_{i}", JobState.ELIGIBLE, reason="Passed filters")
+        store.transition(f"job_{i}", JobState.DEFERRED, reason="Budget exhausted")
+    for i in range(16, 18):
+        store.transition(f"job_{i}", JobState.ELIGIBLE, reason="Passed filters")
+        store.transition(f"job_{i}", JobState.ROUTED_MANUAL, reason="Manual review")
+    store.transition("job_18", JobState.ELIGIBLE, reason="Passed filters")
+    store.transition("job_18", JobState.ROUTED_ATS, reason="ATS detected")
+    store.transition("job_19", JobState.ELIGIBLE, reason="Passed filters")
+    store.transition("job_19", JobState.ROUTED_EXTERNAL, reason="External browser")
+    store.transition("job_20", JobState.ELIGIBLE, reason="Passed filters")
+    store.transition("job_20", JobState.SELECTED_AUTO, reason="Selected")
+    store.transition("job_20", JobState.SUBMITTED, reason="Applied")
+    store.transition("job_21", JobState.ELIGIBLE, reason="Passed filters")
+    store.transition("job_21", JobState.SELECTED_AUTO, reason="Selected")
+    store.transition("job_21", JobState.APPLICATION_FAILED, reason="API error")
 
-    # Finish Classification with 90 survivors
-    projector(PipelineEvent(
-        schema_version=1, event_id="evt_cls_end", sequence=110,
-        event_type="StageFinished",
-        stage="Classification",
-        run_id="test_run",
-        pipeline_job_id=None,
-        timestamp="2026-07-26T00:00:00",
-        payload={"output_count": 90}
-    ))
-
-    # Reject 3 more during Selection (diversity policy)
-    for i in range(3):
-        projector(PipelineEvent(
-            schema_version=1, event_id=f"evt_div_{i}", sequence=111+i,
-            event_type="JobRejected",
-            stage="Selection",
-            run_id="test_run",
-            pipeline_job_id=f"diversity_{i}",
-            timestamp="2026-07-26T00:00:00",
-            payload={"code": "DIVERSITY_POLICY", "reason": "Failed diversity constraints"}
-        ))
-
-    # Finish Selection with 87 survivors
-    projector(PipelineEvent(
-        schema_version=1, event_id="evt_sel_end", sequence=114,
-        event_type="StageFinished",
-        stage="Selection",
-        run_id="test_run",
-        pipeline_job_id=None,
-        timestamp="2026-07-26T00:00:00",
-        payload={"output_count": 87}
-    ))
-
-    m = projector.get_metrics()
+    metrics = store.compute_metrics()
     
-    # Verify identity: acquired = prefiltered + pre_app_rejected
-    acquired = m["acquired"]
-    prefiltered = m["prefiltered"]
-    pre_app_rejected = m["pre_app_rejected"]
+    # Verify identity: acquired = count of ALL jobs
+    assert metrics["acquired"] == 100
     
-    assert acquired == prefiltered + pre_app_rejected, (
-        f"Accounting identity FAILED: {acquired} != {prefiltered} + {pre_app_rejected} "
-        f"(diff: {acquired - prefiltered - pre_app_rejected})"
-    )
-    print(f"Identity verified: {acquired} = {prefiltered} + {pre_app_rejected}")
+    # Verify each state count
+    assert metrics["pre_app_rejected"] == 10
+    assert metrics["deferred"] == 3
+    assert metrics["routed_manual"] == 2
+    assert metrics["routed_ats"] == 1
+    assert metrics["routed_external"] == 1
+    assert metrics["routed"] == 4  # 2 manual + 1 ats + 1 external
+    assert metrics["submitted"] == 1
+    assert metrics["application_failed"] == 1
+    assert metrics["selected"] == 2  # job_20 and job_21 both went through SELECTED_AUTO
+    
+    # Verify artifacts are projections
+    artifacts = store.compute_artifacts()
+    assert len(artifacts["rejected_jobs"]) == 10
+    assert len(artifacts["routed_jobs"]) == 4
+    assert len(artifacts["manual_review"]) == 2
+    assert len(artifacts["ats_queue"]) == 1
+    assert len(artifacts["external_apply"]) == 1
+    assert len(artifacts["deferred_jobs"]) == 3
+    assert len(artifacts["applied_jobs"]) == 1
+    assert len(artifacts["application_failures"]) == 1
+    
+    # Verify lifecycle validation passes (no stuck jobs)
+    diags = store.validate()
+    assert diags == [], f"Lifecycle validation failed: {diags}"
 
 
 # =========================================================================

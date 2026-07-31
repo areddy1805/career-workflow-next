@@ -4,7 +4,8 @@ import re
 import hashlib
 import concurrent.futures
 from src.client.inference_service import InferenceService
-from src.orchestration.metrics import PipelineRunMetrics
+
+
 from src.cache.cache_manager import CacheManager
 from src.cache.fingerprint import compute_llm_fingerprint
 
@@ -379,12 +380,10 @@ class JobFilterPipeline2:
         min_apply_score: int = 75,
         ai_score_limit: int = 300,
         batch_size: int = 5,
-        metrics: PipelineRunMetrics | None = None,
         exec_context=None,
         test_mode: bool = False,
         inference_service: InferenceService | None = None,
     ):
-        self.metrics = metrics
         self.exec_context = exec_context
         self.test_mode = test_mode
         self.inference_service = inference_service or InferenceService()
@@ -630,8 +629,6 @@ class JobFilterPipeline2:
 
                     reason = f"Posting date: {posted_date}, Age: unknown, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
                     self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
-                    if self.metrics:
-                        self.metrics.record_rejection("Posting Too Old")
                     continue
             elif days_old > max_age:
                 posted_date = j.get("posted_date") or "unknown"
@@ -643,8 +640,6 @@ class JobFilterPipeline2:
 
                 reason = f"Posting date: {posted_date}, Age: {days_old}, Threshold: {max_age}, Provider: {provider}, Fingerprint: {fingerprint}"
                 self.record_decision(j, "Age Filter", "POSTING_TOO_OLD", reason)
-                if self.metrics:
-                    self.metrics.record_rejection("Posting Too Old")
                 continue
 
             clean.append(j)
@@ -677,8 +672,6 @@ class JobFilterPipeline2:
                         "ALREADY_PROCESSED",
                         "Job fingerprint found in active ledger decisions",
                     )
-                    if self.metrics:
-                        self.metrics.record_rejection("Deduplication")
                     continue
 
             seen.add(job_id)
@@ -701,8 +694,6 @@ class JobFilterPipeline2:
                         "OBJECTIVELY_INCOMPATIBLE",
                         f"Title matched impossible domain: {domain}",
                     )
-                    if self.metrics:
-                        self.metrics.record_rejection("Impossible Filter")
                     rejected = True
                     break
 
@@ -763,8 +754,6 @@ class JobFilterPipeline2:
                     else "Title indicates non-target seniority level"
                 )
                 self.record_decision(job, "Experience Filter", code, reason)
-                if self.metrics:
-                    self.metrics.record_rejection("Hard Veto (Experience/Seniority)")
                 continue
 
             clean.append(job)
@@ -791,8 +780,6 @@ class JobFilterPipeline2:
                     "DESC_RED_FLAG",
                     f"Description matched red flag pattern: {flagged[0]}",
                 )
-                if self.metrics:
-                    self.metrics.record_rejection(f"Red Flag (Desc): {flagged[0]}")
                 continue
             clean.append(j)
         return clean
@@ -828,8 +815,6 @@ class JobFilterPipeline2:
                     "FULL_DESC_RED_FLAG",
                     f"Full description matched red flag pattern: {flagged[0]}",
                 )
-                if self.metrics:
-                    self.metrics.record_rejection(f"Red Flag (Full JD): {flagged[0]}")
                 continue
 
             clean.append(job)
@@ -855,8 +840,6 @@ class JobFilterPipeline2:
                 self.record_decision(
                     job, "Title Filter", "NON_SOFTWARE_ROLE", "Non-software role"
                 )
-                if self.metrics:
-                    self.metrics.record_rejection("Title Filter (Not SW/AI)")
                 continue
 
             # We removed the WRONG_TRACK rejection so things like Android/iOS, DevOps, SRE
@@ -875,8 +858,6 @@ class JobFilterPipeline2:
                 self.record_decision(
                     j, "Company Veto", "COMPANY_VETO", "Company is blacklisted"
                 )
-                if self.metrics:
-                    self.metrics.record_rejection("Company Veto")
                 continue
             clean.append(j)
         return clean
@@ -1256,7 +1237,12 @@ class JobFilterPipeline2:
         import sys
         import time
         from datetime import datetime, timezone
-        print(f"Entering ai_score_batch (Total Jobs: {len(jobs)}, Timeout: {timeout}s)", file=sys.stdout, flush=True)
+
+        print(
+            f"Entering ai_score_batch (Total Jobs: {len(jobs)}, Timeout: {timeout}s)",
+            file=sys.stdout,
+            flush=True,
+        )
         result = []
         jobs_for_inference = []
 
@@ -1309,13 +1295,16 @@ class JobFilterPipeline2:
                 )
                 result.append(job)
             else:
-                jobs_for_inference.append((idx, global_num, total_jobs, job, f, title, jid))
+                jobs_for_inference.append(
+                    (idx, global_num, total_jobs, job, f, title, jid)
+                )
 
         if not self.test_mode and jobs_for_inference:
 
             def _process_inference(item):
                 batch_num, global_num, total_in_batch, job, f, title, jid = item
                 import sys
+
                 raw_desc = (job.get("description") or "").strip()
                 raw_desc_len = len(raw_desc)
                 mandatory = ", ".join(job.get("mandatory_tags", [])) or "none"
@@ -1391,14 +1380,23 @@ class JobFilterPipeline2:
                 return job
 
             import sys
-            print(f"Creating ThreadPoolExecutor for {len(jobs_for_inference)} jobs...", file=sys.stdout, flush=True)
+
+            print(
+                f"Creating ThreadPoolExecutor for {len(jobs_for_inference)} jobs...",
+                file=sys.stdout,
+                flush=True,
+            )
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=min(10, len(jobs_for_inference))
             ) as executor:
                 futures = {}
                 for item in jobs_for_inference:
                     batch_num, global_num, total_in_batch, job_obj, f, title, jid = item
-                    print(f"Submitting Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}", file=sys.stdout, flush=True)
+                    print(
+                        f"Submitting Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}",
+                        file=sys.stdout,
+                        flush=True,
+                    )
                     futures[executor.submit(_process_inference, item)] = item
 
                 print("Waiting for completed futures...", file=sys.stdout, flush=True)
@@ -1411,15 +1409,31 @@ class JobFilterPipeline2:
                         res = future.result(timeout=timeout)
                         result.append(res)
                         completed_count += 1
-                        print(f"Result acquired for Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} (Completed {completed_count}/{total_in_batch})", file=sys.stdout, flush=True)
+                        print(
+                            f"Result acquired for Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} (Completed {completed_count}/{total_in_batch})",
+                            file=sys.stdout,
+                            flush=True,
+                        )
                     except concurrent.futures.TimeoutError:
                         failed_count += 1
-                        print(f"[STALLED / TIMEOUT] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} timed out after {timeout}s!", file=sys.stdout, flush=True)
+                        print(
+                            f"[STALLED / TIMEOUT] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid} timed out after {timeout}s!",
+                            file=sys.stdout,
+                            flush=True,
+                        )
                     except Exception as e:
                         failed_count += 1
-                        print(f"[FAILED] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}: {e}", file=sys.stdout, flush=True)
+                        print(
+                            f"[FAILED] Job #{batch_num}/{total_in_batch} (Global #{global_num}) ID: {jid}: {e}",
+                            file=sys.stdout,
+                            flush=True,
+                        )
 
-        print(f"Leaving ai_score_batch (Completed: {len(result)}, Failed/Timed out: {total_jobs - len(result)})", file=sys.stdout, flush=True)
+        print(
+            f"Leaving ai_score_batch (Completed: {len(result)}, Failed/Timed out: {total_jobs - len(result)})",
+            file=sys.stdout,
+            flush=True,
+        )
         return result
 
     # =========================================================

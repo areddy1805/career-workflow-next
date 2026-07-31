@@ -34,6 +34,18 @@ from src.orchestration.stages import (
     PipelineStatus,
     StageStatus,
 )
+from src.orchestration.job_lifecycle import JobState
+
+
+def _mode_to_job_state(mode: str) -> JobState | None:
+    """Map a CapacityPlanner mode string to a JobState."""
+    mapping = {
+        "MANUAL_REVIEW": JobState.ROUTED_MANUAL,
+        "ATS": JobState.ROUTED_ATS,
+        "EXTERNAL": JobState.ROUTED_EXTERNAL,
+        "EXTERNAL_BROWSER": JobState.ROUTED_EXTERNAL,
+    }
+    return mapping.get(mode)
 from src.orchestration.explorer import PipelineExplorerRenderer
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.opportunity_repository import OpportunityRepository
@@ -102,16 +114,15 @@ class CareerWorkflowPipeline:
         self.status = PipelineStatus.RUNNING
 
         from src.orchestration.projections import (
-            MetricsProjection,
             ExplorerProjection,
             JobTraceProjection,
         )
 
-        self.metrics_proj = MetricsProjection()
+        # Metrics are now DERIVED from JobLifecycleStore via
+        # ``self.context.lifecycle.compute_metrics()`` — no independent
+        # MetricsProjection with mutable counters.
         self.explorer_proj = ExplorerProjection(fingerprint={})
         self.trace_proj = JobTraceProjection()
-
-        self.exec_context.bus.subscribe(self.metrics_proj)
         self.exec_context.bus.subscribe(self.explorer_proj)
         self.exec_context.bus.subscribe(self.trace_proj)
         # Load config hashes for fingerprinting
@@ -269,6 +280,18 @@ class CareerWorkflowPipeline:
         )
         tmp.replace(target)
 
+    @staticmethod
+    def _safe_log(*args, **kwargs) -> None:
+        """Best-effort logging. Never terminates execution.
+
+        Business logic must execute before logging.
+        Logging is best-effort only.
+        """
+        try:
+            print(*args, **kwargs)
+        except Exception:
+            pass  # ponytail: best-effort logging, never crashes production
+
     # ------------------------------------------------------------------
     # Stage execution
     # ------------------------------------------------------------------
@@ -305,15 +328,10 @@ class CareerWorkflowPipeline:
             function()
             duration = time.perf_counter() - start_time
 
-            # Record total runtime metrics depending on the stage
-            if self.context.metrics:
-                self.context.metrics.total_runtime += duration
-                if name == "acquire":
-                    self.context.metrics.add_network_time(duration)
-                elif name == "classify":
-                    # classify mixes LLM and network (details fetching) and local filtering.
-                    # We subtract llm_time and network_time tracked deeply.
-                    pass
+            # Record total runtime measurements (not job state)
+            self.context.timing.total_runtime += duration
+            if name == "acquire":
+                self.context.timing.network_time += duration
 
             stage_record["duration_ms"] = int(duration * 1000)
 
@@ -520,8 +538,17 @@ class CareerWorkflowPipeline:
         self.context.fetch_result = fetch_result
 
         self.exec_context.start_stage("Acquisition", [])
+        lifecycle = self.context.lifecycle
         for job in jobs:
-            self.exec_context.acquire(job)
+            jid = str(getattr(job, "job_id", ""))
+            lifecycle.create(
+                jid,
+                title=str(getattr(job, "title", "")),
+                company=str(getattr(job, "company", "")),
+                provider_id=str(getattr(job, "provider_id", "")),
+                score=float(getattr(job, "score", 0) or 0),
+            )
+            self.exec_context.acquire(job, self.context.lifecycle)
             self.exec_context.complete(job)
         self.exec_context.finish_stage(self.context.acquired_jobs)
 
@@ -555,7 +582,6 @@ class CareerWorkflowPipeline:
         self.exec_context.start_stage("Classification", jobs)
 
         classifier = JobFilterPipeline2(
-            metrics=self.context.metrics,
             exec_context=self.exec_context,
             test_mode=self.context.test_mode,
             inference_service=self.inference_service,
@@ -627,15 +653,13 @@ class CareerWorkflowPipeline:
                 continue  # Keep this one — it's the first occurrence
             if fp not in kept_fps or fp_counts.get(fp, 0) <= 0:
                 if not j.get("_rejection_recorded"):
-                    j["rejection_stage"] = "Classification"
-                    j["rejection_code"] = "DESCRIPTION_DUPLICATE"
-                    j["rejection_reason"] = "Exact description duplicate removed after enrichment"
                     j["_rejection_recorded"] = True
-                    self.context.rejected_jobs.append(j)
+                    jid = str(j.get("job_id", j.get("id", "")))
                     self.exec_context.reject(
                         j,
                         reason="Exact description duplicate removed after enrichment",
                         code="DESCRIPTION_DUPLICATE",
+                        lifecycle=self.context.lifecycle,
                     )
 
         jobs = enriched_candidates
@@ -666,13 +690,14 @@ class CareerWorkflowPipeline:
             if not r_job.get("_rejection_recorded"):
                 reason = r_job.get("rejection_reason", "DETERMINISTIC_REJECT")
                 code = r_job.get("rejection_code", "SCORE_BELOW_THRESHOLD")
-                r_job["rejection_stage"] = "Classification"
-                r_job["rejection_code"] = code
-                r_job["rejection_reason"] = reason
                 r_job["_rejection_recorded"] = True
-                self.exec_context.reject(r_job, reason=reason, code=code)
-
-        self.context.rejected_jobs.extend(deterministic_rejected)
+                jid = str(r_job.get("job_id", r_job.get("id", "")))
+                self.exec_context.reject(
+                    r_job,
+                    reason=reason,
+                    code=code,
+                    lifecycle=self.context.lifecycle,
+                )
 
         # Release 3.2: Entity Identity & Vector Semantic Reuse
         llm_to_process = []
@@ -744,7 +769,26 @@ class CareerWorkflowPipeline:
         self._write_artifact("performance_benchmark.json", PerformanceBenchmarkSuite.run_benchmark(num_jobs=len(jobs)))
 
         final_jobs = jobs
-        self.context.rejected_jobs.extend(classifier.rejected_jobs)
+        # Record classifier rejections (impossible_filter, experience, title, etc.)
+        # in the lifecycle store as PRE_APPLICATION_REJECTED.
+        for rj in classifier.rejected_jobs:
+            jid = str(rj.get("job_id", rj.get("id", "")))
+            if self.context.lifecycle.get(jid):
+                self.context.lifecycle.transition(
+                    jid,
+                    JobState.PRE_APPLICATION_REJECTED,
+                    reason=rj.get("rejection_reason", rj.get("reason", "Classifier rejection")),
+                    metadata={"code": rj.get("rejection_code", rj.get("code", "UNKNOWN"))},
+                )
+        # Jobs that passed all filters are ELIGIBLE for selection
+        for j in jobs:
+            jid = str(j.get("job_id", j.get("id", "")))
+            if self.context.lifecycle.get(jid):
+                self.context.lifecycle.transition(
+                    jid,
+                    JobState.ELIGIBLE,
+                    reason="Passed all classifier filters",
+                )
         final_jobs = enrich_application_metadata(final_jobs)
 
         self.context.classified_jobs = final_jobs
@@ -770,9 +814,15 @@ class CareerWorkflowPipeline:
 
         print_pipeline_results(final_jobs)
 
-        rejection_summary = {}
-        for r in self.context.rejected_jobs:
-            code = r.get("rejection_code", r.get("code", "UNKNOWN"))
+        life = self.context.lifecycle
+        pre_app_rejected = life.find(JobState.PRE_APPLICATION_REJECTED)
+        rejection_summary: dict[str, int] = {}
+        for r in pre_app_rejected:
+            code = "UNKNOWN"
+            for t in reversed(r.transitions):
+                if t.to_state == JobState.PRE_APPLICATION_REJECTED:
+                    code = t.metadata.get("code", "UNKNOWN")
+                    break
             rejection_summary[code] = rejection_summary.get(code, 0) + 1
 
         self.context.stage_results["classification"] = {
@@ -791,7 +841,7 @@ class CareerWorkflowPipeline:
                 "summary": (self.context.stage_results["classification"]),
                 "rejection_summary": rejection_summary,
                 "jobs_count": len(final_jobs),
-                "rejected_count": len(self.context.rejected_jobs),
+                "rejected_count": life.count_by_state(JobState.PRE_APPLICATION_REJECTED),
             },
         )
 
@@ -932,14 +982,14 @@ class CareerWorkflowPipeline:
             opportunities.append(opp)
             opportunity_by_id[job_id] = opp
 
-        print(f"OPPORTUNITY POOL: {len(opportunities)}")
+        self._safe_log(f"OPPORTUNITY POOL: {len(opportunities)}")
 
         # ---------------------------------------------------------------
         # PriorityEngine — deterministic ranking
         # ---------------------------------------------------------------
         engine = PriorityEngine()
         ranked = engine.rank(opportunities)
-        print(f"RANKED OPPORTUNITIES: {len(ranked)}")
+        self._safe_log(f"RANKED OPPORTUNITIES: {len(ranked)}")
 
         # ---------------------------------------------------------------
         # CapacityModel — assemble from environment and provider capacities
@@ -978,7 +1028,7 @@ class CareerWorkflowPipeline:
         planner = CapacityPlanner(capacity_model, constraints)
         plan = planner.plan(ranked, already_applied_ids=self.context.applied_job_ids)
 
-        print(f"PLANNED: {len(plan.planned)}  "
+        self._safe_log(f"PLANNED: {len(plan.planned)}  "
               f"DEFERRED: {len(plan.deferred)}  "
               f"REJECTED: {plan.summary.rejected}  "
               f"EXPIRED: {plan.summary.expired}")
@@ -991,7 +1041,7 @@ class CareerWorkflowPipeline:
 
         # AUTO jobs → selected_jobs (passed to apply stage)
         auto_job_ids = {p.opportunity.job_id for p in plan.planned if p.mode == "AUTO"}
-        non_auto_job_ids = {
+        external_job_ids = {
             p.opportunity.job_id for p in plan.planned
             if p.mode in ("MANUAL_REVIEW", "ATS", "EXTERNAL", "EXTERNAL_BROWSER")
         }
@@ -1003,42 +1053,35 @@ class CareerWorkflowPipeline:
 
         self.context.selected_jobs = selected_jobs
 
-        # Non-AUTO jobs are recorded here for artifact tracking; the
-        # ApplicationScheduler will handle actual dispatch in apply().
+        # Non-AUTO jobs are recorded in the lifecycle store as routing states.
+        # The ApplicationScheduler will handle actual dispatch in apply().
         for p in plan.planned:
             if p.mode == "AUTO":
                 continue
             opp = p.opportunity
-            self.context.rejected_jobs.append({
-                "job_id": opp.job_id,
-                "title": opp.title,
-                "company": opp.company,
-                "stage": "Selection",
-                "code": p.mode,
-                "reason": p.explanation.summary if p.explanation else f"Routed: {p.mode}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            reason = p.explanation.summary if p.explanation else f"Routed: {p.mode}"
+            state = _mode_to_job_state(p.mode)
+            if state and self.context.lifecycle.get(opp.job_id):
+                self.context.lifecycle.transition(
+                    opp.job_id, state, reason=reason,
+                )
 
-        # Handle deferred opportunities — the ApplicationScheduler will
-        # emit JobDeferred events when it executes the plan. We only record
-        # them in rejected_jobs here for artifact tracking.
+        # Handle deferred opportunities in the lifecycle store.
         for d in plan.deferred:
             opp = d.opportunity
-            self.context.rejected_jobs.append({
-                "job_id": opp.job_id,
-                "title": opp.title,
-                "company": opp.company,
-                "stage": "Planning",
-                "code": "DEFERRED_QUOTA",
-                "reason": d.explanation.deferred_reason if d.explanation else "Deferred",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            reason = d.explanation.deferred_reason if d.explanation else "Deferred"
+            self.exec_context.defer(
+                opp, reason=reason,
+                explanation=d.explanation.summary if d.explanation else "",
+                lifecycle=self.context.lifecycle,
+            )
 
-        # Record SELECTED jobs in exec_context and score_map
+        # Record SELECTED jobs in exec_context (lifecycle transitions via exec_context)
         for j in selected_jobs:
             job_id = str(j.job_id)
             self.exec_context.select(
-                j, {"cause": "Planned via V2 orchestrator"}
+                j, {"cause": "Planned via V2 orchestrator"},
+                lifecycle=self.context.lifecycle,
             )
             self.exec_context.complete(j)
             if sm_job := self.context.score_map.get(job_id):
@@ -1048,16 +1091,16 @@ class CareerWorkflowPipeline:
 
         self.exec_context.finish_stage(selected_jobs)
 
-        print(f"FINAL APPLICATION QUEUE: {len(selected_jobs)} "
-              f"(AUTO={len(auto_job_ids)}, EXTERNAL={len(external_job_ids)}, "
-              f"DEFERRED={len(plan.deferred)})")
+        auto_count = len(auto_job_ids)
+        external_count = len(external_job_ids)
+        deferred_count = len(plan.deferred)
+        self._safe_log(f"FINAL APPLICATION QUEUE: {len(selected_jobs)} "
+              f"(AUTO={auto_count}, EXTERNAL={external_count}, "
+              f"DEFERRED={deferred_count})")
 
         # ---------------------------------------------------------------
         # Stage results for artifacts
         # ---------------------------------------------------------------
-        auto_count = len(auto_job_ids)
-        external_count = len(external_job_ids)
-        deferred_count = len(plan.deferred)
         expired_count = plan.summary.expired
         rejected_count = plan.summary.rejected
 
@@ -1080,9 +1123,16 @@ class CareerWorkflowPipeline:
             "selection.json",
             {
                 **self.context.stage_results["selection"],
-                "rejected_jobs": [
-                    j for j in self.context.rejected_jobs
-                    if j.get("stage") in ("Planning", "Selection")
+                "deferred": [
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.DEFERRED)
+                ],
+                "routed": [
+                    r.to_dict() for r in self.context.lifecycle.find_by_states({
+                        JobState.ROUTED_MANUAL,
+                        JobState.ROUTED_ATS,
+                        JobState.ROUTED_EXTERNAL,
+                        JobState.ROUTED_UNSUPPORTED,
+                    })
                 ],
             },
         )
@@ -1129,6 +1179,11 @@ class CareerWorkflowPipeline:
             }
             self._write_artifact("application.json", self.context.stage_results["application"])
             return
+
+        # Start the Application stage so all scheduler events (JobApplied,
+        # JobRouted, JobDeferred, JobFailed) carry stage="Application"
+        # instead of "Unknown".
+        self.exec_context.start_stage("Application", list(plan.planned))
 
         ledger = self.context.ledger
         ledger_run_id = ledger.start_run(dry_run=self.context.dry_run)
@@ -1242,6 +1297,7 @@ class CareerWorkflowPipeline:
             "failed": len(summary.errors),
             "manual_review": summary.manual_review,
             "deferred": summary.deferred,
+            "routed": summary.external_queued + summary.manual_review + summary.ats_queued,
             "auto_applied": summary.auto_applied,
             "external_queued": summary.external_queued,
         }
@@ -1256,8 +1312,10 @@ class CareerWorkflowPipeline:
             {
                 **self.context.stage_results["application"],
                 "rejected_jobs": [
-                    j for j in self.context.rejected_jobs
-                    if j.get("stage") == "Application"
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.APPLICATION_FAILED)
+                ]
+                + [
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.ALREADY_APPLIED)
                 ],
             },
         )
@@ -1329,9 +1387,8 @@ class CareerWorkflowPipeline:
 
     def report(self) -> None:
         rows = self.context.ledger.analytics_rows()
-        # submitted_this_run comes from the metrics projection (event-sourced counters),
-        # NOT from PipelineRunMetrics which tracks different concepts.
-        run_submitted = self.metrics_proj.get_metrics().get("submitted", 0)
+        # submitted_this_run comes from the lifecycle store — the single source of truth.
+        run_submitted = self.context.lifecycle.count_by_state(JobState.SUBMITTED)
         snapshot = build_report_snapshot(rows, submitted_this_run=run_submitted)
 
         self.context.report_snapshot = snapshot
@@ -1477,7 +1534,6 @@ class CareerWorkflowPipeline:
             timezone.utc,
         )
 
-        self.metrics_proj.flush(self.run_dir)
         self.explorer_proj.flush(self.run_dir)
         self.trace_proj.flush(self.run_dir)
         
@@ -1502,9 +1558,16 @@ class CareerWorkflowPipeline:
         except Exception as e:
             print(f"Warning: Failed to render Pipeline Explorer visual reports: {e}")
 
-
-        counts = self.metrics_proj.get_metrics()
-        # c_res was previously read here but is no longer needed
+        # Write lifecycle-derived metrics artifact
+        lifecycle_metrics = self.context.lifecycle.compute_metrics()
+        self._write_artifact("metrics.json", lifecycle_metrics)
+        
+        # Write lifecycle validation
+        lifecycle_diagnostics = self.context.lifecycle.validate()
+        if lifecycle_diagnostics:
+            print(f"\n[LIFECYCLE VALIDATION] {len(lifecycle_diagnostics)} issue(s):")
+            for d in lifecycle_diagnostics:
+                print(f"  - {d}")
         
         cache_metrics = {}
         if self.context.cache_manager:
@@ -1512,41 +1575,20 @@ class CareerWorkflowPipeline:
             
         # Capture memory peak
         usage = resource.getrusage(resource.RUSAGE_SELF)
-        # On macOS, ru_maxrss is in bytes, on Linux it is in kilobytes
         if sys.platform == "darwin":
             peak_mb = usage.ru_maxrss / (1024 * 1024)
         else:
             peak_mb = usage.ru_maxrss / 1024
-        self.context.metrics.memory_peak_mb = round(peak_mb, 2)
+        self.context.timing.memory_peak_mb = round(peak_mb, 2)
         
         # Capture LLM cost
         if hasattr(self, 'classifier') and hasattr(self.classifier, 'inference_service'):
-            self.context.metrics.llm_cost_usd = round(self.classifier.inference_service.telemetry.cost_usd, 4)
+            self.context.timing.llm_cost_usd = round(self.classifier.inference_service.telemetry.cost_usd, 4)
 
-        return PipelineResult(
+        return PipelineResult.from_lifecycle(
             run_id=self.context.run_id,
             status=self.status.value,
-            acquired=counts["acquired"],
-            summary_ranked=counts.get("prefiltered", 0),
-            detailed=counts.get("detail_candidates", 0),
-            scored=counts.get("classified", 0),
-            ranked=counts.get("classified", 0),
-            selected=counts["selected"],
-            attempted=counts["attempted"],
-            submitted=counts["submitted"],
-            already_applied=counts["already_applied"],
-            skipped_local=counts["skipped_local"],
-            native_applied=counts["native_applied"],
-            ats_queue=counts["ats_queue"],
-            generic_queue=counts["generic_queue"],
-            manual_queue=counts["manual_queue"],
-            unsupported=counts["unsupported"],
-            policy_rejected=counts["policy_rejected"],
-            dry_run_skipped=counts["dry_run_skipped"],
-            run_limit_reached=counts["run_limit_reached"],
-            manual_review=counts["manual_review"],
-            deferred=counts.get("deferred", 0),
-            pre_app_rejected=counts["pre_app_rejected"],
+            lifecycle=self.context.lifecycle,
             started_at=self.context.started_at,
             completed_at=completed_at,
             cache_metrics=cache_metrics,
@@ -1557,43 +1599,42 @@ class CareerWorkflowPipeline:
         )
 
     def _generate_dedicated_artifacts(self, result: PipelineResult) -> None:
-        self._write_artifact("rejected_jobs.json", self.context.rejected_jobs)
+        # ── All artifacts are projections of the canonical lifecycle store ──
+        # Every artifact is generated by querying lifecycle.find() for the
+        # relevant state.  No manual accumulation.  No independent lists.
 
-        selected = []
-        for j in self.context.selected_jobs:
-            if sm_job := self.context.score_map.get(str(j.job_id)):
-                selected.append(sm_job)
-        self._write_artifact("selected_jobs.json", selected)
+        artifacts = self.context.lifecycle.compute_artifacts()
+        for name, jobs in artifacts.items():
+            self._write_artifact(f"{name}.json", jobs)
 
-        manual = [
-            r
-            for r in self.context.rejected_jobs
-            if r.get("code") in {"MANUAL_REVIEW", "EXTERNAL_REJECTION"}
-        ]
-        self._write_artifact("manual_review.json", manual)
-        self._write_artifact("external_apply.json", manual)
+        # Also write selected_jobs using the actual job objects for metadata
+        selection_ok = self.stage_statuses.get("selection") == StageStatus.SUCCESS
+        application_ok = self.stage_statuses.get("application") == StageStatus.SUCCESS
 
-        already = [
-            r for r in self.context.rejected_jobs if r.get("code") == "ALREADY_APPLIED"
-        ]
-        self._write_artifact("already_applied.json", already)
+        if selection_ok:
+            selected = []
+            for j in self.context.selected_jobs:
+                if sm_job := self.context.score_map.get(str(j.job_id)):
+                    selected.append(sm_job)
+            self._write_artifact("selected_jobs.json", selected)
 
-        applied = []
-        if self.context.ledger:
-            rows = self.context.ledger.analytics_rows()
-            for row in rows:
-                if (
-                    row.get("run_id") == self.context.ledger_run_id
-                    and row.get("status") == "applied"
-                ):
-                    applied.append(
-                        {
-                            "job_id": row.get("job_id"),
-                            "status": "SUBMITTED",
-                            "application_time": row.get("timestamp"),
-                        }
-                    )
-        self._write_artifact("applied_jobs.json", applied)
+        if selection_ok and application_ok:
+            applied = []
+            if self.context.ledger:
+                rows = self.context.ledger.analytics_rows()
+                for row in rows:
+                    if (
+                        row.get("run_id") == self.context.ledger_run_id
+                        and row.get("status") == "applied"
+                    ):
+                        applied.append(
+                            {
+                                "job_id": row.get("job_id"),
+                                "status": "SUBMITTED",
+                                "application_time": row.get("timestamp"),
+                            }
+                        )
+            self._write_artifact("applied_jobs.json", applied)
 
     """
     Artifact validation intentionally checks only terminal accounting.
@@ -1609,58 +1650,67 @@ class CareerWorkflowPipeline:
 
     def _validate_artifacts(self, result: PipelineResult) -> None:
         """
-        Validate terminal accounting invariants for the V2 orchestrator.
+        Validate lifecycle invariants from the canonical JobLifecycleStore.
 
-        Every selected opportunity must reach exactly one terminal state:
-
-            selected == submitted + failed
-            manual_queue == external_planned_count
-            deferred == plan_deferred_count
+        Only validates stages that completed successfully.
+        Every metric is DERIVED from the lifecycle.  No cross-system comparison.
         """
+        def _stage_succeeded(name: str) -> bool:
+            return self.stage_statuses.get(name) == StageStatus.SUCCESS
+
         diagnostics = []
 
-        # V2 accounting: selected (AUTO) must equal submitted + failed
-        auto_breakdown = result.submitted + result.failed + result.already_applied
-        if result.selected != auto_breakdown:
-            diagnostics.append(
-                f"V2 AUTO accounting mismatch: selected({result.selected}) != "
-                f"submitted+failed({auto_breakdown})"
-            )
+        selection_ok = _stage_succeeded("selection")
+        application_ok = _stage_succeeded("application")
 
-        # V2 accounting: deferred should match plan deferred count
-        plan = getattr(self.context, "application_plan", None)
-        if plan is not None:
-            planned_deferred = len(plan.deferred)
-            if result.deferred != planned_deferred:
+        # ── Lifecycle invariants (always valid, regardless of stage success) ──
+        lifecycle_diagnostics = self.context.lifecycle.validate()
+        diagnostics.extend(lifecycle_diagnostics)
+
+        if selection_ok:
+            # V2 accounting: selected (AUTO) must equal submitted + application_failed + already_applied
+            # Both selected and submitted/application_failed/already_applied are DERIVED from
+            # the same JobLifecycleStore — they MUST match by construction.
+            auto_breakdown = result.submitted + result.application_failed + result.already_applied
+            # V2 accounting: selected (historical) must equal terminal outcomes
+            # plus jobs still in SELECTED_AUTO (not yet applied).
+            stuck_in_selected = self.context.lifecycle.count_by_state(JobState.SELECTED_AUTO)
+            if result.selected != auto_breakdown + stuck_in_selected:
                 diagnostics.append(
-                    f"V2 deferred accounting mismatch: result.deferred({result.deferred}) != "
-                    f"plan.deferred({planned_deferred})"
+                    f"AUTO accounting mismatch: selected({result.selected}) != "
+                    f"submitted+application_failed+already_applied+stuck_selected"
+                    f"({auto_breakdown}+{stuck_in_selected}={(auto_breakdown + stuck_in_selected)})"
+                )
+            # At run end, no jobs should remain in SELECTED_AUTO,
+            # unless the pipeline didn't attempt any applications
+            # (e.g. test mode, dry run with no planned jobs).
+            if stuck_in_selected > 0 and application_ok and auto_breakdown > 0:
+                diagnostics.append(
+                    f"Stuck jobs in SELECTED_AUTO: {stuck_in_selected} jobs were "
+                    f"selected but never reached a terminal outcome"
                 )
 
-        # Cross-validation: rejected_jobs artifact vs event counts
-        pre_app_rejections_in_artifact = [
-            j for j in self.context.rejected_jobs 
-            if j.get("stage") not in ("Application", "Planning")
-        ]
-        
-        pre_app_rejections_from_events = result.pre_app_rejected
-        if len(pre_app_rejections_in_artifact) != pre_app_rejections_from_events:
-            diagnostics.append(
-                f"Artifact mismatch: Found {len(pre_app_rejections_in_artifact)} pre-application rejections "
-                f"in rejected_jobs, but expected {pre_app_rejections_from_events} from events."
-            )
+            # V2 accounting: deferred should match plan deferred count
+            plan = getattr(self.context, "application_plan", None)
+            if plan is not None:
+                planned_deferred = len(plan.deferred)
+                if result.deferred != planned_deferred:
+                    diagnostics.append(
+                        f"Deferred accounting mismatch: result.deferred({result.deferred}) != "
+                        f"plan.deferred({planned_deferred})"
+                    )
 
         if diagnostics:
-            print("\n[DIAGNOSTICS] Pipeline artifact validation issues found:")
+            self._safe_log("\n[VALIDATION] Lifecycle validation issues found:")
             for item in diagnostics:
-                print(f"  - {item}")
-            raise RuntimeError("Terminal Accounting Validation Failed:\n" + "\n".join(diagnostics))
+                self._safe_log(f"  - {item}")
+            raise RuntimeError("Lifecycle Validation Failed:\n" + "\n".join(diagnostics))
         else:
-            print("\n[DIAGNOSTICS] Artifact accounting validated successfully.")
+            self._safe_log("\n[VALIDATION] Lifecycle validated successfully.")
 
     def print_observability_report(self, result: PipelineResult) -> None:
-        projection = self.metrics_proj.get_metrics()
-        runtime = self.context.metrics
+        projection = self.context.lifecycle.compute_metrics()
+        runtime = self.context.timing
         
         # Get unified metrics from ProviderManager
         if hasattr(self, "inference_service") and self.inference_service:

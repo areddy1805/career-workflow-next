@@ -2,7 +2,8 @@
 
 from datetime import datetime, timezone, timedelta
 
-from src.orchestration.metrics import PipelineRunMetrics
+from src.orchestration.metrics import PipelineTiming
+from src.orchestration.job_lifecycle import JobLifecycleStore, JobState
 from src.orchestration.planner_report import build_planner_report
 from src.orchestration.capacity import CapacityModel, ProviderCapacity
 from src.orchestration.capacity_planner import (
@@ -65,45 +66,53 @@ def _make_plan(planned_count=0, deferred_count=0):
     )
 
 
-class TestPipelineRunMetricsExtensions:
-    """Verify the new metrics fields."""
+class TestPipelineTiming:
+    """Verify PipelineTiming (replaces PipelineRunMetrics for perf measurements)."""
 
     def test_default_values(self):
-        m = PipelineRunMetrics()
-        assert m.deferred_count == 0
-        assert m.quota_used == 0
-        assert m.quota_remaining == 0
-        assert m.pool_size == 0
-        assert m.deferred_avg_score == 0.0
-        assert m.deferred_highest_score == 0.0
-        assert m.quota_exhausted_gracefully is False
+        t = PipelineTiming()
+        assert t.total_runtime == 0.0
+        assert t.network_time == 0.0
+        assert t.llm_time == 0.0
+        assert t.memory_peak_mb == 0.0
+        assert t.stage_timings == {}
 
-    def test_update_from_plan_with_deferred(self):
-        m = PipelineRunMetrics()
-        plan = _make_plan(planned_count=2, deferred_count=3)
-        m.update_from_plan(plan)
-        assert m.deferred_count == 3
-        assert m.quota_used == 2
-        assert m.pool_size == 5
-        assert m.deferred_highest_score == 72.0  # d2 has score 72
-        assert m.quota_exhausted_gracefully is True
+    def test_stage_timing_recorded(self):
+        t = PipelineTiming()
+        t.stage_timings["acquire"] = 1.5
+        t.total_runtime = 10.0
+        assert t.stage_timings["acquire"] == 1.5
+        assert t.total_runtime == 10.0
 
-    def test_update_from_plan_no_deferred(self):
-        m = PipelineRunMetrics()
-        plan = _make_plan(planned_count=5, deferred_count=0)
-        m.update_from_plan(plan)
-        assert m.deferred_count == 0
-        assert m.quota_used == 5
-        assert m.pool_size == 5
-        assert m.deferred_avg_score == 0.0
-        assert m.quota_exhausted_gracefully is False
 
-    def test_update_from_plan_empty(self):
-        m = PipelineRunMetrics()
-        plan = _make_plan(planned_count=0, deferred_count=0)
-        m.update_from_plan(plan)
-        assert m.deferred_count == 0
-        assert m.pool_size == 0
+class TestMetricsFromLifecycle:
+    """Verify metrics are derived from the JobLifecycleStore."""
+
+    def test_compute_metrics(self):
+        store = JobLifecycleStore(":memory:")
+        store.create("j1", title="Engineer", company="Acme")
+        store.create("j2", title="Manager", company="Beta")
+        store.transition("j2", JobState.PRE_APPLICATION_REJECTED, reason="test")
+
+        metrics = store.compute_metrics()
+        assert metrics["acquired"] == 2
+        assert metrics["pre_app_rejected"] == 1
+        assert metrics["submitted"] == 0
+
+    def test_selected_invariant(self):
+        store = JobLifecycleStore(":memory:")
+        store.create("j1", title="Engineer")
+        store.transition("j1", JobState.ELIGIBLE, reason="ok")
+        store.transition("j1", JobState.SELECTED_AUTO, reason="selected")
+        store.transition("j1", JobState.APPLYING, reason="applying")
+        store.transition("j1", JobState.SUBMITTED, reason="done")
+
+        metrics = store.compute_metrics()
+        # selected_total counts jobs that ever went through SELECTED_AUTO
+        assert metrics["selected"] == 1
+        assert metrics["submitted"] == 1
+        assert metrics["application_failed"] == 0
+        assert metrics["already_applied"] == 0
 
 
 class TestPlannerDecisionReport:

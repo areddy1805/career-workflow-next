@@ -96,7 +96,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.GREENHOUSE
 
     def test_external_ats(self, basic_job):
-        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL_BROWSER)
         basic_job.apply_url = "https://jobs.lever.co/techcorp/123"
 
         result = ApplicationRouter.route(basic_job, caps)
@@ -104,7 +104,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.LEVER
 
     def test_generic_career_site(self, basic_job):
-        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL_BROWSER)
         basic_job.apply_url = "https://techcorp.com/careers/123"
 
         result = ApplicationRouter.route(basic_job, caps)
@@ -112,7 +112,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.UNKNOWN
 
     def test_manual_review_unknown_site(self, basic_job):
-        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL_BROWSER)
         basic_job.apply_url = (
             "https://techcorp.com/apply/123"  # missing "careers" or "jobs"
         )
@@ -122,7 +122,7 @@ class TestApplicationRouter:
         assert result.ats_type == ATSType.UNKNOWN
 
     def test_manual_review_no_url(self, basic_job):
-        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        caps = ApplicationCapabilities(mode=ApplicationMode.EXTERNAL_BROWSER)
         basic_job.apply_url = None
 
         result = ApplicationRouter.route(basic_job, caps)

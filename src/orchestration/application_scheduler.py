@@ -206,6 +206,12 @@ class ApplicationScheduler:
                 strategy="MANUAL_QUEUE",
                 reason=planned.explanation.summary if planned.explanation else "External apply",
             )
+        if self._ledger:
+            self._ledger.record(
+                planned.opportunity,
+                "EXTERNAL_QUEUED",
+                meta={"mode": "EXTERNAL_BROWSER", "reason": planned.explanation.summary if planned.explanation else "External apply"},
+            )
 
     def _execute_manual_review(self, planned: PlannedApplication, run_id: str) -> None:
         """Execute a MANUAL_REVIEW-mode application (enqueue for manual review)."""
