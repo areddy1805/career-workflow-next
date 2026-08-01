@@ -487,11 +487,11 @@ class JobLifecycleStore:
             "prefiltered": self.count_by_states(classified_states),
             "pre_app_rejected": self.count_by_state(JobState.PRE_APPLICATION_REJECTED),
             "selected": selected_total,
+            "routed": self.count_by_states(QUEUED_STATES),
             "routed_manual": self.count_by_state(JobState.ROUTED_MANUAL),
             "routed_ats": self.count_by_state(JobState.ROUTED_ATS),
             "routed_external": self.count_by_state(JobState.ROUTED_EXTERNAL),
             "routed_unsupported": self.count_by_state(JobState.ROUTED_UNSUPPORTED),
-            "routed": self.count_by_states(QUEUED_STATES),
             "deferred": self.count_by_state(JobState.DEFERRED),
             "submitted": self.count_by_state(JobState.SUBMITTED),
             "application_failed": self.count_by_state(JobState.APPLICATION_FAILED),
@@ -501,6 +501,13 @@ class JobLifecycleStore:
 
     def compute_artifacts(self) -> dict[str, list[dict[str, Any]]]:
         def _to_artifact(record: JobLifecycleRecord) -> dict[str, Any]:
+            reason = record.transitions[-1].reason if record.transitions else ""
+            code = ""
+            for t in reversed(record.transitions):
+                if t.to_state == record.current_state:
+                    code = t.metadata.get("code", "")
+                    reason = t.reason or reason
+                    break
             return {
                 "job_id": record.job_id,
                 "title": record.title,
@@ -508,10 +515,8 @@ class JobLifecycleStore:
                 "provider_id": record.provider_id,
                 "score": record.score,
                 "state": record.current_state.value,
-                "reason": (
-                    record.transitions[-1].reason
-                    if record.transitions else ""
-                ),
+                "reason_code": code,
+                "explanation": reason,
             }
 
         return {

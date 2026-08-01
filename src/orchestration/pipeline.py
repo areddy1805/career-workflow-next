@@ -1242,12 +1242,21 @@ class CareerWorkflowPipeline:
         )
 
         def _enqueue_external(opp: ApplicationOpportunity, **kwargs: Any) -> None:
-            manual_action_queue.enqueue_external_apply(
-                job=opp,
-                score=kwargs.get("score", int(opp.score)),
-                reason=kwargs.get("reason", "External apply"),
-                run_id=kwargs.get("run_id", self.context.run_id),
-            )
+            """Enqueue a non-AUTO job to the correct queue based on its application mode."""
+            from src.application.capability import ApplicationMode
+            app_mode = getattr(opp, "application_mode", None)
+            score = kwargs.get("score", int(opp.score))
+            reason = kwargs.get("reason", "External apply")
+            run_id = kwargs.get("run_id", self.context.run_id)
+
+            if app_mode == ApplicationMode.MANUAL_REVIEW:
+                manual_action_queue.enqueue_manual_review(
+                    job=opp, score=score, reason=reason, run_id=run_id,
+                )
+            else:
+                manual_action_queue.enqueue_external_apply(
+                    job=opp, score=score, reason=reason, run_id=run_id,
+                )
 
         # ---------------------------------------------------------------
         # Build OpportunityRepository and ApplicationScheduler
@@ -1283,26 +1292,32 @@ class CareerWorkflowPipeline:
         self.context.stage_results["application"] = {
             "total_candidates": len(plan.planned) + len(plan.deferred),
             "attempted": attempted,
+            # Auto-apply outcomes
             "submitted": summary.auto_applied,
             "already_applied": 0,
-            "skipped_local": 0,
+            "failed": len(summary.errors),
             "native_applied": summary.auto_applied,
+            # Queue routing (successful scheduling decisions)
+            "manual_queue": summary.manual_review,
             "ats_queue": summary.ats_queued,
-            "generic_queue": 0,
-            "manual_queue": summary.external_queued + summary.manual_review,
+            "external_queue": summary.external_queued,
+            "routed": summary.external_queued + summary.manual_review + summary.ats_queued,
+            "manual_review": summary.manual_review,
+            "external_queued": summary.external_queued,
+            # Other
+            "deferred": summary.deferred,
+            "skipped_local": 0,
             "unsupported": 0,
             "policy_rejected": 0,
             "dry_run_skipped": 0,
             "run_limit_reached": 0,
-            "failed": len(summary.errors),
-            "manual_review": summary.manual_review,
-            "deferred": summary.deferred,
-            "routed": summary.external_queued + summary.manual_review + summary.ats_queued,
+            "generic_queue": 0,
             "auto_applied": summary.auto_applied,
-            "external_queued": summary.external_queued,
         }
 
-        print(f"APPLICATION SUMMARY: {summary.auto_applied} applied, "
+        print(f"APPLICATION SUMMARY: {summary.auto_applied} submitted, "
+              f"{summary.manual_review} manual, "
+              f"{summary.ats_queued} ATS, "
               f"{summary.external_queued} external, "
               f"{summary.deferred} deferred, "
               f"{len(summary.errors)} errors")
@@ -1606,6 +1621,27 @@ class CareerWorkflowPipeline:
         artifacts = self.context.lifecycle.compute_artifacts()
         for name, jobs in artifacts.items():
             self._write_artifact(f"{name}.json", jobs)
+
+        # Generate pre_application_rejections.json with full rejection details
+        lifecycle = self.context.lifecycle
+        pre_app_records = lifecycle.find(JobState.PRE_APPLICATION_REJECTED)
+        rejection_details = []
+        for rec in pre_app_records:
+            code = "UNKNOWN"
+            explanation = ""
+            for t in reversed(rec.transitions):
+                if t.to_state == JobState.PRE_APPLICATION_REJECTED:
+                    code = t.metadata.get("code", "UNKNOWN")
+                    explanation = t.reason or ""
+                    break
+            rejection_details.append({
+                "job_id": rec.job_id,
+                "title": rec.title,
+                "company": rec.company,
+                "reason_code": code,
+                "explanation": explanation,
+            })
+        self._write_artifact("pre_application_rejections.json", rejection_details)
 
         # Also write selected_jobs using the actual job objects for metadata
         selection_ok = self.stage_statuses.get("selection") == StageStatus.SUCCESS
