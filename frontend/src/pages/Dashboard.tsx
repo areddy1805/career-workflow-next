@@ -227,6 +227,7 @@ export default function Dashboard() {
   if (isLoading) return <OverviewSkeleton />;
 
   const {
+    lifecycle_metrics,
     summary,
     lifecycle: rawLifecycle,
     latest_run,
@@ -234,14 +235,31 @@ export default function Dashboard() {
     upcoming_executions,
   } = dashboard ?? {};
 
-  const totalJobs = summary?.total_jobs ?? 0;
-  const totalApplied = summary?.total_applied ?? 0;
-  const applicationRate = totalJobs > 0 ? ((totalApplied / totalJobs) * 100).toFixed(1) : '0';
+  // Prefer lifecycle-derived metrics (canonical source of truth)
+  const lc = lifecycle_metrics ?? {};
+  const totalJobs = lc.acquired ?? summary?.total_jobs ?? 0;
+  const totalSubmitted = lc.submitted ?? summary?.total_applied ?? 0;
+  const totalRouted = lc.routed ?? 0;
+  const latestRun = latest_run?.run_id ? <RelativeTime date={latest_run.started_at} /> : 'None';
 
-  const lifecycle = (rawLifecycle ?? []).map((d: any) => ({
-    ...d,
-    lifecycle_stage: LIFECYCLE_LABELS[d.lifecycle_stage] ?? d.lifecycle_stage,
-  })).filter((d: any) => d.count > 0);
+  // Build lifecycle distribution from canonical lifecycle metrics
+  const PIPELINE_LIFECYCLE = [
+    { lifecycle_stage: 'Acquired', count: lc.acquired ?? 0 },
+    { lifecycle_stage: 'Pre-App Rejected', count: lc.pre_app_rejected ?? 0 },
+    { lifecycle_stage: 'Selected', count: lc.selected ?? 0 },
+    { lifecycle_stage: 'Routed', count: lc.routed ?? 0 },
+    { lifecycle_stage: 'Submitted', count: lc.submitted ?? 0 },
+    { lifecycle_stage: 'Failed', count: lc.application_failed ?? 0 },
+    { lifecycle_stage: 'Deferred', count: lc.deferred ?? 0 },
+  ].filter(d => d.count > 0);
+
+  // Fall back to legacy lifecycle distribution if no metrics available
+  const lifecycle = !lc.acquired && (rawLifecycle ?? []).length > 0
+    ? (rawLifecycle ?? []).map((d: any) => ({
+        ...d,
+        lifecycle_stage: LIFECYCLE_LABELS[d.lifecycle_stage] ?? d.lifecycle_stage,
+      })).filter((d: any) => d.count > 0)
+    : PIPELINE_LIFECYCLE;
 
   const sysStatus = system_health?.status === 'HEALTHY' ? 'success' : system_health?.status === 'WARNING' ? 'warning' : 'error';
 
@@ -263,25 +281,25 @@ export default function Dashboard() {
 
       <MetricGrid className="mb-6">
         <MetricCard
-          title="Jobs Discovered"
+          title="Jobs Acquired"
           value={totalJobs.toLocaleString()}
           icon={<Briefcase className="w-4 h-4" />}
           className="cursor-pointer hover:border-foreground/30 transition-colors"
         />
         <MetricCard
-          title="Total Applied"
-          value={totalApplied.toLocaleString()}
+          title="Submitted"
+          value={totalSubmitted.toLocaleString()}
           icon={<CheckCircle2 className="w-4 h-4" />}
           className="cursor-pointer hover:border-foreground/30 transition-colors"
         />
         <MetricCard
-          title="Conversion Rate"
-          value={`${applicationRate}%`}
+          title="Routed"
+          value={totalRouted.toLocaleString()}
           icon={<TrendingUp className="w-4 h-4" />}
         />
         <MetricCard
           title="Latest Run"
-          value={latest_run?.run_id ? <RelativeTime date={latest_run.started_at} /> : 'None'}
+          value={latestRun}
           icon={<Play className="w-4 h-4" />}
           className="cursor-pointer hover:border-foreground/30 transition-colors"
         />

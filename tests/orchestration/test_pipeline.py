@@ -185,23 +185,19 @@ def test_preflight_artifact_is_part_of_complete_stage_artifacts(tmp_path, monkey
 def test_pipeline_result_exposes_complete_application_accounting(tmp_path):
     pipeline = RecordingPipeline(artifacts_root=tmp_path)
     result = pipeline.run().to_dict()
+    # All metrics are now derived from the canonical JobLifecycleStore
     for key in (
-        "attempted",
+        "acquired",
+        "classified",
+        "pre_app_rejected",
+        "selected",
+        "routed",
+        "deferred",
         "submitted",
+        "application_failed",
         "already_applied",
-        "skipped_local",
-        "native_applied",
-        "ats_queue",
-        "generic_queue",
-        "manual_queue",
-        "unsupported",
-        "policy_rejected",
-        "dry_run_skipped",
-        "run_limit_reached",
-        "failed",
-        "manual_review",
     ):
-        assert key in result
+        assert key in result, f"Missing canonical metric: {key}"
 
 
 def test_full_pipeline_persists_all_artifacts(tmp_path):

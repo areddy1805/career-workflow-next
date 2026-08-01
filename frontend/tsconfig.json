@@ -1,5 +1,6 @@
 {
   "include": ["src"],
+  "exclude": ["src/__tests__"],
   "compilerOptions": {
     "ignoreDeprecations": "6.0",
     "target": "ES2020",

@@ -356,8 +356,8 @@ class JobSpyProvider:
 
     @property
     def application_capabilities(self) -> ApplicationCapabilities:
-        """JobSpy provides external apply URLs for manual queue routing."""
-        return ApplicationCapabilities(mode=ApplicationMode.EXTERNAL)
+        """JobSpy provides external-apply URLs for manual queue routing."""
+        return ApplicationCapabilities(mode=ApplicationMode.MANUAL_REVIEW)
 
     # ------------------------------------------------------------------
     # Public interface

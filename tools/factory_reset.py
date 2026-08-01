@@ -43,6 +43,7 @@ FILES_TO_DELETE = [
     "data/job_decision_ledger.db*",
     "data/workflow_queue.db*",
     "data/manual_jobs.db*",
+    "data/job_lifecycle.db*",
     # Naukri parameter database
     "nkparams.db",
     # Caches

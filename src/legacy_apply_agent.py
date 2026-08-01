@@ -42,7 +42,6 @@ from src.application.response_interpreter import (
     interpret_application_response,
 )
 from src.application.response_store import save_response
-from src.orchestration.metrics import PipelineRunMetrics
 from src.client.job_classifier import JobFilterPipeline2
 from src.client.job_client import NaukriJobClient
 from src.client.naukri_client import NaukriLoginClient
@@ -1444,7 +1443,6 @@ def run_application_batch(
     sleep_fn=time.sleep,
     ledger: ApplicationLedger | None = None,
     run_id: str = "",
-    metrics: PipelineRunMetrics | None = None,
     rejected_jobs: list | None = None,
     exec_context=None,
 ) -> ApplicationRunSummary:
@@ -1675,7 +1673,11 @@ def run_application_batch(
             # Proceed to native application execution below
             pass
 
-        elif resolution.mode == ApplicationMode.EXTERNAL:
+        elif resolution.mode in (
+            ApplicationMode.EXTERNAL_BROWSER,
+            ApplicationMode.MANUAL_REVIEW,
+            ApplicationMode.ATS,
+        ):
             manual_queue_count += 1
 
             _record_app_reject(
@@ -1753,9 +1755,6 @@ def run_application_batch(
                 questionnaire_resolver=questionnaire_resolver,
                 resume_path=meta.get("resume_path"),
             )
-            duration = time.perf_counter() - start_time
-            if metrics:
-                metrics.add_application_time(duration)
 
             if outcome.status == ApplicationStatus.ALREADY_APPLIED:
                 logger.info(

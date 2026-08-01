@@ -123,12 +123,16 @@ def _ensure_api_contract(job: dict[str, Any]) -> None:
 
 @router.get("/dashboard")
 def get_dashboard() -> dict[str, Any]:
+    from control_center.data import lifecycle_summary, lifecycle_records_list
     summary = application_summary()
     lifecycle = df_to_dict(lifecycle_distribution())
     latest = latest_run()
     health = system_health()
     upcoming = upcoming_executions()
     companies = top_companies()
+
+    # Lifecycle-derived metrics (canonical source of truth)
+    lc_metrics = lifecycle_summary()
 
     # Get latest provider health from acquisition.json
     provider_health = {}
@@ -149,6 +153,7 @@ def get_dashboard() -> dict[str, Any]:
 
     return {
         "summary": summary,
+        "lifecycle_metrics": lc_metrics,  # canonical lifecycle-derived counts
         "lifecycle": lifecycle,
         "latest_run": latest,
         "system_health": health,

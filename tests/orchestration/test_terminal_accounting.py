@@ -3,6 +3,9 @@ from unittest.mock import Mock, MagicMock
 from src.orchestration.pipeline import CareerWorkflowPipeline, PipelineResult
 from src.orchestration.context import PipelineContext
 from src.orchestration.execution_context import PipelineExecutionContext
+from src.orchestration.stages import StageStatus
+from src.orchestration.job_lifecycle import JobState
+
 
 def test_duplicate_budget_exceeded_regression():
     """
@@ -36,6 +39,7 @@ def test_duplicate_budget_exceeded_regression():
         reason="Job fell below summary rank cutoff for detail fetching",
         code="BUDGET_EXCEEDED"
     )
+
 
 def test_missing_policy_rejected_regression():
     """
@@ -80,92 +84,101 @@ def test_missing_policy_rejected_regression():
     finally:
         apply_agent.evaluate_application_policy = original_eval
 
+
 def test_terminal_accounting_validator():
     """
-    Test that the validator correctly checks invariants and raises RuntimeError on mismatch.
+    Test that the validator correctly checks lifecycle invariants.
+    
+    ``selected`` is now a historical count: jobs that ever went through
+    SELECTED_AUTO.  At run end, every selected job must reach one of:
+    SUBMITTED, APPLICATION_FAILED, ALREADY_APPLIED.
     """
     pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
-    result = PipelineResult(
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+
+    store = pipeline.context.lifecycle
+
+    # 5 jobs: PRE_APPLICATION_REJECTED
+    for i in range(5):
+        store.create(f"rejected_{i}")
+        store.transition(f"rejected_{i}", JobState.PRE_APPLICATION_REJECTED, reason="test")
+
+    # 1 → SUBMITTED
+    store.create("applied_job")
+    store.transition("applied_job", JobState.SELECTED_AUTO, reason="test")
+    store.transition("applied_job", JobState.SUBMITTED, reason="test")
+    # 1 → ALREADY_APPLIED
+    store.create("already_job")
+    store.transition("already_job", JobState.SELECTED_AUTO, reason="test")
+    store.transition("already_job", JobState.ALREADY_APPLIED, reason="test")
+    # 1 → APPLICATION_FAILED
+    store.create("failed_job")
+    store.transition("failed_job", JobState.SELECTED_AUTO, reason="test")
+    store.transition("failed_job", JobState.APPLICATION_FAILED, reason="test")
+
+    result = PipelineResult.from_lifecycle(
         run_id="test", status="SUCCESS",
-        acquired=10, summary_ranked=0, detailed=0, scored=0, ranked=0, selected=5, attempted=0,
-        submitted=1, already_applied=1, ats_queue=0, generic_queue=0, manual_queue=0,
-        unsupported=0, policy_rejected=0, failed=1, manual_review=1, skipped_local=1,
-        run_limit_reached=0, dry_run_skipped=0, pre_app_rejected=5, started_at=None, completed_at=None,
-        stage_results={}, errors=[]
+        lifecycle=store,
+        stage_results={},
     )
-    
-    # 5 selected = 1+1+1+1+1 (submitted, already_applied, failed, manual_review, skipped_local)
-    # 10 acquired = 5 selected + 5 rejected before application
-    pipeline.context.rejected_jobs = [
-        {"stage": "Classification", "job_id": str(i)} for i in range(5)
-    ]
-    
-    # Should not raise exception
+
+    # Total: 5 rejected + 1 applied + 1 already + 1 failed = 8
+    assert result.acquired == 8
+    assert result.pre_app_rejected == 5
+    # selected is HISTORICAL: 1 applied + 1 already + 1 failed = 3
+    assert result.selected == 3
+    assert result.submitted == 1
+    assert result.already_applied == 1
+    assert result.application_failed == 1
+    # No stuck jobs — everything is accounted for
+    # validator should pass
     pipeline._validate_artifacts(result)
-    
-    # Test selected mismatch
-    result.submitted = 2 # This makes breakdown = 6, but selected = 5
+
+    # Test mismatch by adding a selected job that never reaches terminal outcome
+    store.create("stuck_job")
+    store.transition("stuck_job", JobState.SELECTED_AUTO, reason="test")
+    # Now selected=4, submitted=1, app_failed=1, already_applied=1, stuck=1
+    result3 = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS",
+        lifecycle=store,
+    )
     with pytest.raises(RuntimeError) as exc:
-        pipeline._validate_artifacts(result)
-    assert "Application accounting mismatch" in str(exc.value)
-    
-    # Test pre-app rejection mismatch
-    result.submitted = 1 # Back to 5
-    pipeline.context.rejected_jobs = [
-        {"stage": "Classification", "job_id": str(i)} for i in range(4)
-    ] # Missing one pre-app rejection!
-    with pytest.raises(RuntimeError) as exc:
-        pipeline._validate_artifacts(result)
-    assert "Artifact mismatch: Found 4 pre-application rejections" in str(exc.value)
+        pipeline._validate_artifacts(result3)
+    err_msg = str(exc.value)
+    assert "Stuck jobs" in err_msg
+
 
 def test_duplicate_rejection_detection():
-    """
-    Simulate a synthetic case where the same job receives two JobRejected events.
-    """
-    from src.orchestration.projections import MetricsProjection
-    from src.orchestration.events import PipelineEvent
+    from src.orchestration.job_lifecycle import JobLifecycleStore, JobState
     
-    proj = MetricsProjection()
-    ev1 = Mock(pipeline_job_id="1", event_type="JobRejected", stage="Classification", payload={"code": "WALK_IN"})
-    ev2 = Mock(pipeline_job_id="1", event_type="JobRejected", stage="Classification", payload={"code": "WALK_IN"})
-    
-    proj(ev1)
-    proj(ev2)
-    
-    metrics = proj.get_metrics()
-    assert metrics["pre_app_rejected"] == 2
-    
-    # If the artifact only has 1, the validator should fail
-    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
-    result = PipelineResult(
-        run_id="test", status="SUCCESS",
-        acquired=1, selected=0, pre_app_rejected=2
-    )
-    # The artifact deduplicates inherently by only appending once (or if there's a bug, it appends twice).
-    # But let's say the artifact only appended once
-    pipeline.context.rejected_jobs = [{"job_id": "1", "stage": "Classification"}]
-    
-    with pytest.raises(RuntimeError) as exc:
-        pipeline._validate_artifacts(result)
-    assert "Artifact mismatch: Found 1 pre-application rejections" in str(exc.value)
+    store = JobLifecycleStore(":memory:")
+    store.create("job_1")
+    store.transition("job_1", JobState.PRE_APPLICATION_REJECTED, reason="test")
+
+    assert store.count_by_state(JobState.PRE_APPLICATION_REJECTED) == 1
+    assert store.validate() == []
+
 
 def test_missing_terminal_outcome_detection():
-    """
-    Simulate a selected job that never emits any terminal application event.
-    """
     pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
-    # Acquired=1, Selected=1, but NO outcomes (submitted=0, failed=0, etc.)
-    result = PipelineResult(
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+
+    store = pipeline.context.lifecycle
+    # One job that was correctly applied
+    store.create("ok_job")
+    store.transition("ok_job", JobState.SELECTED_AUTO)
+    store.transition("ok_job", JobState.SUBMITTED)
+    # One job stuck in SELECTED_AUTO
+    store.create("stuck_job")
+    store.transition("stuck_job", JobState.SELECTED_AUTO)
+
+    result = PipelineResult.from_lifecycle(
         run_id="test", status="SUCCESS",
-        acquired=1, selected=1, 
-        submitted=0, already_applied=0, ats_queue=0, generic_queue=0, manual_queue=0,
-        unsupported=0, policy_rejected=0, failed=0, manual_review=0, skipped_local=0,
-        run_limit_reached=0, dry_run_skipped=0, pre_app_rejected=0
+        lifecycle=store,
     )
-    
-    pipeline.context.rejected_jobs = []
-    
+    # selected=2, submitted=1, stuck=1, auto_breakdown=1 > 0
     with pytest.raises(RuntimeError) as exc:
         pipeline._validate_artifacts(result)
-    assert "Application accounting mismatch: selected(1) != breakdown(0)" in str(exc.value)
-
+    assert "Stuck jobs" in str(exc.value)

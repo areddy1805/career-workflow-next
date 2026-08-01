@@ -6,50 +6,26 @@ import resource
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from dotenv import load_dotenv
 
 from application_report import build_report_snapshot
-from src.legacy_apply_agent import (
-    acquire_jobs,
-    enrich_application_metadata,
-    enrich_jobs_with_details,
-    print_acquisition_summary,
-    print_pipeline_results,
-    print_runtime_policy,
-    run_application_batch,
-)
 from config.candidate_profile import CANDIDATE_PROFILE
 from monitor_applications import reconcile_application_history
-from src.application.adaptive_strategy import (
-    AdaptiveStrategyConfig,
-    build_adaptive_strategy,
-    rank_candidates_adaptively,
-    strategy_audit_payload,
-)
-from src.application.diversity import (
-    DiversityPolicy,
-    deduplicate_enriched_jobs,
-    description_fingerprint,
-    diversify_jobs,
-    exclude_job_ids,
-)
-from src.application.eligibility import (
-    annotate_auto_apply_eligibility,
-    eligibility_rejection_summary,
-)
 from src.application.ledger import ApplicationLedger
+from src.application.manual_action_queue import ManualActionQueue
 from src.application.policy import ApplicationPolicy
-from src.config.search_strategy import load_search_strategy
 from src.client.job_classifier import JobFilterPipeline2
-from src.client.inference_service import InferenceService
 from src.client.job_client import NaukriJobClient
-from src.orchestration.provider_factory import initialize_providers
+from src.config.search_strategy import load_search_strategy
+from src.client.inference_service import InferenceService
 
 from src.client.naukri_client import NaukriLoginClient
 from src.llm.client import OMLXClient
 from src.llm.question_resolver import LLMQuestionResolver
+from src.orchestration.provider_factory import initialize_providers
+
 from src.orchestration.context import PipelineContext
 from src.orchestration.result import PipelineResult
 from src.orchestration.runtime import PipelineLock, effective_limit
@@ -58,11 +34,42 @@ from src.orchestration.stages import (
     PipelineStatus,
     StageStatus,
 )
+from src.orchestration.job_lifecycle import JobState
+
+
+def _mode_to_job_state(mode: str) -> JobState | None:
+    """Map a CapacityPlanner mode string to a JobState."""
+    mapping = {
+        "MANUAL_REVIEW": JobState.ROUTED_MANUAL,
+        "ATS": JobState.ROUTED_ATS,
+        "EXTERNAL": JobState.ROUTED_EXTERNAL,
+        "EXTERNAL_BROWSER": JobState.ROUTED_EXTERNAL,
+    }
+    return mapping.get(mode)
 from src.orchestration.explorer import PipelineExplorerRenderer
+from src.orchestration.opportunity import ApplicationOpportunity
+from src.orchestration.opportunity_repository import OpportunityRepository
+from src.orchestration.priority_engine import PriorityEngine
+from src.orchestration.capacity_planner import CapacityPlanner
+from src.orchestration.capacity import CapacityModel
+from src.orchestration.application_scheduler import ApplicationScheduler
+
+from src.constraints.age_expiry import AgeExpiryConstraint
+from src.constraints.company_cap import CompanyCapConstraint
+from src.constraints.duplicate_check import DuplicateConstraint
+from src.constraints.provider_quota import ProviderQuotaConstraint
+from src.constraints.quality_threshold import QualityConstraint
+from src.constraints.resume_minimum import ResumeMinimumConstraint
+
 from src.resolution.hybrid_resolver import HybridQuestionResolver
 from src.search.challenge_cooldown import SearchChallengeCooldown
 from src.search.job_search_cache import JobSearchCache
 from src.cache.cache_manager import CacheManager
+
+# Legacy acquisition/classification functions still needed for those stages
+from src.legacy_apply_agent import acquire_jobs, enrich_jobs_with_details, enrich_application_metadata, print_acquisition_summary, print_pipeline_results
+from src.application.adaptive_strategy import build_adaptive_strategy, AdaptiveStrategyConfig, strategy_audit_payload
+from src.application.diversity import deduplicate_enriched_jobs, description_fingerprint
 
 load_dotenv()
 
@@ -107,16 +114,15 @@ class CareerWorkflowPipeline:
         self.status = PipelineStatus.RUNNING
 
         from src.orchestration.projections import (
-            MetricsProjection,
             ExplorerProjection,
             JobTraceProjection,
         )
 
-        self.metrics_proj = MetricsProjection()
+        # Metrics are now DERIVED from JobLifecycleStore via
+        # ``self.context.lifecycle.compute_metrics()`` — no independent
+        # MetricsProjection with mutable counters.
         self.explorer_proj = ExplorerProjection(fingerprint={})
         self.trace_proj = JobTraceProjection()
-
-        self.exec_context.bus.subscribe(self.metrics_proj)
         self.exec_context.bus.subscribe(self.explorer_proj)
         self.exec_context.bus.subscribe(self.trace_proj)
         # Load config hashes for fingerprinting
@@ -274,6 +280,18 @@ class CareerWorkflowPipeline:
         )
         tmp.replace(target)
 
+    @staticmethod
+    def _safe_log(*args, **kwargs) -> None:
+        """Best-effort logging. Never terminates execution.
+
+        Business logic must execute before logging.
+        Logging is best-effort only.
+        """
+        try:
+            print(*args, **kwargs)
+        except Exception:
+            pass  # ponytail: best-effort logging, never crashes production
+
     # ------------------------------------------------------------------
     # Stage execution
     # ------------------------------------------------------------------
@@ -310,15 +328,10 @@ class CareerWorkflowPipeline:
             function()
             duration = time.perf_counter() - start_time
 
-            # Record total runtime metrics depending on the stage
-            if self.context.metrics:
-                self.context.metrics.total_runtime += duration
-                if name == "acquire":
-                    self.context.metrics.add_network_time(duration)
-                elif name == "classify":
-                    # classify mixes LLM and network (details fetching) and local filtering.
-                    # We subtract llm_time and network_time tracked deeply.
-                    pass
+            # Record total runtime measurements (not job state)
+            self.context.timing.total_runtime += duration
+            if name == "acquire":
+                self.context.timing.network_time += duration
 
             stage_record["duration_ms"] = int(duration * 1000)
 
@@ -525,8 +538,17 @@ class CareerWorkflowPipeline:
         self.context.fetch_result = fetch_result
 
         self.exec_context.start_stage("Acquisition", [])
+        lifecycle = self.context.lifecycle
         for job in jobs:
-            self.exec_context.acquire(job)
+            jid = str(getattr(job, "job_id", ""))
+            lifecycle.create(
+                jid,
+                title=str(getattr(job, "title", "")),
+                company=str(getattr(job, "company", "")),
+                provider_id=str(getattr(job, "provider_id", "")),
+                score=float(getattr(job, "score", 0) or 0),
+            )
+            self.exec_context.acquire(job, self.context.lifecycle)
             self.exec_context.complete(job)
         self.exec_context.finish_stage(self.context.acquired_jobs)
 
@@ -560,7 +582,6 @@ class CareerWorkflowPipeline:
         self.exec_context.start_stage("Classification", jobs)
 
         classifier = JobFilterPipeline2(
-            metrics=self.context.metrics,
             exec_context=self.exec_context,
             test_mode=self.context.test_mode,
             inference_service=self.inference_service,
@@ -632,15 +653,13 @@ class CareerWorkflowPipeline:
                 continue  # Keep this one — it's the first occurrence
             if fp not in kept_fps or fp_counts.get(fp, 0) <= 0:
                 if not j.get("_rejection_recorded"):
-                    j["rejection_stage"] = "Classification"
-                    j["rejection_code"] = "DESCRIPTION_DUPLICATE"
-                    j["rejection_reason"] = "Exact description duplicate removed after enrichment"
                     j["_rejection_recorded"] = True
-                    self.context.rejected_jobs.append(j)
+                    jid = str(j.get("job_id", j.get("id", "")))
                     self.exec_context.reject(
                         j,
                         reason="Exact description duplicate removed after enrichment",
                         code="DESCRIPTION_DUPLICATE",
+                        lifecycle=self.context.lifecycle,
                     )
 
         jobs = enriched_candidates
@@ -671,13 +690,14 @@ class CareerWorkflowPipeline:
             if not r_job.get("_rejection_recorded"):
                 reason = r_job.get("rejection_reason", "DETERMINISTIC_REJECT")
                 code = r_job.get("rejection_code", "SCORE_BELOW_THRESHOLD")
-                r_job["rejection_stage"] = "Classification"
-                r_job["rejection_code"] = code
-                r_job["rejection_reason"] = reason
                 r_job["_rejection_recorded"] = True
-                self.exec_context.reject(r_job, reason=reason, code=code)
-
-        self.context.rejected_jobs.extend(deterministic_rejected)
+                jid = str(r_job.get("job_id", r_job.get("id", "")))
+                self.exec_context.reject(
+                    r_job,
+                    reason=reason,
+                    code=code,
+                    lifecycle=self.context.lifecycle,
+                )
 
         # Release 3.2: Entity Identity & Vector Semantic Reuse
         llm_to_process = []
@@ -749,7 +769,26 @@ class CareerWorkflowPipeline:
         self._write_artifact("performance_benchmark.json", PerformanceBenchmarkSuite.run_benchmark(num_jobs=len(jobs)))
 
         final_jobs = jobs
-        self.context.rejected_jobs.extend(classifier.rejected_jobs)
+        # Record classifier rejections (impossible_filter, experience, title, etc.)
+        # in the lifecycle store as PRE_APPLICATION_REJECTED.
+        for rj in classifier.rejected_jobs:
+            jid = str(rj.get("job_id", rj.get("id", "")))
+            if self.context.lifecycle.get(jid):
+                self.context.lifecycle.transition(
+                    jid,
+                    JobState.PRE_APPLICATION_REJECTED,
+                    reason=rj.get("rejection_reason", rj.get("reason", "Classifier rejection")),
+                    metadata={"code": rj.get("rejection_code", rj.get("code", "UNKNOWN"))},
+                )
+        # Jobs that passed all filters are ELIGIBLE for selection
+        for j in jobs:
+            jid = str(j.get("job_id", j.get("id", "")))
+            if self.context.lifecycle.get(jid):
+                self.context.lifecycle.transition(
+                    jid,
+                    JobState.ELIGIBLE,
+                    reason="Passed all classifier filters",
+                )
         final_jobs = enrich_application_metadata(final_jobs)
 
         self.context.classified_jobs = final_jobs
@@ -775,9 +814,15 @@ class CareerWorkflowPipeline:
 
         print_pipeline_results(final_jobs)
 
-        rejection_summary = {}
-        for r in self.context.rejected_jobs:
-            code = r.get("rejection_code", r.get("code", "UNKNOWN"))
+        life = self.context.lifecycle
+        pre_app_rejected = life.find(JobState.PRE_APPLICATION_REJECTED)
+        rejection_summary: dict[str, int] = {}
+        for r in pre_app_rejected:
+            code = "UNKNOWN"
+            for t in reversed(r.transitions):
+                if t.to_state == JobState.PRE_APPLICATION_REJECTED:
+                    code = t.metadata.get("code", "UNKNOWN")
+                    break
             rejection_summary[code] = rejection_summary.get(code, 0) + 1
 
         self.context.stage_results["classification"] = {
@@ -796,7 +841,7 @@ class CareerWorkflowPipeline:
                 "summary": (self.context.stage_results["classification"]),
                 "rejection_summary": rejection_summary,
                 "jobs_count": len(final_jobs),
-                "rejected_count": len(self.context.rejected_jobs),
+                "rejected_count": life.count_by_state(JobState.PRE_APPLICATION_REJECTED),
             },
         )
 
@@ -902,203 +947,192 @@ class CareerWorkflowPipeline:
         )
 
     def select(self) -> None:
+        """V2 Selection: PriorityEngine → ConstraintEngine → CapacityPlanner.
+        
+        Replaces legacy rank_candidates_adaptively() + annotate_auto_apply_eligibility()
+        + diversify_jobs() with the V2 orchestration pipeline.
+        """
         ledger = self.context.ledger
 
         self.exec_context.start_stage("Selection", self.context.classified_jobs)
 
         self.context.applied_job_ids = ledger.applied_job_ids()
 
-        metadata_quality = ledger.metadata_completeness()
-
-        minimum_coverage = float(
-            os.getenv(
-                "ADAPTIVE_MIN_METADATA_COVERAGE",
-                "0.80",
-            )
-        )
-
-        strategy = self._build_adaptive_strategy()
-
-        if metadata_quality["coverage"] < minimum_coverage:
-            strategy = build_adaptive_strategy(
-                [],
-                config=AdaptiveStrategyConfig(
-                    enabled=False,
-                    base_minimum_score=int(
-                        os.getenv(
-                            "AUTO_APPLY_MIN_SCORE",
-                            "68",
-                        )
-                    ),
-                    base_max_applications_per_run=(self.context.max_applications),
-                ),
-            )
-
-        self.context.adaptive_strategy = strategy
-
+        # ---------------------------------------------------------------
+        # Build ApplicationOpportunity pool from classified jobs
+        # ---------------------------------------------------------------
         jobs_by_id = {str(job.job_id): job for job in self.context.acquired_jobs}
 
-        ranked_jobs = [
-            jobs_by_id[str(result["job_id"])]
-            for result in self.context.classified_jobs
-            if str(result["job_id"]) in jobs_by_id
+        opportunities: list[ApplicationOpportunity] = []
+        opportunity_by_id: dict[str, ApplicationOpportunity] = {}
+        for result in self.context.classified_jobs:
+            job_id = str(result["job_id"])
+            job = jobs_by_id.get(job_id)
+            if job is None:
+                continue
+            score_data = self.context.score_map.get(job_id, {})
+            opp = ApplicationOpportunity.from_job(job, status="CLASSIFIED")
+            # Resolve application mode from job metadata (provider-independent)
+            from src.application.resolver import ApplicationResolutionService
+            resolution = ApplicationResolutionService.resolve_from_job(job)
+            opp.application_mode = resolution.mode
+            opp.apply_url = resolution.apply_url or opp.apply_url
+            opp.score = float(score_data.get("score", score_data.get("ai_score", 0)) or 0)
+            opp.meta = score_data
+            opportunities.append(opp)
+            opportunity_by_id[job_id] = opp
+
+        self._safe_log(f"OPPORTUNITY POOL: {len(opportunities)}")
+
+        # ---------------------------------------------------------------
+        # PriorityEngine — deterministic ranking
+        # ---------------------------------------------------------------
+        engine = PriorityEngine()
+        ranked = engine.rank(opportunities)
+        self._safe_log(f"RANKED OPPORTUNITIES: {len(ranked)}")
+
+        # ---------------------------------------------------------------
+        # CapacityModel — assemble from environment and provider capacities
+        # ---------------------------------------------------------------
+        daily_budget = effective_limit(
+            self.context.max_applications,
+            int(os.getenv("AUTO_APPLY_DAILY_BUDGET", "50")),
+        )
+        company_limit = int(os.getenv("MAX_APPLICATIONS_PER_COMPANY_PER_RUN", "2"))
+        quality_threshold = int(os.getenv("AUTO_APPLY_MIN_SCORE", "20"))
+        max_age_days = int(os.getenv("MAX_JOB_AGE_DAYS", "14"))
+
+        capacity_model = CapacityModel(
+            daily_budget=daily_budget,
+            company_limit=company_limit,
+            quality_threshold=quality_threshold,
+            max_age_days=max_age_days,
+            resume_minimums={"AI": 15, "FDE": 10},
+        )
+
+        # ---------------------------------------------------------------
+        # Constraints — all six constraint types
+        # ---------------------------------------------------------------
+        constraints = [
+            AgeExpiryConstraint(max_age_days=max_age_days),
+            CompanyCapConstraint(max_per_company=company_limit),
+            DuplicateConstraint(),
+            ProviderQuotaConstraint(daily_budget=daily_budget),
+            QualityConstraint(min_score=quality_threshold),
+            ResumeMinimumConstraint(minimums={"AI": 15, "FDE": 10}),
         ]
 
-        ranked_jobs = rank_candidates_adaptively(
-            ranked_jobs,
-            score_map=self.context.score_map,
-            strategy=strategy,
-        )
+        # ---------------------------------------------------------------
+        # CapacityPlanner — produce the ApplicationPlan
+        # ---------------------------------------------------------------
+        planner = CapacityPlanner(capacity_model, constraints)
+        plan = planner.plan(ranked, already_applied_ids=self.context.applied_job_ids)
 
-        print(f"RANKED CANDIDATES: {len(ranked_jobs)}")
+        self._safe_log(f"PLANNED: {len(plan.planned)}  "
+              f"DEFERRED: {len(plan.deferred)}  "
+              f"REJECTED: {plan.summary.rejected}  "
+              f"EXPIRED: {plan.summary.expired}")
 
-        # Spray & Pray: Everything 20+ flows to apply. 
-        auto_apply_min_score = int(os.getenv("AUTO_APPLY_MIN_SCORE", "20"))
+        self.context.application_plan = plan
 
-        eligible_jobs, eligibility_decisions = annotate_auto_apply_eligibility(
-            ranked_jobs,
-            score_map=self.context.score_map,
-            minimum_score=auto_apply_min_score,
-        )
+        # ---------------------------------------------------------------
+        # Route decisions back to the legacy context for downstream stages
+        # ---------------------------------------------------------------
 
-        rejected_decisions = [
-            decision for decision in eligibility_decisions if not decision["eligible"]
+        # AUTO jobs → selected_jobs (passed to apply stage)
+        auto_job_ids = {p.opportunity.job_id for p in plan.planned if p.mode == "AUTO"}
+        external_job_ids = {
+            p.opportunity.job_id for p in plan.planned
+            if p.mode in ("MANUAL_REVIEW", "ATS", "EXTERNAL", "EXTERNAL_BROWSER")
+        }
+
+        selected_jobs = [
+            jobs_by_id[jid] for jid in auto_job_ids
+            if jid in jobs_by_id
         ]
-
-        rejection_summary = eligibility_rejection_summary(eligibility_decisions)
-
-        print(f"APPLY CONFIDENCE ELIGIBLE: {len(eligible_jobs)}")
-
-        print(f"APPLY CONFIDENCE REJECTED: {len(rejected_decisions)}")
-
-        for decision in rejected_decisions:
-            reasons = ",".join(decision["reasons"])
-
-            print(
-                "  [LOW CONFIDENCE REJECT] "
-                f"{decision['title']} "
-                f"@ {decision['company']} "
-                f"| score={decision['score']} "
-                f"| {reasons}"
-            )
-
-            rejection_dict = {
-                "job_id": str(decision["job_id"]),
-                "title": str(decision["title"]),
-                "company": str(decision["company"]),
-                "stage": "Selection / Eligibility",
-                "code": "SELECTION_INELIGIBLE",
-                "reason": str(reasons),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            self.context.rejected_jobs.append(rejection_dict)
-
-            job = self.context.score_map.get(str(decision["job_id"]))
-            if job:
-                self.exec_context.reject(
-                    job, reason=str(reasons), code="SELECTION_INELIGIBLE"
-                )
-
-        if rejection_summary:
-            print("LOW CONFIDENCE REJECTION SUMMARY:")
-
-            for (
-                reason,
-                count,
-            ) in rejection_summary.items():
-                print(f"  {reason}: {count}")
-
-        diversified_jobs = diversify_jobs(
-            eligible_jobs,
-            historical_company_counts=(ledger.company_application_counts()),
-            policy=DiversityPolicy(
-                max_per_company_per_run=int(
-                    os.getenv(
-                        "MAX_APPLICATIONS_PER_COMPANY_PER_RUN",
-                        "2",
-                    )
-                ),
-                max_per_role_family_per_company=int(
-                    os.getenv(
-                        "MAX_ROLE_FAMILY_PER_COMPANY",
-                        "1",
-                    )
-                ),
-                max_per_vacancy_fingerprint=int(
-                    os.getenv(
-                        "MAX_PER_VACANCY_FINGERPRINT",
-                        "1",
-                    )
-                ),
-            ),
-        )
-
-        diversified_ids = {str(j.job_id) for j in diversified_jobs}
-        for j in eligible_jobs:
-            if str(j.job_id) not in diversified_ids:
-                self.context.rejected_jobs.append(
-                    {
-                        "job_id": str(j.job_id),
-                        "title": str(getattr(j, "title", "Unknown")),
-                        "company": str(getattr(j, "company", "Unknown")),
-                        "stage": "Diversity Policy",
-                        "code": "DIVERSITY_POLICY",
-                        "reason": "Failed diversity constraints",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
-                self.exec_context.reject(
-                    j, "Failed diversity constraints", "DIVERSITY_POLICY"
-                )
-
-        # No more arbitrary attempt budgets or selection exploration
-        selected_jobs = diversified_jobs
 
         self.context.selected_jobs = selected_jobs
 
+        # Non-AUTO jobs are recorded in the lifecycle store as routing states.
+        # The ApplicationScheduler will handle actual dispatch in apply().
+        for p in plan.planned:
+            if p.mode == "AUTO":
+                continue
+            opp = p.opportunity
+            reason = p.explanation.summary if p.explanation else f"Routed: {p.mode}"
+            state = _mode_to_job_state(p.mode)
+            if state and self.context.lifecycle.get(opp.job_id):
+                self.context.lifecycle.transition(
+                    opp.job_id, state, reason=reason,
+                )
+
+        # Handle deferred opportunities in the lifecycle store.
+        for d in plan.deferred:
+            opp = d.opportunity
+            reason = d.explanation.deferred_reason if d.explanation else "Deferred"
+            self.exec_context.defer(
+                opp, reason=reason,
+                explanation=d.explanation.summary if d.explanation else "",
+                lifecycle=self.context.lifecycle,
+            )
+
+        # Record SELECTED jobs in exec_context (lifecycle transitions via exec_context)
         for j in selected_jobs:
-            if sm_job := self.context.score_map.get(str(j.job_id)):
+            job_id = str(j.job_id)
+            self.exec_context.select(
+                j, {"cause": "Planned via V2 orchestrator"},
+                lifecycle=self.context.lifecycle,
+            )
+            self.exec_context.complete(j)
+            if sm_job := self.context.score_map.get(job_id):
                 sm_job.setdefault("decision_history", []).append(
                     {"stage": "Selection", "decision": "SELECTED"}
                 )
 
-        print(f"FINAL APPLICATION QUEUE: {len(selected_jobs)}")
-
-        strategy_payload = strategy_audit_payload(strategy)
-
-        # Explainability for selected jobs
-        for job in selected_jobs:
-            self.exec_context.select(
-                job, {"cause": "Eligible and passed policy constraints"}
-            )
-            self.exec_context.complete(job)
-
         self.exec_context.finish_stage(selected_jobs)
+
+        auto_count = len(auto_job_ids)
+        external_count = len(external_job_ids)
+        deferred_count = len(plan.deferred)
+        self._safe_log(f"FINAL APPLICATION QUEUE: {len(selected_jobs)} "
+              f"(AUTO={auto_count}, EXTERNAL={external_count}, "
+              f"DEFERRED={deferred_count})")
+
+        # ---------------------------------------------------------------
+        # Stage results for artifacts
+        # ---------------------------------------------------------------
+        expired_count = plan.summary.expired
+        rejected_count = plan.summary.rejected
 
         self.context.stage_results["selection"] = {
             "llm_reviewed": len(self.context.classified_jobs),
-            "ranked": len(ranked_jobs),
-            "apply_confidence_threshold": auto_apply_min_score,
-            "apply_confidence_eligible": len(eligible_jobs),
-            "apply_confidence_rejected": len(rejected_decisions),
-            "rejection_summary": (rejection_summary),
-            "policy_accepted": len(diversified_jobs),
-            "diversity_rejected": len(eligible_jobs) - len(diversified_jobs),
+            "ranked": len(ranked),
+            "planned_auto": auto_count,
+            "planned_external": external_count,
+            "deferred": deferred_count,
+            "expired": expired_count,
+            "constraint_rejected": rejected_count,
             "selected_for_application": len(selected_jobs),
-            "metadata_quality": (metadata_quality),
-            "strategy": strategy_payload,
+            "daily_budget": daily_budget,
+            "company_limit": company_limit,
+            "quality_threshold": quality_threshold,
+            "max_age_days": max_age_days,
         }
 
         self._write_artifact(
             "selection.json",
             {
                 **self.context.stage_results["selection"],
-                "rejected_jobs": [
-                    j
-                    for j in self.context.rejected_jobs
-                    if j.get("stage", "").startswith("Selection")
-                    or j.get("stage", "") == "Diversity Policy"
+                "deferred": [
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.DEFERRED)
+                ],
+                "routed": [
+                    r.to_dict() for r in self.context.lifecycle.find_by_states({
+                        JobState.ROUTED_MANUAL,
+                        JobState.ROUTED_ATS,
+                        JobState.ROUTED_EXTERNAL,
+                        JobState.ROUTED_UNSUPPORTED,
+                    })
                 ],
             },
         )
@@ -1119,11 +1153,14 @@ class CareerWorkflowPipeline:
         )
 
     def apply(self) -> None:
-        # Removed explorer.start_stage
-
-        if not self.context.selected_jobs:
+        """V2 Application: ApplicationScheduler executes plan produced by select().
+        
+        Replaces legacy run_application_batch() with the V2 scheduler.
+        """
+        plan = getattr(self.context, "application_plan", None)
+        if plan is None or (not plan.planned and not plan.deferred):
             self.context.stage_results["application"] = {
-                "message": ("No selected jobs available"),
+                "message": "No planned jobs available",
                 "attempted": 0,
                 "submitted": 0,
                 "already_applied": 0,
@@ -1138,106 +1175,181 @@ class CareerWorkflowPipeline:
                 "run_limit_reached": 0,
                 "failed": 0,
                 "manual_review": 0,
+                "deferred": len(plan.deferred) if plan else 0,
             }
-
-            self._write_artifact(
-                "application.json",
-                self.context.stage_results["application"],
-            )
-
-            # Removed explorer.finish_stage
-
+            self._write_artifact("application.json", self.context.stage_results["application"])
             return
 
-        questionnaire_resolver = None
-
-        if not self.context.dry_run:
-            questionnaire_resolver = self._build_questionnaire_resolver()
-
-        self.context.questionnaire_resolver = questionnaire_resolver
-
-        strategy = load_search_strategy()
-
-        effective_run_limit = effective_limit(
-            self.context.adaptive_strategy.max_applications_per_run,
-            self.context.max_applications,
-        )
-
-        policy = ApplicationPolicy(
-            dry_run=self.context.dry_run,
-            max_applications_per_run=effective_run_limit,
-        )
-
-        print_runtime_policy(policy)
+        # Start the Application stage so all scheduler events (JobApplied,
+        # JobRouted, JobDeferred, JobFailed) carry stage="Application"
+        # instead of "Unknown".
+        self.exec_context.start_stage("Application", list(plan.planned))
 
         ledger = self.context.ledger
-
-        ledger_run_id = ledger.start_run(dry_run=policy.dry_run)
-
+        ledger_run_id = ledger.start_run(dry_run=self.context.dry_run)
         self.context.ledger_run_id = ledger_run_id
 
-        ledger.record_strategy_decision(
-            run_id=ledger_run_id,
-            strategy=strategy_audit_payload(self.context.adaptive_strategy),
+        # ---------------------------------------------------------------
+        # Build the process_job_fn bridge: ApplicationOpportunity → apply
+        # ---------------------------------------------------------------
+        jobs_by_id = {str(job.job_id): job for job in self.context.acquired_jobs}
+        score_map = self.context.score_map
+        providers = self.context.providers
+
+        def _process_opportunity(opp: ApplicationOpportunity) -> str:
+            """Bridge: convert ApplicationOpportunity → call process_job_application."""
+            from src.legacy_apply_agent import process_job_application
+            from src.application.resolver import ApplicationResolutionService, ApplicationMode
+
+            job = jobs_by_id.get(opp.job_id)
+            if job is None:
+                return f"FAILED: job {opp.job_id} not found in acquired jobs"
+
+            meta = score_map.get(opp.job_id, {})
+            provider_id = getattr(job, "provider_id", "naukri")
+            jc = providers.get(provider_id)
+            if jc is None:
+                return f"FAILED: no provider client for {provider_id}"
+
+            # Resolve application mode
+            resolution = ApplicationResolutionService.resolve(job, jc, meta=meta)
+            if resolution.mode != ApplicationMode.AUTO:
+                return f"SKIPPED: mode={resolution.mode} — {resolution.reasoning}"
+
+            # Build questionnaire resolver for live mode
+            qr = None
+            if not self.context.dry_run:
+                qr = self._build_questionnaire_resolver() if not hasattr(self, '_qr') else self._qr
+                if not hasattr(self, '_qr'):
+                    self._qr = qr
+
+            resume_path = meta.get("resume_path", "")
+            try:
+                outcome = process_job_application(
+                    jc=jc,
+                    job=job,
+                    meta=meta,
+                    questionnaire_resolver=qr,
+                    resume_path=resume_path or None,
+                )
+                return f"APPLIED: {outcome.status.value if hasattr(outcome, 'status') else str(outcome)}"
+            except Exception as exc:
+                return f"FAILED: {exc}"
+
+        # Build the enqueue_external_fn
+        manual_action_queue = ManualActionQueue(
+            os.getenv("MANUAL_ACTION_QUEUE_PATH", "data/manual_action_queue.json")
         )
 
-        summary = run_application_batch(
-            providers=self.context.providers,
-            jobs=self.context.selected_jobs,
-            score_map=self.context.score_map,
-            questionnaire_resolver=(questionnaire_resolver),
-            applied_jobs_set=(self.context.applied_job_ids),
-            policy=policy,
-            detail_cache=(self.context.detail_cache),
-            ledger=ledger,
-            run_id=self.context.run_id,
-            metrics=self.context.metrics,
-            rejected_jobs=self.context.rejected_jobs,
-            # Removed explorer
+        def _enqueue_external(job: ApplicationOpportunity, **kwargs: Any) -> None:
+            """Enqueue a non-AUTO job to the correct queue based on its application mode.
+            
+            If the queue write fails, the job is STILL considered routed (its lifecycle
+            state is ROUTED_MANUAL/ATS/EXTERNAL).  The queue is a convenience projection.
+            """
+            from src.application.capability import ApplicationMode
+            app_mode = getattr(job, "application_mode", None)
+            score = kwargs.get("score", int(getattr(job, "score", 0)))
+            reason = kwargs.get("reason", "External apply")
+            run_id = kwargs.get("run_id", self.context.run_id)
+            jid = str(getattr(job, "job_id", ""))
+
+            try:
+                if app_mode == ApplicationMode.MANUAL_REVIEW:
+                    manual_action_queue.enqueue_manual_review(
+                        job=job, score=score, reason=reason, run_id=run_id,
+                    )
+                else:
+                    manual_action_queue.enqueue_external_apply(
+                        job=job, score=score, reason=reason, run_id=run_id,
+                    )
+            except Exception as e:
+                # Log but do NOT re-raise — the lifecycle state is already correct
+                self._safe_log(
+                    f"  [QUEUE] Failed to enqueue {jid} ({getattr(job, 'title', '?')}): {e}"
+                )
+
+        # ---------------------------------------------------------------
+        # Build OpportunityRepository and ApplicationScheduler
+        # ---------------------------------------------------------------
+        opportunity_repo = OpportunityRepository(ledger)
+
+        scheduler = ApplicationScheduler(
+            opportunity_repo=opportunity_repo,
+            process_job_fn=_process_opportunity,
+            enqueue_external_fn=_enqueue_external,
             exec_context=self.exec_context,
+            ledger=ledger,
         )
+
+        # ---------------------------------------------------------------
+        # Execute the plan
+        # ---------------------------------------------------------------
+        summary = scheduler.execute(plan, run_id=self.context.run_id)
 
         self.context.application_summary = summary
 
         ledger.finish_run(
             ledger_run_id,
             fetched=len(self.context.acquired_jobs),
-            qualified=summary.total_candidates,
-            applied=summary.applied,
-            already_applied=(summary.already_applied),
-            failed=summary.failed,
+            qualified=len(plan.planned) + len(plan.deferred),
+            applied=summary.auto_applied,
+            already_applied=0,
+            failed=len(summary.errors),
         )
 
-        attempted = summary.applied + summary.failed
+        attempted = summary.auto_applied + summary.external_queued + summary.manual_review + summary.ats_queued + len(summary.errors)
 
         self.context.stage_results["application"] = {
-            "total_candidates": (summary.total_candidates),
+            "total_candidates": len(plan.planned) + len(plan.deferred),
             "attempted": attempted,
-            "submitted": summary.applied,
-            "already_applied": (summary.already_applied),
-            "skipped_local": (summary.skipped_local),
-            "native_applied": (summary.native_applied),
-            "ats_queue": (summary.ats_queue),
-            "generic_queue": (summary.generic_queue),
-            "manual_queue": (summary.manual_queue),
-            "unsupported": (summary.unsupported),
-            "policy_rejected": (summary.policy_rejected),
-            "dry_run_skipped": (summary.dry_run_skipped),
-            "run_limit_reached": (summary.run_limit_reached),
-            "failed": summary.failed,
+            # Auto-apply outcomes
+            "submitted": summary.auto_applied,
+            "already_applied": 0,
+            "failed": len(summary.errors),
+            "native_applied": summary.auto_applied,
+            # Queue routing (successful scheduling decisions)
+            "manual_queue": summary.manual_review,
+            "ats_queue": summary.ats_queued,
+            "external_queue": summary.external_queued,
+            "routed": summary.external_queued + summary.manual_review + summary.ats_queued,
             "manual_review": summary.manual_review,
+            "external_queued": summary.external_queued,
+            # Other
+            "deferred": summary.deferred,
+            "skipped_local": 0,
+            "unsupported": 0,
+            "policy_rejected": 0,
+            "dry_run_skipped": 0,
+            "run_limit_reached": 0,
+            "generic_queue": 0,
+            "auto_applied": summary.auto_applied,
         }
 
-        # Removed explorer.finish_stage
+        print(f"APPLICATION SUMMARY: {summary.auto_applied} submitted, "
+              f"{summary.manual_review} manual, "
+              f"{summary.ats_queued} ATS, "
+              f"{summary.external_queued} external, "
+              f"{summary.deferred} deferred, "
+              f"{len(summary.errors)} errors")
+
+        # Log first few errors for debugging
+        if summary.errors:
+            self._safe_log(f"Scheduler errors ({len(summary.errors)} total):")
+            for err in summary.errors[:10]:
+                self._safe_log(f"  {err}")
+            if len(summary.errors) > 10:
+                self._safe_log(f"  ... and {len(summary.errors) - 10} more errors")
 
         self._write_artifact(
             "application.json",
             {
                 **self.context.stage_results["application"],
                 "rejected_jobs": [
-                    j
-                    for j in self.context.rejected_jobs
-                    if j.get("stage", "") == "Application"
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.APPLICATION_FAILED)
+                ]
+                + [
+                    r.to_dict() for r in self.context.lifecycle.find(JobState.ALREADY_APPLIED)
                 ],
             },
         )
@@ -1309,9 +1421,8 @@ class CareerWorkflowPipeline:
 
     def report(self) -> None:
         rows = self.context.ledger.analytics_rows()
-        # submitted_this_run comes from the metrics projection (event-sourced counters),
-        # NOT from PipelineRunMetrics which tracks different concepts.
-        run_submitted = self.metrics_proj.get_metrics().get("submitted", 0)
+        # submitted_this_run comes from the lifecycle store — the single source of truth.
+        run_submitted = self.context.lifecycle.count_by_state(JobState.SUBMITTED)
         snapshot = build_report_snapshot(rows, submitted_this_run=run_submitted)
 
         self.context.report_snapshot = snapshot
@@ -1457,7 +1568,6 @@ class CareerWorkflowPipeline:
             timezone.utc,
         )
 
-        self.metrics_proj.flush(self.run_dir)
         self.explorer_proj.flush(self.run_dir)
         self.trace_proj.flush(self.run_dir)
         
@@ -1482,9 +1592,16 @@ class CareerWorkflowPipeline:
         except Exception as e:
             print(f"Warning: Failed to render Pipeline Explorer visual reports: {e}")
 
-
-        counts = self.metrics_proj.get_metrics()
-        # c_res was previously read here but is no longer needed
+        # Write lifecycle-derived metrics artifact
+        lifecycle_metrics = self.context.lifecycle.compute_metrics()
+        self._write_artifact("metrics.json", lifecycle_metrics)
+        
+        # Write lifecycle validation
+        lifecycle_diagnostics = self.context.lifecycle.validate()
+        if lifecycle_diagnostics:
+            print(f"\n[LIFECYCLE VALIDATION] {len(lifecycle_diagnostics)} issue(s):")
+            for d in lifecycle_diagnostics:
+                print(f"  - {d}")
         
         cache_metrics = {}
         if self.context.cache_manager:
@@ -1492,40 +1609,20 @@ class CareerWorkflowPipeline:
             
         # Capture memory peak
         usage = resource.getrusage(resource.RUSAGE_SELF)
-        # On macOS, ru_maxrss is in bytes, on Linux it is in kilobytes
         if sys.platform == "darwin":
             peak_mb = usage.ru_maxrss / (1024 * 1024)
         else:
             peak_mb = usage.ru_maxrss / 1024
-        self.context.metrics.memory_peak_mb = round(peak_mb, 2)
+        self.context.timing.memory_peak_mb = round(peak_mb, 2)
         
         # Capture LLM cost
         if hasattr(self, 'classifier') and hasattr(self.classifier, 'inference_service'):
-            self.context.metrics.llm_cost_usd = round(self.classifier.inference_service.telemetry.cost_usd, 4)
+            self.context.timing.llm_cost_usd = round(self.classifier.inference_service.telemetry.cost_usd, 4)
 
-        return PipelineResult(
+        return PipelineResult.from_lifecycle(
             run_id=self.context.run_id,
             status=self.status.value,
-            acquired=counts["acquired"],
-            summary_ranked=counts.get("prefiltered", 0),
-            detailed=counts.get("detail_candidates", 0),
-            scored=counts.get("classified", 0),
-            ranked=counts.get("classified", 0),
-            selected=counts["selected"],
-            attempted=counts["attempted"],
-            submitted=counts["submitted"],
-            already_applied=counts["already_applied"],
-            skipped_local=counts["skipped_local"],
-            native_applied=counts["native_applied"],
-            ats_queue=counts["ats_queue"],
-            generic_queue=counts["generic_queue"],
-            manual_queue=counts["manual_queue"],
-            unsupported=counts["unsupported"],
-            policy_rejected=counts["policy_rejected"],
-            dry_run_skipped=counts["dry_run_skipped"],
-            run_limit_reached=counts["run_limit_reached"],
-            manual_review=counts["manual_review"],
-            pre_app_rejected=counts["pre_app_rejected"],
+            lifecycle=self.context.lifecycle,
             started_at=self.context.started_at,
             completed_at=completed_at,
             cache_metrics=cache_metrics,
@@ -1536,43 +1633,63 @@ class CareerWorkflowPipeline:
         )
 
     def _generate_dedicated_artifacts(self, result: PipelineResult) -> None:
-        self._write_artifact("rejected_jobs.json", self.context.rejected_jobs)
+        # ── All artifacts are projections of the canonical lifecycle store ──
+        # Every artifact is generated by querying lifecycle.find() for the
+        # relevant state.  No manual accumulation.  No independent lists.
 
-        selected = []
-        for j in self.context.selected_jobs:
-            if sm_job := self.context.score_map.get(str(j.job_id)):
-                selected.append(sm_job)
-        self._write_artifact("selected_jobs.json", selected)
+        artifacts = self.context.lifecycle.compute_artifacts()
+        for name, jobs in artifacts.items():
+            self._write_artifact(f"{name}.json", jobs)
 
-        manual = [
-            r
-            for r in self.context.rejected_jobs
-            if r.get("code") in {"MANUAL_REVIEW", "EXTERNAL_REJECTION"}
-        ]
-        self._write_artifact("manual_review.json", manual)
-        self._write_artifact("external_apply.json", manual)
+        # Generate pre_application_rejections.json with full rejection details
+        lifecycle = self.context.lifecycle
+        pre_app_records = lifecycle.find(JobState.PRE_APPLICATION_REJECTED)
+        rejection_details = []
+        for rec in pre_app_records:
+            code = "UNKNOWN"
+            explanation = ""
+            for t in reversed(rec.transitions):
+                if t.to_state == JobState.PRE_APPLICATION_REJECTED:
+                    code = t.metadata.get("code", "UNKNOWN")
+                    explanation = t.reason or ""
+                    break
+            rejection_details.append({
+                "job_id": rec.job_id,
+                "title": rec.title,
+                "company": rec.company,
+                "reason_code": code,
+                "explanation": explanation,
+            })
+        self._write_artifact("pre_application_rejections.json", rejection_details)
 
-        already = [
-            r for r in self.context.rejected_jobs if r.get("code") == "ALREADY_APPLIED"
-        ]
-        self._write_artifact("already_applied.json", already)
+        # Also write selected_jobs using the actual job objects for metadata
+        selection_ok = self.stage_statuses.get("selection") == StageStatus.SUCCESS
+        application_ok = self.stage_statuses.get("application") == StageStatus.SUCCESS
 
-        applied = []
-        if self.context.ledger:
-            rows = self.context.ledger.analytics_rows()
-            for row in rows:
-                if (
-                    row.get("run_id") == self.context.ledger_run_id
-                    and row.get("status") == "applied"
-                ):
-                    applied.append(
-                        {
-                            "job_id": row.get("job_id"),
-                            "status": "SUBMITTED",
-                            "application_time": row.get("timestamp"),
-                        }
-                    )
-        self._write_artifact("applied_jobs.json", applied)
+        if selection_ok:
+            selected = []
+            for j in self.context.selected_jobs:
+                if sm_job := self.context.score_map.get(str(j.job_id)):
+                    selected.append(sm_job)
+            self._write_artifact("selected_jobs.json", selected)
+
+        if selection_ok and application_ok:
+            applied = []
+            if self.context.ledger:
+                rows = self.context.ledger.analytics_rows()
+                for row in rows:
+                    if (
+                        row.get("run_id") == self.context.ledger_run_id
+                        and row.get("status") == "applied"
+                    ):
+                        applied.append(
+                            {
+                                "job_id": row.get("job_id"),
+                                "status": "SUBMITTED",
+                                "application_time": row.get("timestamp"),
+                            }
+                        )
+            self._write_artifact("applied_jobs.json", applied)
 
     """
     Artifact validation intentionally checks only terminal accounting.
@@ -1588,79 +1705,67 @@ class CareerWorkflowPipeline:
 
     def _validate_artifacts(self, result: PipelineResult) -> None:
         """
-        Validate only invariants that remain true regardless of
-        ranking budgets, selection policies, or future pipeline stages.
+        Validate lifecycle invariants from the canonical JobLifecycleStore.
 
-        NOTE:
-
-        Older versions assumed:
-
-            acquired == scored + rejected
-            scored == selected + rejected
-
-        Those assumptions are no longer valid after the introduction of:
-
-            • summary ranking
-            • detail fetch budgets
-            • adaptive selection
-            • manual review
-            • run limits
-            • future routing stages
-
-        Therefore we validate only terminal accounting.
+        Only validates stages that completed successfully.
+        Every metric is DERIVED from the lifecycle.  No cross-system comparison.
         """
+        def _stage_succeeded(name: str) -> bool:
+            return self.stage_statuses.get(name) == StageStatus.SUCCESS
 
         diagnostics = []
 
-        selected_breakdown = (
-            result.submitted
-            + result.already_applied
-            + result.ats_queue
-            + result.generic_queue
-            + result.manual_queue
-            + result.unsupported
-            + result.policy_rejected
-            + result.failed
-            + result.manual_review
-            + result.skipped_local
-            + result.run_limit_reached
-            + result.dry_run_skipped
-        )
+        selection_ok = _stage_succeeded("selection")
+        application_ok = _stage_succeeded("application")
 
-        if result.selected != selected_breakdown:
-            diagnostics.append(
-                (
-                    "Application accounting mismatch: "
-                    f"selected({result.selected}) != "
-                    f"breakdown({selected_breakdown})"
+        # ── Lifecycle invariants (always valid, regardless of stage success) ──
+        lifecycle_diagnostics = self.context.lifecycle.validate()
+        diagnostics.extend(lifecycle_diagnostics)
+
+        if selection_ok:
+            # V2 accounting: selected (AUTO) must equal submitted + application_failed + already_applied
+            # Both selected and submitted/application_failed/already_applied are DERIVED from
+            # the same JobLifecycleStore — they MUST match by construction.
+            auto_breakdown = result.submitted + result.application_failed + result.already_applied
+            # V2 accounting: selected (historical) must equal terminal outcomes
+            # plus jobs still in SELECTED_AUTO (not yet applied).
+            stuck_in_selected = self.context.lifecycle.count_by_state(JobState.SELECTED_AUTO)
+            if result.selected != auto_breakdown + stuck_in_selected:
+                diagnostics.append(
+                    f"AUTO accounting mismatch: selected({result.selected}) != "
+                    f"submitted+application_failed+already_applied+stuck_selected"
+                    f"({auto_breakdown}+{stuck_in_selected}={(auto_breakdown + stuck_in_selected)})"
                 )
-            )
+            # At run end, no jobs should remain in SELECTED_AUTO,
+            # unless the pipeline didn't attempt any applications
+            # (e.g. test mode, dry run with no planned jobs).
+            if stuck_in_selected > 0 and application_ok and auto_breakdown > 0:
+                diagnostics.append(
+                    f"Stuck jobs in SELECTED_AUTO: {stuck_in_selected} jobs were "
+                    f"selected but never reached a terminal outcome"
+                )
 
-        # Artifact cross-validation
-        # Count rejections that happened before application routing
-        pre_app_rejections_in_artifact = [
-            j for j in self.context.rejected_jobs 
-            if j.get("stage") != "Application" and j.get("rejection_stage") != "Application"
-        ]
-        
-        pre_app_rejections_from_events = result.pre_app_rejected
-        if len(pre_app_rejections_in_artifact) != pre_app_rejections_from_events:
-            diagnostics.append(
-                f"Artifact mismatch: Found {len(pre_app_rejections_in_artifact)} pre-application rejections "
-                f"in rejected_jobs, but expected {pre_app_rejections_from_events} from events."
-            )
+            # V2 accounting: deferred should match plan deferred count
+            plan = getattr(self.context, "application_plan", None)
+            if plan is not None:
+                planned_deferred = len(plan.deferred)
+                if result.deferred != planned_deferred:
+                    diagnostics.append(
+                        f"Deferred accounting mismatch: result.deferred({result.deferred}) != "
+                        f"plan.deferred({planned_deferred})"
+                    )
 
         if diagnostics:
-            print("\n[DIAGNOSTICS] Pipeline artifact validation issues found:")
+            self._safe_log("\n[VALIDATION] Lifecycle validation issues found:")
             for item in diagnostics:
-                print(f"  - {item}")
-            raise RuntimeError("Terminal Accounting Validation Failed:\n" + "\n".join(diagnostics))
+                self._safe_log(f"  - {item}")
+            raise RuntimeError("Lifecycle Validation Failed:\n" + "\n".join(diagnostics))
         else:
-            print("\n[DIAGNOSTICS] Artifact accounting validated successfully.")
+            self._safe_log("\n[VALIDATION] Lifecycle validated successfully.")
 
     def print_observability_report(self, result: PipelineResult) -> None:
-        projection = self.metrics_proj.get_metrics()
-        runtime = self.context.metrics
+        projection = self.context.lifecycle.compute_metrics()
+        runtime = self.context.timing
         
         # Get unified metrics from ProviderManager
         if hasattr(self, "inference_service") and self.inference_service:

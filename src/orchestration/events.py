@@ -5,6 +5,34 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
+# ── Event type constants ──────────────────────────────────────────
+# Pipeline lifecycle
+RUN_STARTED = "RunStarted"
+RUN_COMPLETED = "RunCompleted"
+RUN_FAILED = "RunFailed"
+STAGE_STARTED = "StageStarted"
+STAGE_FINISHED = "StageFinished"
+
+# Job lifecycle
+JOB_ACQUIRED = "JobAcquired"
+JOB_REJECTED = "JobRejected"
+JOB_SELECTED = "JobSelected"
+JOB_ROUTED = "JobRouted"
+JOB_APPLIED = "JobApplied"
+JOB_DEFERRED = "JobDeferred"
+JOB_RESUMED = "JobResumed"
+JOB_SKIPPED = "JobSkipped"
+JOB_FAILED = "JobFailed"
+JOB_COMPLETED = "JobCompleted"
+
+# Cache / Inference
+CACHE_HIT = "CacheHit"
+CACHE_MISS = "CacheMiss"
+HEALTH_STATUS = "HealthStatus"
+INFERENCE_METRICS = "InferenceMetrics"
+EFFICIENCY_METRICS = "EfficiencyMetrics"
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
