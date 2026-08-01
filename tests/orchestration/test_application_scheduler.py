@@ -12,6 +12,8 @@ from src.orchestration.capacity_planner import ApplicationPlan, PlannedApplicati
 from src.orchestration.explanation import DecisionExplanation
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.lifecycle import OpportunityStatus
+from src.orchestration.job_lifecycle import JobLifecycleStore, JobState
+from src.orchestration.execution_context import PipelineExecutionContext
 from src.application.ledger import ApplicationLedger
 from src.orchestration.opportunity_repository import OpportunityRepository
 
@@ -220,3 +222,102 @@ def _record_job(repo: OpportunityRepository, job_id: str) -> None:
     j.subtrack = ""
     j.source = "test"
     repo.record_opportunity(j, status="SCORED")
+
+
+class TestSchedulerAccountingRegression:
+    """Regression: AUTO accounting must reflect only genuine submissions.
+
+    Pre-fix, ``_execute_auto`` swallowed the apply outcome and always
+    incremented ``auto_applied``, producing phantom applications for jobs
+    that never reached the provider.  These tests pin the corrected
+    behavior.
+    """
+
+    def _scheduler(self, tmp_path, process_fn, lifecycle=None):
+        ledger = ApplicationLedger(path=":memory:")
+        repo = OpportunityRepository(ledger)
+        exec_ctx = PipelineExecutionContext("test-run", tmp_path)
+        return (
+            ApplicationScheduler(
+                opportunity_repo=repo,
+                process_job_fn=process_fn,
+                exec_context=exec_ctx,
+                ledger=ledger,
+                lifecycle=lifecycle,
+            ),
+            repo,
+            lifecycle,
+        )
+
+    def test_auto_non_submission_is_failure(self, tmp_path):
+        """Outcome without apply evidence must not count as applied."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("phantom1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: {"status": "unknown", "reason": "no server confirmation"},
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["phantom1"]))
+        assert summary.auto_applied == 0
+        assert summary.auto_already_applied == 0
+        assert len(summary.errors) == 1
+        assert "not submitted" in summary.errors[0]
+        assert lifecycle.current_state("phantom1") == JobState.APPLICATION_FAILED
+
+    def test_auto_already_applied_not_counted_as_submitted(self, tmp_path):
+        """A job already applied on the server is not a new submission."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("dup1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: {"status": "already_applied"},
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["dup1"]))
+        assert summary.auto_applied == 0
+        assert summary.auto_already_applied == 1
+        assert summary.errors == []
+        assert lifecycle.current_state("dup1") == JobState.ALREADY_APPLIED
+
+    def test_auto_genuine_submission_transitions_lifecycle(self, tmp_path):
+        """A confirmed apply must transition the lifecycle to SUBMITTED."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("job1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: {"status": "applied"},
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["job1"]))
+        assert summary.auto_applied == 1
+        assert summary.errors == []
+        assert lifecycle.current_state("job1") == JobState.SUBMITTED
+
+    def test_auto_failure_emits_jobfailed_and_counts_error(self, tmp_path):
+        """Exceptions from the process function are failures, not applies."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("fail1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: (_ for _ in ()).throw(RuntimeError("provider rejected")),
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["fail1"]))
+        assert summary.auto_applied == 0
+        assert len(summary.errors) == 1
+        assert "provider rejected" in summary.errors[0]
+        assert lifecycle.current_state("fail1") == JobState.APPLICATION_FAILED
+
+    def test_string_outcome_without_apply_evidence_is_failure(self, tmp_path):
+        """Legacy string returns without apply evidence must not count."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("str1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: "SKIPPED: no match",
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["str1"]))
+        assert summary.auto_applied == 0
+        assert len(summary.errors) == 1

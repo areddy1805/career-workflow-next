@@ -182,3 +182,95 @@ def test_missing_terminal_outcome_detection():
     with pytest.raises(RuntimeError) as exc:
         pipeline._validate_artifacts(result)
     assert "Stuck jobs" in str(exc.value)
+
+
+class _DictJob(dict):
+    """Minimal dict-like job for pipeline helper tests."""
+
+    def __init__(self, job_id, description, title="X", company="Y",
+                 location="Z", experience="3-6", tags=None):
+        super().__init__()
+        self["job_id"] = job_id
+        self["description"] = description
+        self["title"] = title
+        self["company"] = company
+        self["location"] = location
+        self["experience"] = experience
+        self["tags"] = tags or []
+
+
+def test_description_duplicates_fire_one_rejection_each():
+    """
+    Regression: jobs silently dropped by deduplicate_enriched_jobs must each
+    fire a DESCRIPTION_DUPLICATE rejection so lifecycle accounting never leaves
+    them stuck in ACQUIRED (previously the loop's off-by-one guard skipped the
+    final duplicate, so pre_app_rejected undercounted).
+    """
+    from unittest.mock import Mock
+    from src.orchestration.pipeline import _reject_description_duplicates
+    from src.application.diversity import deduplicate_enriched_jobs
+
+    jobs = [
+        _DictJob("1", "same desc here"),
+        _DictJob("2", "same desc here"),
+        _DictJob("3", "totally different thing"),
+        _DictJob("4", "", title="Frontend", company="Acme", location="Pune",
+                 experience="3-6", tags=["frontend"]),
+        _DictJob("5", "", title="Frontend", company="Acme", location="Pune",
+                 experience="3-6", tags=["frontend"]),
+    ]
+    kept = deduplicate_enriched_jobs(jobs)
+    dropped = len(jobs) - len(kept)
+    assert dropped == 2
+
+    exec_context = Mock()
+    lifecycle = Mock()
+    _reject_description_duplicates(jobs, exec_context=exec_context, lifecycle=lifecycle)
+
+    assert exec_context.reject.call_count == dropped
+    rejected_ids = {c.args[0]["job_id"] for c in exec_context.reject.call_args_list}
+    assert rejected_ids == {"2", "5"}
+    for c in exec_context.reject.call_args_list:
+        assert c.kwargs["code"] == "DESCRIPTION_DUPLICATE"
+        assert c.kwargs["lifecycle"] is lifecycle
+
+
+def test_description_duplicates_no_rejections_when_none_dropped():
+    from unittest.mock import Mock
+    from src.orchestration.pipeline import _reject_description_duplicates
+
+    jobs = [
+        _DictJob("1", "unique a"),
+        _DictJob("2", "unique b"),
+    ]
+    exec_context = Mock()
+    _reject_description_duplicates(jobs, exec_context=exec_context, lifecycle=Mock())
+    exec_context.reject.assert_not_called()
+
+
+def test_exec_context_reject_transitions_dict_jobs():
+    """
+    Regression: exec_context.reject must transition lifecycle for dict jobs.
+    Previously getattr(job, "job_id", "") returned "" for dicts, so the
+    rejection event fired but the lifecycle never left ACQUIRED, leaving
+    pre_app_rejected undercounted.
+    """
+    from src.orchestration.execution_context import PipelineExecutionContext
+    from src.orchestration.job_lifecycle import JobLifecycleStore, JobState
+    from pathlib import Path
+
+    store = JobLifecycleStore(":memory:")
+    store.create("j1", title="T", company="C", provider_id="naukri")
+    assert store.get("j1").current_state == JobState.ACQUIRED
+
+    exec_ctx = PipelineExecutionContext("test", Path("artifacts/runs/"))
+    exec_ctx.reject(
+        {"job_id": "j1", "title": "T", "company": "C"},
+        reason="Exact description duplicate removed after enrichment",
+        code="DESCRIPTION_DUPLICATE",
+        lifecycle=store,
+    )
+
+    rec = store.get("j1")
+    assert rec.current_state == JobState.PRE_APPLICATION_REJECTED
+    assert rec.transitions[-1].metadata.get("code") == "DESCRIPTION_DUPLICATE"

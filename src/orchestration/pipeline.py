@@ -46,12 +46,53 @@ def _mode_to_job_state(mode: str) -> JobState | None:
         "EXTERNAL_BROWSER": JobState.ROUTED_EXTERNAL,
     }
     return mapping.get(mode)
+
+
+def _reject_description_duplicates(
+    before_dedup: list,
+    exec_context: "PipelineExecutionContext",
+    lifecycle: "JobLifecycleStore | None",
+) -> None:
+    """Fire one rejection per job that deduplicate_enriched_jobs silently drops.
+
+    Mirrors deduplicate_enriched_jobs exactly: keep the first occurrence per
+    description fingerprint (or vacancy fingerprint when the description is
+    empty), and reject every subsequent occurrence so the pre_app_rejected
+    counter and rejection_histogram stay accurate.
+    """
+    from src.application.diversity import vacancy_fingerprint
+
+    seen_descriptions: set[str] = set()
+    seen_vacancies: set[str] = set()
+    for j in before_dedup:
+        description_key = description_fingerprint(j)
+        vacancy_key = vacancy_fingerprint(j)
+        dropped = (
+            (description_key and description_key in seen_descriptions)
+            or (not description_key and vacancy_key in seen_vacancies)
+        )
+        if description_key:
+            seen_descriptions.add(description_key)
+        seen_vacancies.add(vacancy_key)
+        if not dropped:
+            continue
+        if not j.get("_rejection_recorded"):
+            j["_rejection_recorded"] = True
+            jid = str(j.get("job_id", j.get("id", "")))
+            exec_context.reject(
+                j,
+                reason="Exact description duplicate removed after enrichment",
+                code="DESCRIPTION_DUPLICATE",
+                lifecycle=lifecycle,
+            )
+
 from src.orchestration.explorer import PipelineExplorerRenderer
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.opportunity_repository import OpportunityRepository
 from src.orchestration.priority_engine import PriorityEngine
 from src.orchestration.capacity_planner import CapacityPlanner
 from src.orchestration.capacity import CapacityModel
+from src.orchestration.capacity_discovery import ProviderCapacityDiscovery, cap_daily_budget_by_capacity
 from src.orchestration.application_scheduler import ApplicationScheduler
 
 from src.constraints.age_expiry import AgeExpiryConstraint
@@ -640,27 +681,11 @@ class CareerWorkflowPipeline:
         enriched_candidates = deduplicate_enriched_jobs(enriched_candidates)
         # Fire rejection events for jobs silently dropped by deduplicate_enriched_jobs
         # so that pre_app_rejected counter and rejection_histogram are accurate.
-        # Use a Counter to track how many times each fingerprint appears; only
-        # the first occurrence is kept, subsequent ones are duplicates.
-        from collections import Counter
-        fp_counts = Counter(description_fingerprint(j) for j in _before_dedup)
-        kept_fps = {description_fingerprint(j) for j in enriched_candidates}
-        for j in _before_dedup:
-            fp = description_fingerprint(j)
-            if fp in kept_fps and fp_counts.get(fp, 0) > 1:
-                # Decrement so only the first surviving job passes this check
-                fp_counts[fp] -= 1
-                continue  # Keep this one — it's the first occurrence
-            if fp not in kept_fps or fp_counts.get(fp, 0) <= 0:
-                if not j.get("_rejection_recorded"):
-                    j["_rejection_recorded"] = True
-                    jid = str(j.get("job_id", j.get("id", "")))
-                    self.exec_context.reject(
-                        j,
-                        reason="Exact description duplicate removed after enrichment",
-                        code="DESCRIPTION_DUPLICATE",
-                        lifecycle=self.context.lifecycle,
-                    )
+        _reject_description_duplicates(
+            _before_dedup,
+            exec_context=self.exec_context,
+            lifecycle=self.context.lifecycle,
+        )
 
         jobs = enriched_candidates
         jobs = classifier.full_description_red_flag_check(jobs)
@@ -973,10 +998,28 @@ class CareerWorkflowPipeline:
             score_data = self.context.score_map.get(job_id, {})
             opp = ApplicationOpportunity.from_job(job, status="CLASSIFIED")
             # Resolve application mode from job metadata (provider-independent)
-            from src.application.resolver import ApplicationResolutionService
+            from src.application.resolver import ApplicationResolutionService, ApplicationMode
             resolution = ApplicationResolutionService.resolve_from_job(job)
             opp.application_mode = resolution.mode
             opp.apply_url = resolution.apply_url or opp.apply_url
+            # Enriched detail metadata may flag a Naukri job as external-apply
+            # (responseManager == "companyUrl") even when the raw job object
+            # does not carry the flag. Such jobs must NOT consume the AUTO
+            # budget — route them to the external queue instead.
+            external_flag = score_data.get("is_external_apply")
+            if (
+                opp.application_mode == ApplicationMode.AUTO
+                and external_flag
+            ):
+                if isinstance(external_flag, dict):
+                    external_flag = external_flag.get("is_external_apply")
+                if external_flag:
+                    opp.application_mode = ApplicationMode.EXTERNAL_BROWSER
+                    opp.apply_url = (
+                        score_data.get("apply_url")
+                        or opp.apply_url
+                    )
+                    opp.is_external = True
             opp.score = float(score_data.get("score", score_data.get("ai_score", 0)) or 0)
             opp.meta = score_data
             opportunities.append(opp)
@@ -1002,12 +1045,30 @@ class CareerWorkflowPipeline:
         quality_threshold = int(os.getenv("AUTO_APPLY_MIN_SCORE", "20"))
         max_age_days = int(os.getenv("MAX_JOB_AGE_DAYS", "14"))
 
+        # Discover live per-provider capacity.  If the provider reports a
+        # remaining daily quota (e.g. Naukri), cap the effective AUTO budget
+        # to it so we defer instead of planning jobs the server will refuse.
+        # Discovery failures fall back to unlimited/unknown — never block.
+        provider_capacities = ProviderCapacityDiscovery(
+            self.context.providers
+        ).discover_all()
+        env_budget = daily_budget
+        daily_budget = cap_daily_budget_by_capacity(
+            daily_budget, provider_capacities
+        )
+        if daily_budget != env_budget:
+            self._safe_log(
+                f"LIVE CAPACITY: budget capped to {daily_budget} "
+                f"(env cap={env_budget})"
+            )
+
         capacity_model = CapacityModel(
             daily_budget=daily_budget,
             company_limit=company_limit,
             quality_threshold=quality_threshold,
             max_age_days=max_age_days,
             resume_minimums={"AI": 15, "FDE": 10},
+            provider_capacities=provider_capacities,
         )
 
         # ---------------------------------------------------------------
@@ -1196,25 +1257,33 @@ class CareerWorkflowPipeline:
         score_map = self.context.score_map
         providers = self.context.providers
 
-        def _process_opportunity(opp: ApplicationOpportunity) -> str:
-            """Bridge: convert ApplicationOpportunity → call process_job_application."""
+        def _process_opportunity(opp: ApplicationOpportunity) -> Any:
+            """Bridge: convert ApplicationOpportunity → process_job_application.
+
+            Returns the ``ApplicationOutcome`` produced by the apply agent.
+            Exceptions (including a non-AUTO resolution) propagate to the
+            scheduler, which records a failure instead of a phantom apply.
+            """
             from src.legacy_apply_agent import process_job_application
             from src.application.resolver import ApplicationResolutionService, ApplicationMode
 
             job = jobs_by_id.get(opp.job_id)
             if job is None:
-                return f"FAILED: job {opp.job_id} not found in acquired jobs"
+                raise RuntimeError(f"job {opp.job_id} not found in acquired jobs")
 
             meta = score_map.get(opp.job_id, {})
             provider_id = getattr(job, "provider_id", "naukri")
             jc = providers.get(provider_id)
             if jc is None:
-                return f"FAILED: no provider client for {provider_id}"
+                raise RuntimeError(f"no provider client for {provider_id}")
 
             # Resolve application mode
             resolution = ApplicationResolutionService.resolve(job, jc, meta=meta)
             if resolution.mode != ApplicationMode.AUTO:
-                return f"SKIPPED: mode={resolution.mode} — {resolution.reasoning}"
+                raise RuntimeError(
+                    f"job {opp.job_id} resolved to {resolution.mode.value} at execution; "
+                    f"expected AUTO — {resolution.reasoning}"
+                )
 
             # Build questionnaire resolver for live mode
             qr = None
@@ -1224,17 +1293,13 @@ class CareerWorkflowPipeline:
                     self._qr = qr
 
             resume_path = meta.get("resume_path", "")
-            try:
-                outcome = process_job_application(
-                    jc=jc,
-                    job=job,
-                    meta=meta,
-                    questionnaire_resolver=qr,
-                    resume_path=resume_path or None,
-                )
-                return f"APPLIED: {outcome.status.value if hasattr(outcome, 'status') else str(outcome)}"
-            except Exception as exc:
-                return f"FAILED: {exc}"
+            return process_job_application(
+                jc=jc,
+                job=job,
+                meta=meta,
+                questionnaire_resolver=qr,
+                resume_path=resume_path or None,
+            )
 
         # Build the enqueue_external_fn
         manual_action_queue = ManualActionQueue(
@@ -1280,6 +1345,7 @@ class CareerWorkflowPipeline:
             enqueue_external_fn=_enqueue_external,
             exec_context=self.exec_context,
             ledger=ledger,
+            lifecycle=self.context.lifecycle,
         )
 
         # ---------------------------------------------------------------
@@ -1294,18 +1360,25 @@ class CareerWorkflowPipeline:
             fetched=len(self.context.acquired_jobs),
             qualified=len(plan.planned) + len(plan.deferred),
             applied=summary.auto_applied,
-            already_applied=0,
+            already_applied=summary.auto_already_applied,
             failed=len(summary.errors),
         )
 
-        attempted = summary.auto_applied + summary.external_queued + summary.manual_review + summary.ats_queued + len(summary.errors)
+        attempted = (
+            summary.auto_applied
+            + summary.auto_already_applied
+            + summary.external_queued
+            + summary.manual_review
+            + summary.ats_queued
+            + len(summary.errors)
+        )
 
         self.context.stage_results["application"] = {
             "total_candidates": len(plan.planned) + len(plan.deferred),
             "attempted": attempted,
             # Auto-apply outcomes
             "submitted": summary.auto_applied,
-            "already_applied": 0,
+            "already_applied": summary.auto_already_applied,
             "failed": len(summary.errors),
             "native_applied": summary.auto_applied,
             # Queue routing (successful scheduling decisions)

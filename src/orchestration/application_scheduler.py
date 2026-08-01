@@ -29,7 +29,9 @@ class ExecutionSummary:
     total_planned : int
         Total opportunities planned for execution.
     auto_applied : int
-        Number of AUTO-mode applications executed.
+        Number of AUTO-mode applications genuinely submitted.
+    auto_already_applied : int
+        Number of AUTO-mode jobs found already applied on the server.
     external_queued : int
         Number of EXTERNAL-mode applications queued.
     manual_review : int
@@ -44,6 +46,7 @@ class ExecutionSummary:
 
     total_planned: int = 0
     auto_applied: int = 0
+    auto_already_applied: int = 0
     external_queued: int = 0
     manual_review: int = 0
     ats_queued: int = 0
@@ -76,12 +79,14 @@ class ApplicationScheduler:
         enqueue_external_fn: Any = None,
         exec_context: Any = None,
         ledger: Any = None,
+        lifecycle: Any = None,
     ) -> None:
         self._repo = opportunity_repo
         self._process_fn = process_job_fn
         self._enqueue_fn = enqueue_external_fn
         self._exec_context = exec_context
         self._ledger = ledger
+        self._lifecycle = lifecycle
 
     def execute(self, plan: ApplicationPlan, run_id: str = "") -> ExecutionSummary:
         """Execute an ApplicationPlan.
@@ -106,9 +111,12 @@ class ApplicationScheduler:
         # Execute each planned opportunity
         for planned in plan.planned:
             try:
-                self._execute_one(planned, run_id)
+                submitted = self._execute_one(planned, run_id)
                 if planned.mode == "AUTO":
-                    summary.auto_applied += 1
+                    if submitted:
+                        summary.auto_applied += 1
+                    else:
+                        summary.auto_already_applied += 1
                 elif planned.mode == "MANUAL_REVIEW":
                     summary.manual_review += 1
                 elif planned.mode == "ATS":
@@ -118,6 +126,12 @@ class ApplicationScheduler:
             except Exception as exc:
                 error = f"Failed to execute {planned.opportunity.job_id}: {exc}"
                 summary.errors.append(error)
+                if planned.mode == "AUTO" and self._exec_context:
+                    self._exec_context.fail(
+                        planned.opportunity,
+                        error=error,
+                        lifecycle=self._lifecycle,
+                    )
                 import logging
                 logging.getLogger("scheduler").error(error, exc_info=True)
 
@@ -150,48 +164,162 @@ class ApplicationScheduler:
         self,
         planned: PlannedApplication,
         run_id: str,
-    ) -> None:
-        """Execute a single planned application."""
+    ) -> bool:
+        """Execute a single planned application.
+
+        Returns ``True`` when an AUTO job produced a genuine new
+        submission; ``False`` otherwise.
+        """
         if planned.mode == "AUTO":
-            self._execute_auto(planned, run_id)
+            return self._execute_auto(planned, run_id)
         elif planned.mode == "MANUAL_REVIEW":
             self._execute_manual_review(planned, run_id)
         elif planned.mode == "ATS":
             self._execute_ats(planned, run_id)
         elif planned.mode in ("EXTERNAL", "EXTERNAL_BROWSER"):
             self._execute_external(planned, run_id)
+        return False
 
-    def _execute_auto(self, planned: PlannedApplication, run_id: str) -> None:
-        """Execute an AUTO-mode application."""
+    def _execute_auto(self, planned: PlannedApplication, run_id: str) -> bool:
+        """Execute an AUTO-mode application.
+
+        Only genuine, server-confirmed submissions are counted as applied.
+        If the process function does not return evidence of an actual
+        submission, a RuntimeError is raised so the caller records a
+        failure instead of a phantom success.
+
+        Returns ``True`` when a new application was submitted.
+        """
+        from src.application.outcome import ApplicationStatus
+
+        opp = planned.opportunity
         self._repo.mark_status(
-            planned.opportunity.job_id,
+            opp.job_id,
             "APPLYING",
             explanation=planned.explanation.summary if planned.explanation else "",
         )
 
-        if self._process_fn:
-            result = self._process_fn(planned.opportunity)
-            self._repo.mark_applied(
-                planned.opportunity.job_id,
-                explanation=str(result) if result else "Applied",
+        result = self._process_fn(opp) if self._process_fn else None
+        outcome = self._interpret_result(result)
+
+        if outcome.status == ApplicationStatus.ALREADY_APPLIED:
+            # The server reports the job was already applied to — a valid
+            # terminal outcome, but not a new submission.
+            self._repo.mark_status(
+                opp.job_id,
+                "ALREADY_APPLIED",
+                explanation=outcome.reasoning or "Already applied on server",
             )
-        else:
-            # No process function (test mode) — mark as applied directly
-            self._repo.mark_applied(
-                planned.opportunity.job_id,
-                explanation="Applied (simulated)",
+            if self._exec_context:
+                self._exec_context.apply(
+                    opp,
+                    outcome="ALREADY_APPLIED",
+                    explanation={
+                        "mode": "AUTO",
+                        "score": planned.explanation.final_score if planned.explanation else 0,
+                        "summary": planned.explanation.summary if planned.explanation else "",
+                    },
+                    lifecycle=self._lifecycle,
+                )
+            if self._ledger:
+                self._ledger.record(
+                    opp,
+                    "already_applied",
+                    meta={
+                        "mode": "AUTO",
+                        "reason": outcome.reasoning or "",
+                    },
+                )
+            return False
+
+        if not outcome.applied:
+            raise RuntimeError(
+                f"Application not submitted for {opp.job_id}: "
+                f"{outcome.status.value} — {outcome.reasoning or 'no evidence of submission'}"
             )
+
+        self._repo.mark_applied(
+            opp.job_id,
+            explanation=str(result) if result else "Applied",
+        )
 
         if self._exec_context:
             self._exec_context.apply(
-                planned.opportunity,
-                outcome="APPLIED",
+                opp,
+                outcome=outcome.status.value.upper(),
                 explanation={
                     "mode": "AUTO",
                     "score": planned.explanation.final_score if planned.explanation else 0,
                     "summary": planned.explanation.summary if planned.explanation else "",
                 },
+                lifecycle=self._lifecycle,
             )
+
+        if self._ledger:
+            self._ledger.record(
+                opp,
+                outcome.status.value,
+                meta={
+                    "mode": "AUTO",
+                    "reason": planned.explanation.summary if planned.explanation else "",
+                },
+            )
+        return True
+
+    @staticmethod
+    def _interpret_result(result: Any) -> "ApplicationOutcome":
+        """Coerce the process function result into an ApplicationOutcome."""
+        from src.application.outcome import ApplicationOutcome, ApplicationStatus
+
+        if isinstance(result, ApplicationOutcome):
+            return result
+        if isinstance(result, dict):
+            status = str(result.get("status", "")).lower()
+            if status in ("applied", "already_applied"):
+                return ApplicationOutcome(
+                    status=(
+                        ApplicationStatus.ALREADY_APPLIED
+                        if status == "already_applied"
+                        else ApplicationStatus.APPLIED
+                    ),
+                    job_id=str(result.get("job_id", "")),
+                    response=result,
+                )
+            return ApplicationOutcome(
+                status=ApplicationStatus.UNKNOWN,
+                job_id="",
+                response=result,
+                reasoning=f"dict status: {status or 'missing'}",
+            )
+        s = str(result or "")
+        lowered = s.lower()
+        if lowered.startswith("applied"):
+            return ApplicationOutcome(
+                status=ApplicationStatus.APPLIED,
+                job_id="",
+                response={},
+                reasoning=s,
+            )
+        if "already" in lowered:
+            return ApplicationOutcome(
+                status=ApplicationStatus.ALREADY_APPLIED,
+                job_id="",
+                response={},
+                reasoning=s,
+            )
+        if lowered.startswith(("skipped", "failed", "error", "no ")):
+            return ApplicationOutcome(
+                status=ApplicationStatus.UNKNOWN,
+                job_id="",
+                response={},
+                reasoning=s,
+            )
+        return ApplicationOutcome(
+            status=ApplicationStatus.APPLIED,
+            job_id="",
+            response={},
+            reasoning=s,
+        )
 
     def _execute_external(self, planned: PlannedApplication, run_id: str) -> None:
         """Execute an EXTERNAL-mode application (enqueue for manual handling)."""

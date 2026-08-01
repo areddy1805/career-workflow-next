@@ -3,7 +3,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-from src.client.naukri_client import NaukriLoginClient
+from src.client.naukri_client import HISTORY_URL, NaukriLoginClient
 from src.application.capability import ApplicationCapabilities, ApplicationMode
 from src.config.constants import (
     APPLY_JOB_URL,
@@ -171,25 +171,31 @@ class NaukriJobClient:
         back to a conservative estimate if the provider is unreachable.
         """
         try:
-            headers = self._session._build_headers(auth=True)
+            headers = self._client._build_headers(auth=True)
             res = self._session.get(HISTORY_URL, headers=headers, timeout=10)
             if res.status_code == 200:
                 data = res.json()
+                daily_quota = 50
+                applied_today: int | None = None
                 quota = (
                     data.get("quotaDetails")
                     or data.get("data", {}).get("quotaDetails", {})
                 )
                 if quota:
                     daily_quota = int(quota.get("dailyQuota", 50))
-                    daily_applied = int(quota.get("dailyApplied", 0))
-                    remaining = max(0, daily_quota - daily_applied)
-                    from src.orchestration.capacity import ProviderCapacity as PC
-                    return PC(
-                        provider_id="naukri",
-                        supports_auto_apply=True,
-                        daily_quota=daily_quota,
-                        remaining_quota=remaining,
-                    )
+                    applied_today = int(quota.get("dailyApplied", 0))
+                if applied_today is None:
+                    # The history endpoint exposes today's applications via
+                    # applyDetails[].status[] rather than a quotaDetails block.
+                    applied_today = self._count_applied_today(data)
+                remaining = max(0, daily_quota - applied_today)
+                from src.orchestration.capacity import ProviderCapacity as PC
+                return PC(
+                    provider_id="naukri",
+                    supports_auto_apply=True,
+                    daily_quota=daily_quota,
+                    remaining_quota=remaining,
+                )
         except Exception:
             pass
 
@@ -201,6 +207,35 @@ class NaukriJobClient:
             daily_quota=50,
             remaining_quota=50,
         )
+
+    @staticmethod
+    def _count_applied_today(data: dict) -> int:
+        """Count applications submitted today from the history endpoint.
+
+        Naukri reports apply timestamps in IST (UTC+5:30).  A record counts
+        towards the daily quota when its latest status is ``Applied`` or
+        ``Application Sent`` on the server's current calendar day.
+        """
+        from datetime import datetime, timezone, timedelta
+
+        rows = (
+            data.get("applyDetails")
+            or data.get("data", {}).get("applyDetails", [])
+            or []
+        )
+        now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+        today = now_ist.date().isoformat()
+        count = 0
+        for row in rows:
+            statuses = row.get("status") or []
+            if not statuses:
+                continue
+            latest = statuses[0]
+            status_value = str(latest.get("statusValue", "")).lower()
+            ts = str(latest.get("dateTime", ""))[:10]
+            if ts == today and status_value in ("applied", "application sent"):
+                count += 1
+        return count
 
     # ----------------------------------------------------------------------------------
     # Internal helpers

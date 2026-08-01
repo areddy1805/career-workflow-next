@@ -23,6 +23,29 @@ from typing import Any, Dict, List, Optional
 from src.orchestration.capacity import ProviderCapacity
 
 
+def cap_daily_budget_by_capacity(
+    env_budget: int,
+    provider_capacities: Dict[str, ProviderCapacity],
+) -> int:
+    """Cap a configured daily budget by providers' reported remaining quota.
+
+    Sums ``remaining_quota`` across auto-apply-capable providers that report
+    a known quota.  If none report a known quota (unknown/unlimited), the
+    configured budget is returned unchanged — an exhausted server quota
+    therefore yields a cap of ``0`` so the planner defers instead of planning
+    jobs the provider will refuse.
+    """
+    known_remaining = [
+        c.remaining_quota
+        for c in provider_capacities.values()
+        if c.supports_auto_apply and c.remaining_quota is not None
+    ]
+    if not known_remaining:
+        return env_budget
+    live_remaining = max(0, sum(known_remaining))
+    return min(env_budget, live_remaining)
+
+
 class ProviderCapacityDiscovery:
     """Discovers live capacity from all registered providers.
 

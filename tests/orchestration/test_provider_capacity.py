@@ -2,8 +2,12 @@
 
 from datetime import datetime, timezone
 
+from src.client.job_client import NaukriJobClient
 from src.orchestration.capacity import ProviderCapacity, CapacityModel
-from src.orchestration.capacity_discovery import ProviderCapacityDiscovery
+from src.orchestration.capacity_discovery import (
+    ProviderCapacityDiscovery,
+    cap_daily_budget_by_capacity,
+)
 
 
 class TestProviderCapacity:
@@ -139,6 +143,115 @@ class TestProviderCapacityDiscovery:
         discovery = ProviderCapacityDiscovery({"naukri": IntProvider()})
         cap = discovery.discover_one("naukri")
         assert cap.remaining_quota == 17
+
+
+class TestCapDailyBudgetByCapacity:
+    """Verify the select() budget-capping helper."""
+
+    def _naukri(self, remaining: int | None, auto: bool = True) -> ProviderCapacity:
+        return ProviderCapacity(
+            provider_id="naukri",
+            supports_auto_apply=auto,
+            daily_quota=50,
+            remaining_quota=remaining,
+        )
+
+    def test_no_caps_unchanged(self):
+        assert cap_daily_budget_by_capacity(50, {}) == 50
+
+    def test_unknown_quota_unchanged(self):
+        caps = {"jobspy": ProviderCapacity.unlimited("jobspy", supports_auto_apply=True)}
+        assert cap_daily_budget_by_capacity(50, caps) == 50
+
+    def test_remaining_higher_than_env_keeps_env_cap(self):
+        caps = {"naukri": self._naukri(80)}
+        assert cap_daily_budget_by_capacity(50, caps) == 50
+
+    def test_remaining_lower_than_env_caps_budget(self):
+        caps = {"naukri": self._naukri(17)}
+        assert cap_daily_budget_by_capacity(50, caps) == 17
+
+    def test_exhausted_quota_caps_to_zero(self):
+        caps = {"naukri": self._naukri(0)}
+        assert cap_daily_budget_by_capacity(50, caps) == 0
+
+    def test_non_auto_provider_ignored(self):
+        caps = {"naukri": self._naukri(3, auto=False)}
+        assert cap_daily_budget_by_capacity(50, caps) == 50
+
+    def test_sums_across_auto_providers(self):
+        caps = {
+            "naukri": self._naukri(10),
+            "other": self._naukri(7),
+        }
+        assert cap_daily_budget_by_capacity(50, caps) == 17
+
+
+class TestCountAppliedToday:
+    """Verify NaukriJobClient._count_applied_today derives today's applies."""
+
+    def _row(self, statuses):
+        if statuses and isinstance(statuses[0], list):
+            rows = [{"status": s} for s in statuses]
+        else:
+            rows = statuses and [{"status": statuses}]
+        return {"applyDetails": rows}
+
+    def test_empty_rows_zero(self):
+        assert NaukriJobClient._count_applied_today({"applyDetails": []}) == 0
+        assert NaukriJobClient._count_applied_today({}) == 0
+
+    def test_counts_applied_today_ist(self):
+        from datetime import datetime, timezone, timedelta
+
+        today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+        data = self._row(
+            [
+                [{"statusValue": "Applied", "dateTime": f"{today} 09:15:00"}],
+                [{"statusValue": "Application Sent", "dateTime": f"{today} 10:00:00"}],
+            ]
+        )
+        assert NaukriJobClient._count_applied_today(data) == 2
+
+    def test_ignores_yesterday(self):
+        from datetime import datetime, timezone, timedelta
+
+        yesterday = (
+            datetime.now(timezone.utc) + timedelta(hours=5, minutes=30) - timedelta(days=1)
+        ).date().isoformat()
+        data = self._row(
+            [
+                {"statusValue": "Applied", "dateTime": f"{yesterday} 09:15:00"},
+                {"statusValue": "Applied", "dateTime": "2020-01-01 09:15:00"},
+            ]
+        )
+        assert NaukriJobClient._count_applied_today(data) == 0
+
+    def test_ignores_non_apply_status(self):
+        from datetime import datetime, timezone, timedelta
+
+        today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+        data = self._row(
+            [
+                {"statusValue": "Job Saved", "dateTime": f"{today} 09:15:00"},
+                {"statusValue": "Viewed", "dateTime": f"{today} 10:00:00"},
+            ]
+        )
+        assert NaukriJobClient._count_applied_today(data) == 0
+
+    def test_no_status_rows_skipped(self):
+        from datetime import datetime, timezone, timedelta
+
+        today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+        data = self._row([{"statusValue": "Applied", "dateTime": f"{today} 09:15:00"}, None])
+        assert NaukriJobClient._count_applied_today(data) == 1
+
+    def test_applies_via_nested_data_key(self):
+        from datetime import datetime, timezone, timedelta
+
+        today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+        data = {"data": {"applyDetails": [{"status": [{"statusValue": "Applied", "dateTime": f"{today} 09:15:00"}]}]}}
+        assert NaukriJobClient._count_applied_today(data) == 1
 
 
 class TestCapacityModel:

@@ -70,6 +70,18 @@ def runtime_reducer(state: RunViewModel, event: PipelineEvent) -> RunViewModel:
         new_state.progress.jobs_applied += 1
         new_state.decision_summary.submitted += 1
 
+    elif event.event_type == "JobRouted":
+        # All routed jobs land in the manual action queue (manual review,
+        # external apply, and ATS dispatch).  Mirror the pipeline's routing
+        # accounting so the live dashboard queue count is not always zero.
+        strategy = (event.payload or {}).get("strategy", "")
+        new_state.statistics.manual_queue += 1
+        if strategy == "MANUAL_REVIEW":
+            new_state.decision_summary.manual_review += 1
+
+    elif event.event_type == "JobDeferred":
+        new_state.decision_summary.quota_skipped += 1
+
     elif event.event_type == "CacheHit":
         new_state.efficiency.cache_hits += 1
 

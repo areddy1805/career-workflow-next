@@ -115,6 +115,13 @@ class PipelineExecutionContext:
         )
         self.bus.publish(event)
 
+    @staticmethod
+    def _job_id(job: Any) -> str:
+        """Extract a job id from dicts and attribute-style job objects."""
+        if isinstance(job, dict):
+            return str(job.get("job_id", job.get("id", "")))
+        return str(getattr(job, "job_id", ""))
+
     def acquire(self, job: Any, lifecycle: JobLifecycleStore) -> None:
         self.emit_job_event(job, "JobAcquired", {})
         jid = str(getattr(job, "job_id", ""))
@@ -129,9 +136,14 @@ class PipelineExecutionContext:
     def reject(self, job: Any, reason: str, code: str, lifecycle: JobLifecycleStore | None = None) -> None:
         self.emit_job_event(job, "JobRejected", {"reason": reason, "code": code})
         if lifecycle is not None:
-            jid = str(getattr(job, "job_id", ""))
-            if lifecycle.get(jid):
-                lifecycle.transition(jid, JobState.PRE_APPLICATION_REJECTED, reason=reason)
+            jid = self._job_id(job)
+            if jid and lifecycle.get(jid):
+                lifecycle.transition(
+                    jid,
+                    JobState.PRE_APPLICATION_REJECTED,
+                    reason=reason,
+                    metadata={"code": code},
+                )
 
     def select(self, job: Any, explanation: dict = None, lifecycle: JobLifecycleStore = None) -> None:
         self.emit_job_event(job, "JobSelected", {"explanation": explanation or {}})
