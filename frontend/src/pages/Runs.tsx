@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRuns } from '@/lib/hooks';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { StatRow } from '@/components/operations/StatRow';
@@ -11,12 +11,29 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CopyButton } from '@/components/CopyButton';
 import { ExternalLink, Database } from 'lucide-react';
+import { useSortable, sortData } from '@/hooks/useSortable';
+import { SortableHeader } from '@/components/SortableHeader';
+
+const RUNS_SORT_TYPES = {
+  started_at: 'date' as const,
+  status: 'status' as const,
+  mode: 'text' as const,
+  acquired: 'number' as const,
+  classified: 'number' as const,
+  submitted: 'number' as const,
+  failed: 'number' as const,
+};
 
 export default function Runs() {
   const { data: runs = [], isLoading } = useRuns();
   const [selectedRun, setSelectedRun] = useState<any | null>(null);
+  const { sort, handleSort } = useSortable(RUNS_SORT_TYPES);
 
   const runsArray = runs as any[];
+  const sortedRuns = useMemo(
+    () => sortData(runsArray, sort, RUNS_SORT_TYPES),
+    [runsArray, sort],
+  );
 
   return (
     <div className="h-full flex flex-col animate-in fade-in duration-300">
@@ -30,13 +47,13 @@ export default function Runs() {
           <Table>
             <TableHeader className="bg-muted/30 sticky top-0 z-10">
               <TableRow className="hover:bg-transparent border-b border-border">
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3 h-auto">Started</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3 h-auto">Status</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3 h-auto">Mode</TableHead>
-                <TableHead className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3 h-auto">Acquired</TableHead>
-                <TableHead className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wider py-3 h-auto">Classified</TableHead>
-                <TableHead className="text-right text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider py-3 h-auto">Submitted</TableHead>
-                <TableHead className="text-right text-[10px] font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider py-3 h-auto">Failed</TableHead>
+                <SortableHeader column="started_at" label="Started" sort={sort} onSort={handleSort} />
+                <SortableHeader column="status" label="Status" sort={sort} onSort={handleSort} />
+                <SortableHeader column="mode" label="Mode" sort={sort} onSort={handleSort} />
+                <SortableHeader column="acquired" label="Acquired" sort={sort} onSort={handleSort} align="right" />
+                <SortableHeader column="classified" label="Classified" sort={sort} onSort={handleSort} align="right" />
+                <SortableHeader column="submitted" label="Submitted" sort={sort} onSort={handleSort} align="right" />
+                <SortableHeader column="failed" label="Failed" sort={sort} onSort={handleSort} align="right" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -48,8 +65,8 @@ export default function Runs() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : runsArray.length ? (
-                runsArray.map((run: any) => (
+              ) : sortedRuns.length ? (
+                sortedRuns.map((run: any) => (
                   <TableRow
                     key={run.run_id}
                     className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-border/50 group"

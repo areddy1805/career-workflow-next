@@ -118,6 +118,8 @@ class ApplicationScheduler:
             except Exception as exc:
                 error = f"Failed to execute {planned.opportunity.job_id}: {exc}"
                 summary.errors.append(error)
+                import logging
+                logging.getLogger("scheduler").error(error, exc_info=True)
 
         # Record all deferred opportunities
         for deferred in plan.deferred:

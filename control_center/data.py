@@ -648,3 +648,50 @@ def get_job_cache_dict() -> dict[str, dict[str, Any]]:
             pass
 
     return cache
+
+
+# ---------------------------------------------------------------------------
+# JobLifecycleStore integration — canonical source of truth
+# ---------------------------------------------------------------------------
+
+
+def read_lifecycle_store() -> dict[str, Any]:
+    """Read the persisted JobLifecycleStore and return metrics + records.
+
+    This is the CANONICAL source of truth for pipeline accounting.
+    """
+    from src.orchestration.job_lifecycle import JobLifecycleStore
+    db_path = os.getenv("JOB_LIFECYCLE_DB_PATH", str(REPO_ROOT / "data" / "job_lifecycle.db"))
+    try:
+        store = JobLifecycleStore(db_path)
+        metrics = store.compute_metrics()
+        records = [r.to_dict() for r in store.all_records()]
+        return {
+            "metrics": metrics,
+            "records": records,
+            "db_path": str(db_path),
+        }
+    except Exception:
+        return {
+            "metrics": {
+                "acquired": 0, "classified": 0, "pre_app_rejected": 0,
+                "selected": 0, "routed": 0, "routed_manual": 0,
+                "routed_ats": 0, "routed_external": 0, "deferred": 0,
+                "submitted": 0, "application_failed": 0, "already_applied": 0,
+                "queued": 0,
+            },
+            "records": [],
+            "error": "JobLifecycleStore not available",
+        }
+
+
+def lifecycle_summary() -> dict[str, int]:
+    """Return pipeline accounting metrics from the canonical JobLifecycleStore."""
+    data = read_lifecycle_store()
+    return data.get("metrics", {})
+
+
+def lifecycle_records_list() -> list[dict[str, Any]]:
+    """Return all lifecycle records."""
+    data = read_lifecycle_store()
+    return data.get("records", [])

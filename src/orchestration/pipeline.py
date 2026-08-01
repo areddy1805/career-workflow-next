@@ -1241,21 +1241,32 @@ class CareerWorkflowPipeline:
             os.getenv("MANUAL_ACTION_QUEUE_PATH", "data/manual_action_queue.json")
         )
 
-        def _enqueue_external(opp: ApplicationOpportunity, **kwargs: Any) -> None:
-            """Enqueue a non-AUTO job to the correct queue based on its application mode."""
+        def _enqueue_external(job: ApplicationOpportunity, **kwargs: Any) -> None:
+            """Enqueue a non-AUTO job to the correct queue based on its application mode.
+            
+            If the queue write fails, the job is STILL considered routed (its lifecycle
+            state is ROUTED_MANUAL/ATS/EXTERNAL).  The queue is a convenience projection.
+            """
             from src.application.capability import ApplicationMode
-            app_mode = getattr(opp, "application_mode", None)
-            score = kwargs.get("score", int(opp.score))
+            app_mode = getattr(job, "application_mode", None)
+            score = kwargs.get("score", int(getattr(job, "score", 0)))
             reason = kwargs.get("reason", "External apply")
             run_id = kwargs.get("run_id", self.context.run_id)
+            jid = str(getattr(job, "job_id", ""))
 
-            if app_mode == ApplicationMode.MANUAL_REVIEW:
-                manual_action_queue.enqueue_manual_review(
-                    job=opp, score=score, reason=reason, run_id=run_id,
-                )
-            else:
-                manual_action_queue.enqueue_external_apply(
-                    job=opp, score=score, reason=reason, run_id=run_id,
+            try:
+                if app_mode == ApplicationMode.MANUAL_REVIEW:
+                    manual_action_queue.enqueue_manual_review(
+                        job=job, score=score, reason=reason, run_id=run_id,
+                    )
+                else:
+                    manual_action_queue.enqueue_external_apply(
+                        job=job, score=score, reason=reason, run_id=run_id,
+                    )
+            except Exception as e:
+                # Log but do NOT re-raise — the lifecycle state is already correct
+                self._safe_log(
+                    f"  [QUEUE] Failed to enqueue {jid} ({getattr(job, 'title', '?')}): {e}"
                 )
 
         # ---------------------------------------------------------------
@@ -1321,6 +1332,14 @@ class CareerWorkflowPipeline:
               f"{summary.external_queued} external, "
               f"{summary.deferred} deferred, "
               f"{len(summary.errors)} errors")
+
+        # Log first few errors for debugging
+        if summary.errors:
+            self._safe_log(f"Scheduler errors ({len(summary.errors)} total):")
+            for err in summary.errors[:10]:
+                self._safe_log(f"  {err}")
+            if len(summary.errors) > 10:
+                self._safe_log(f"  ... and {len(summary.errors) - 10} more errors")
 
         self._write_artifact(
             "application.json",
