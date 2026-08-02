@@ -1,7 +1,7 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH2 complete (certified) — PH4 in progress; see certification reports below.
+**Phase:** PH4 complete (certified) — PH3 (parallel) and PH5+ remain; see certification reports below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
-| PH4 | In Progress | 90 | CP-4-05 DONE | PH4 exit gate + certification next |
+| PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -357,3 +357,54 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — proceed to PH4 (CP-4-01 Session state machine); PH3 (CP-3-01 answerbank fingerprinting) parallel-ready.
+
+## PH4 Certification Report
+
+**Phase:** PH4 — Application Session (Epic SES) · **Date:** 2026-08-02
+
+### Completed Tasks (5/5)
+| ID | Task | Result |
+|---|---|---|
+| CP-4-01 | Session state machine (frozen states/events) | DONE |
+| CP-4-02 | Session persistence + events (`copilot_sessions`, `copilot_session_events`) | DONE |
+| CP-4-03 | Workspace service (brief→answers→resume→submit orchestration) | DONE |
+| CP-4-04 | Outcome capture (pipeline-visible writes only via queue APIs + learn signal) | DONE |
+| CP-4-05 | Session API (create/get/advance/abort) | DONE |
+
+### Acceptance Criteria Verification
+- **All valid/invalid transitions tested** (CP-4-01): exhaustive (state × event) matrix — 30 unit tests, every valid pair transitions, every invalid pair raises `InvalidTransitionError` (a `CopilotError`); D-011 reading enforced (progress self-loops, HUMAN_SUBMIT trigger, SUBMITTED never a trigger, OUTCOME_RECORDED self-loop on SUBMITTED). ✅
+- **State + snapshot persisted; events appended** (CP-4-02): full §7.8 row round-trip (brief/answers snapshot JSON, submitted_at, outcome cols); per-session seq log + `ses.*` CopilotEvents in sync; invalid transition persists **nothing**; upsert idempotent. ✅
+- **Workspace advances correctly; snapshots consistent** (CP-4-03): start → BRIEF_READY + brief snapshot; confirm → answers snapshot atomic with the transition (answers/auto/confirm counts); resume routing with explicit-id precedence + router-failure fallback; submit gesture guard (ADR-002); happy-path event trail in frozen order. ✅
+- **No direct pipeline DB writes; accounting consistent; ledger tests pass** (CP-4-04): the only pipeline-visible write is `WorkflowQueue.transition` through an injectable seam (ADR-007) — a **real-queue integration test** verifies MAQ base status, `workflow_history` (actor=copilot, note=outcome), and merged `workflow_status` all align after an outcome; missing job / missing `pipeline_job_id` / raised exception are recorded in the event payload and never crash the session; learning insert idempotent per session + `learn.outcome_recorded` emitted. ✅
+- **Contract §7.9** (CP-4-05): POST /sessions, GET /sessions/{id} (state + events), POST /sessions/{id}/advance (event-name → `SessionEventType`, workspace ops route to the snapshot/pipeline-carrying service methods), POST /sessions/{id}/abort; `{ok, data, error}` envelope; 404 missing / 409 invalid transition / 400 unknown event or payload; seams overridable via `app.dependency_overrides`. ✅
+- **PH4 exit gate**: end-to-end session (brief→answers→resume→submit→outcome) runs through the API (full-chain advance test + outcome-through-queue test with the flag on) and the full regression passes with the pipeline untouched. ✅
+
+### Tests Executed
+- 80 new copilot tests: state machine 30, store 10, workspace service 13, outcome 12 (incl. real `WorkflowQueue` ledger integration), session API 15. Copilot suite now **456 tests**.
+- Full regression: **1249 passed, 0 failed** (1175 → 1185 → 1222 → 1234 → 1249 across CP-4-01..05; pipeline untouched).
+- ruff clean on all new files; mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- `src/copilot` + `api/routers/copilot.py`: **96%** (2190 stmts, 77 missed — config/error-guard branches). Session modules: api 88%, outcome 92%, service 97%, state_machine/events/models/store 100%.
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-4-05 (30 entries); `09_TASK_BOARD.md` 5/5 DONE; `11_DECISIONS.md` D-011 (transition reading), D-013 (answer status passthrough), D-014 (outcome vocabulary + gating), D-015 (session endpoints module placement) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- Frozen §7.5 states/events, §7.7 CopilotEvent namespaces (`ses.*` + `learn.*`), §7.8 schema used as-is (`copilot_sessions` incl. outcome cols, `copilot_session_events`, `copilot_learning_outcomes`), §7.9 API contract implemented.
+- ADR-007: Copilot reads the pipeline through stable interfaces, writes outcomes only via `WorkflowQueue.transition` — verified by the ledger-consistency test. ADR-002: no autonomous submit (human gesture required). ADR-010/012: copilot.db is the sole Copilot store; `pipeline_job_id` mapping read-only.
+- No pipeline imports inside `src/copilot` (importlib seams for `ResumeRouter`, `WorkflowQueue`, `WorkflowStatus`; injectable params everywhere else).
+
+### Known Issues
+- PH2 caveat carried forward: “verdict accepted ≥80%” (PH2 exit gate, 16_SUCCESS_METRICS) is a **manual-sample** metric pending user feedback — not machine-verifiable.
+- Outcome capture is feature-flag **OFF by default** (`OUTCOME_CAPTURE_ENABLED = False`, D-014): pipeline transition + learning signal activate when the flag flips; session-row outcomes record regardless.
+- Browser fill is PH5 — `fill_form` records the transition + optional summary; the exit-gate submit path is exercised at service/API level, not against a live ATS.
+- `FORM_FILLING`/`CHECKPOINT_PENDING` are log-only progress events until PH5 drives them.
+
+### Risks (next phase)
+- PH5 (browser assistant) needs the **playwright dependency** — confirm with user before starting.
+- PH3 remainder (CP-3-03..3-06 answer store/confirm/profile/API) is parallel-ready and unblocks answer persistence; `copilot_learning_outcomes` consumption lands with PH7 (learning store).
+- Interview-probability calibration pending outcome accumulation (16_SUCCESS_METRICS M09).
+
+### Recommendation
+- **GO** — PH4 certified. Next: PH3 remainder (parallel) or PH5 (pending playwright confirmation).
