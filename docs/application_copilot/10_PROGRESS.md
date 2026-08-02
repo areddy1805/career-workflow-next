@@ -11,8 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | Pending | 0 | — | Blocked on PH1–PH5 (API ready) |
-| PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
+| PH6 | In progress | 11 | CP-6-01 DONE | UI 1/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -20,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-01 (Inbox) — DONE
+- Files: `frontend/src/pages/copilot/Inbox.tsx` (replaces the placeholder; same default export).
+- Per frozen 07_UI §3.1: toolbar (debounced search + source/status filters derived from fetched rows + clear), TanStack Table + `@tanstack/react-virtual` (fixed 48px rows, sticky header, `useSortable`/`sort.ts`), row → **Brief sheet** (JobDrawer-pattern on the Sheet primitive: verdict banner, 12 sections with provenance chips + LLM markers via `useBrief`, Apply/Open/Skip/Dismiss actions). Row: title/location, company, source badge, salary (`comp_min/max/currency`, else “—”), effort chip (strategy-derived: auto=Low/ats=Medium/else High), status badge, risk flag (manual/unsupported strategy or REVIEW status). Keyboard: `j/k` move, `1` brief, `a` apply, `s` skip, `d` dismiss; Enter opens the row; shortcuts in tooltips; guards against inputs. Apply → `createSession` → stash session_id in sessionStorage → navigate `/copilot/apply/:id`. Empty/loading/error states incl. “all caught up” + Restore dismissed.
+- Data gaps (documented in code): the API has no fit score or effort field — effort chip derives from `application_strategy`; skip/dismiss have **no backend endpoint** → client-side dismissal persisted in `localStorage["copilot.inbox.dismissed"]` (the frozen status vocabulary has no dismissed state, so nothing is written server-side).
+- Validation: `npm run gate` (typecheck + oxlint + vite build) green; backend regression untouched (no backend change).
 
 ### 2026-08-02 — CP-5-08 (Assistant API + events) — DONE
 - Files: `src/copilot/browser/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`BrowserOpenRequest`/`CheckpointConfirmRequest`/`SubmitRequest`/`BrowserAbortRequest`), `src/copilot/browser/safety.py` (+`looks_like_success`), `src/copilot/browser/checkpoint.py` (+type-match-failure → `ask`), `tests/copilot/test_browser_api.py`.
