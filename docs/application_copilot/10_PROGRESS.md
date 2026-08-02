@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 14 | CP-2-01 DONE | 1/7 tasks; next: CP-2-02 salary |
+| PH2 | In progress | 29 | CP-2-02 DONE | 2/7 tasks; next: CP-2-03 effort |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-02 (Salary assessment service) — DONE
+- Files: `src/copilot/brief/salary.py`, `tests/copilot/test_salary.py`; `brief/models.py` + `brief/assembler.py` extended additively.
+- `assess_salary(opportunity, *, target, market_median)` → `SalaryAssessment{status: within|above|below|unknown, reason, job_min/max, currency, target_min/max, market_median}` (05 §2 #6). Classification: job_max < target_min → below; job_min > target_max → above; overlap or boundary-equal → within; single bound treated as point value; unknown when job has no comp range or profile has no target. `market_median` (knowledge store, CP-7-01) carried for context only.
+- `ApplicationBrief` gained `salary: SalaryAssessment | None` (+ to_dict); `assemble_brief(salary=...)` fills section 6 (source deterministic) and drives the 05 §4 verdict gate — below-band → CONSIDER (existing `salary_below_band` param still honored when salary absent).
+- Validation: 15 new unit tests (full classification matrix incl. boundary-equal, single-bound, unknown paths, market passthrough; brief section + consider gate + to_dict); full regression 1089 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-01 (Brief assembler) — DONE
 - Files: `src/copilot/brief/{__init__,models,assembler}.py`, `tests/copilot/test_brief_assembler.py`.

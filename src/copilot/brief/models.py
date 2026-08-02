@@ -26,6 +26,15 @@ class LearningCost(StrEnum):
     HIGH = "high"
 
 
+class SalaryStatus(StrEnum):
+    """Salary classification vs profile target (05 §2 #6, CP-2-02)."""
+
+    WITHIN = "within"
+    ABOVE = "above"
+    BELOW = "below"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class MissingSkill:
     """One missing skill with its learning cost (05 §2 #3)."""
@@ -77,6 +86,20 @@ class RiskFlags:
 
 
 @dataclass(frozen=True)
+class SalaryAssessment:
+    """Salary assessment (05 §2 #6, CP-2-02)."""
+
+    status: SalaryStatus  # within|above|below|unknown
+    reason: str
+    job_min: float | None = None
+    job_max: float | None = None
+    currency: str | None = None
+    target_min: float | None = None
+    target_max: float | None = None
+    market_median: float | None = None
+
+
+@dataclass(frozen=True)
 class StrategySection:
     """Application strategy + reason (05 §2 #9, ADR-004 mapping)."""
 
@@ -100,6 +123,7 @@ class ApplicationBrief:
     section_sources: dict[str, str]  # section -> deterministic|llm|knowledge (§5)
     provenance_summary: dict[str, list[str]]  # opportunity field provenance (§2 #11)
     confidence: float
+    salary: SalaryAssessment | None = None  # CP-2-02
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
@@ -147,4 +171,18 @@ class ApplicationBrief:
                 for field, sources in self.provenance_summary.items()
             },
             "confidence": self.confidence,
+            "salary": (
+                {
+                    "status": self.salary.status.value,
+                    "reason": self.salary.reason,
+                    "job_min": self.salary.job_min,
+                    "job_max": self.salary.job_max,
+                    "currency": self.salary.currency,
+                    "target_min": self.salary.target_min,
+                    "target_max": self.salary.target_max,
+                    "market_median": self.salary.market_median,
+                }
+                if self.salary
+                else None
+            ),
         }

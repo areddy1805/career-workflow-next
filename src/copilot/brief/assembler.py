@@ -21,6 +21,8 @@ from src.copilot.brief.models import (
     MissingSkill,
     ResumeRecommendation,
     RiskFlags,
+    SalaryAssessment,
+    SalaryStatus,
     StrategySection,
     Verdict,
 )
@@ -149,15 +151,20 @@ def assemble_brief(
     risk_flags: RiskFlags | None = None,
     quality_threshold: float = _DEFAULT_QUALITY_THRESHOLD,
     salary_below_band: bool = False,
+    salary: SalaryAssessment | None = None,
 ) -> ApplicationBrief:
     """Deterministic aggregation → :class:`ApplicationBrief`.
 
     ``components`` (fit breakdown, 05 §2 #2), ``learning_costs`` (§2 #3),
     ``resume_recommendation`` (§2 #4) and ``risk_flags`` (§2 #10) are
-    injectable pipeline outputs; every default is deterministic. The salary
-    gate (05 §4, CP-2-02) defaults to not-below-band so apply is unblocked
-    until salary assessment lands.
+    injectable pipeline outputs; every default is deterministic. When
+    ``salary`` (CP-2-02) is provided it fills brief section 6 and drives the
+    verdict gate (below-band → consider, 05 §4); otherwise the explicit
+    ``salary_below_band`` flag applies (defaults unblocked until salary is
+    assessed).
     """
+    if salary is not None and salary.status == SalaryStatus.BELOW:
+        salary_below_band = True
     fit_score = opportunity.score if opportunity.score is not None else 0.0
     flags = risk_flags or _risk_flags(opportunity)
     verdict, reason = _verdict(
@@ -167,6 +174,8 @@ def assemble_brief(
         "verdict", "fit", "missing_skills", "resume_recommendation",
         "strategy", "risk_flags", "provenance_summary",
     ]
+    if salary is not None:
+        sections.append("salary")
     return ApplicationBrief(
         opportunity_id=opportunity.opportunity_id,
         verdict=verdict,
@@ -185,4 +194,5 @@ def assemble_brief(
         section_sources={section: "deterministic" for section in sections},
         provenance_summary=dict(opportunity.provenance),
         confidence=_confidence(opportunity, flags.low_confidence_provenance),
+        salary=salary,
     )

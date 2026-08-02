@@ -36,7 +36,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
 | CP-2-01 | Brief assembler | Critical | DONE | 1-11 | M | 6h |
-| CP-2-02 | Salary assessment | High | TODO | 2-01 | S | 3h |
+| CP-2-02 | Salary assessment | High | DONE | 2-01 | S | 3h |
 | CP-2-03 | Effort estimator | Medium | TODO | 2-01 | S | 3h |
 | CP-2-04 | Interview probability v1 | High | TODO | 2-01,7-01 | S | 3h |
 | CP-2-05 | Likely questions | Medium | TODO | 2-01,3-02 | M | 5h |
