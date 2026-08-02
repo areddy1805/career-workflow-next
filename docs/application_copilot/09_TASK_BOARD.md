@@ -28,14 +28,14 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-1-08 | Pasted text adapter | High | TODO (ready) | 1-02 | M | 6h |
 | CP-1-09 | PDF adapter | High | TODO | 1-02,1-08 | M | 4h |
 | CP-1-10 | CopilotOpportunity model | Critical | DONE | 0-01 | M | 4h |
-| CP-1-11 | Opportunity store + dedup + mapping | Critical | TODO (ready) | 1-10,0-02 | M | 6h |
-| CP-1-12 | Status read view | High | TODO | 1-11 | M | 4h |
-| CP-1-13 | Ingest/list/detail API | Critical | TODO | 1-01,1-11 | M | 6h |
+| CP-1-11 | Opportunity store + dedup + mapping | Critical | DONE | 1-10,0-02 | M | 6h |
+| CP-1-12 | Status read view | High | TODO (ready) | 1-11 | M | 4h |
+| CP-1-13 | Ingest/list/detail API | Critical | TODO (ready) | 1-01,1-11 | M | 6h |
 
 ## PH2 — Brief
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-2-01 | Brief assembler | Critical | TODO | 1-11 | M | 6h |
+| CP-2-01 | Brief assembler | Critical | TODO (ready) | 1-11 | M | 6h |
 | CP-2-02 | Salary assessment | High | TODO | 2-01 | S | 3h |
 | CP-2-03 | Effort estimator | Medium | TODO | 2-01 | S | 3h |
 | CP-2-04 | Interview probability v1 | High | TODO | 2-01,7-01 | S | 3h |
