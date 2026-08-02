@@ -1,11 +1,11 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH0 in progress — CP-0-01 complete.
+**Phase:** PH0 in progress — CP-0-02 complete.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
-| PH0 | In progress | 10 | CP-0-01 DONE | Package scaffold complete; next: CP-0-02 |
+| PH0 | In progress | 20 | CP-0-02 DONE | Package + DB bootstrapped; next: CP-0-03 |
 | PH1 | Pending | 0 | — | Blocked on PH0 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Pending | 0 | — | Blocked on PH0 |
@@ -20,9 +20,10 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ## Session Log
 
-### 2026-08-02 — CP-0-01 (Scaffold `src/copilot/` package) — DONE
-- Files: `src/copilot/{__init__,constants,exceptions}.py`, `src/copilot/config/{__init__,loader}.py`, `config/copilot.yaml`, `tests/copilot/test_package.py`.
-- Enums pin frozen vocabulary (`03_OPPORTUNITY_MODEL.md` §2, `02_ARCHITECTURE.md` §7.4/§7.5/§7.7, ADR-012).
-- Config loader mirrors `src/config/search_strategy.py` convention (`$COPILOT_CONFIG` override; missing file → defaults; malformed file → `CopilotConfigurationError`).
-- Validation: 21 new unit tests green; full regression 814 passed; ruff + mypy clean on new files.
+### 2026-08-02 — CP-0-02 (copilot.db schema + migrations) — DONE
+- Files: `src/copilot/db/{__init__,schema.sql,db.py,migrate.py}`, `tests/copilot/test_db.py`.
+- Schema implements the frozen §7.8 table set exactly (10 tables — see D-008 for the 10-vs-11 count).
+- Versioning via `PRAGMA user_version` (no bookkeeping table); migrations transactional (explicit BEGIN/ROLLBACK — sqlite3 implicit transactions only cover DML and would let DDL auto-commit); WAL + FK + Row factory on connect; bootstrap via `open_copilot_db()`.
+- Validation: 9 new unit tests green (fresh + idempotent + version-gate + rollback + WAL + column-freeze); full regression 823 passed; ruff + mypy clean.
+- Real bootstrap smoke-tested: `data/copilot.db` created, 10 tables, WAL, version 1.
 - No behavior change to pipeline.

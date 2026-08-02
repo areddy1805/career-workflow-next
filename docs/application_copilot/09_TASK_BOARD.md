@@ -10,8 +10,8 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
 | CP-0-01 | Scaffold copilot package | Critical | DONE | — | S | 2h |
-| CP-0-02 | copilot.db schema + migrations | Critical | TODO (ready) | 0-01 | M | 4h |
-| CP-0-03 | CopilotEvent model + emitter | High | TODO | 0-02 | S | 2h |
+| CP-0-02 | copilot.db schema + migrations | Critical | DONE | 0-01 | M | 4h |
+| CP-0-03 | CopilotEvent model + emitter | High | TODO (ready) | 0-02 | S | 2h |
 | CP-0-04 | Copilot API router + health | Critical | TODO | 0-02 | S | 2h |
 | CP-0-05 | Frontend Copilot shell | High | TODO | 0-04 | M | 4h |
 
