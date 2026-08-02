@@ -156,6 +156,7 @@ def assemble_brief(
     effort: EffortEstimate | None = None,
     interview_probability: float | None = None,
     questions: list[LikelyQuestion] | None = None,
+    prose_summary: str | None = None,
 ) -> ApplicationBrief:
     """Deterministic aggregation → :class:`ApplicationBrief`.
 
@@ -186,6 +187,11 @@ def assemble_brief(
         sections.append("interview_probability")
     if questions is not None:
         sections.append("questions")
+    if prose_summary is not None:
+        sections.append("prose_summary")
+    sources = {section: "deterministic" for section in sections}
+    if prose_summary is not None:
+        sources["prose_summary"] = "llm"
     return ApplicationBrief(
         opportunity_id=opportunity.opportunity_id,
         verdict=verdict,
@@ -201,11 +207,12 @@ def assemble_brief(
         ),
         strategy=_strategy_section(opportunity),
         risk_flags=flags,
-        section_sources={section: "deterministic" for section in sections},
+        section_sources=sources,
         provenance_summary=dict(opportunity.provenance),
         confidence=_confidence(opportunity, flags.low_confidence_provenance),
         salary=salary,
         effort=effort,
         interview_probability=interview_probability,
         questions=questions,
+        prose_summary=prose_summary,
     )

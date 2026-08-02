@@ -137,6 +137,7 @@ class ApplicationBrief:
     effort: EffortEstimate | None = None  # CP-2-03
     interview_probability: float | None = None  # CP-2-04
     questions: list[LikelyQuestion] | None = None  # CP-2-05
+    prose_summary: str | None = None  # CP-2-06 (llm provenance when present)
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
@@ -218,4 +219,5 @@ class ApplicationBrief:
                 if self.questions
                 else None
             ),
+            "prose_summary": self.prose_summary,
         }

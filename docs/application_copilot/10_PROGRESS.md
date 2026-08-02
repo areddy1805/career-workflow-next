@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 71 | CP-2-05 DONE | 5/7 tasks; next: CP-2-06 LLM prose |
+| PH2 | In progress | 86 | CP-2-06 DONE | 6/7 tasks; next: CP-2-07 store+API |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-06 (LLM prose augmentation, gated) — DONE
+- Files: `src/copilot/brief/llm.py`, `tests/copilot/test_llm.py`; `brief/models.py` + `brief/assembler.py` extended additively.
+- `prose_summary(opportunity, *, llm_call, enabled, cache, max_input_chars=4000, max_output_chars=600)` → summary or None. Gated: `BRIEF_LLM_ENABLED = False` feature flag (08 DoD: off by default; rollback = leave off), injectable `llm_call` provider seam (caller pins temp 0, 05 §3 step 5), one pass cached in-memory per opportunity (durable brief cache arrives CP-2-07), input truncated + output capped (budget-respected), empty results → no augmentation.
+- `ApplicationBrief` gained `prose_summary: str | None` (+ to_dict); `assemble_brief(prose_summary=...)` fills the section with **section source `llm`** (05 §5 — the one non-deterministic section; renders with the distinct llm marker).
+- Validation: 9 new unit tests (flag off by default, disabled no-call, one-pass + cache hit, no provider, empty result, input truncation, output cap, brief llm-source wiring); full regression 1130 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-05 (Likely questions service) — DONE
 - Files: `src/copilot/brief/questions.py`, `tests/copilot/test_questions.py`; `brief/models.py` + `brief/assembler.py` extended additively.
