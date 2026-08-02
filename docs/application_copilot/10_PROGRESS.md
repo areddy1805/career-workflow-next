@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 54 | CP-1-12 DONE | 7/13 tasks; next: CP-1-05 / CP-1-06 / CP-1-13 |
+| PH1 | In progress | 69 | CP-1-06 DONE | 9/13 tasks; next: CP-1-13 / CP-1-08 / CP-1-07 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,17 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-05 (LinkedIn URL adapter) — DONE
+- Files: `src/copilot/ingestion/adapters/linkedin_url.py`, `tests/copilot/{test_linkedin_url_adapter.py,fixtures/linkedin_paywall.html}`.
+- Subclasses GenericUrlAdapter; paywall detection (HTTP 999 or "authwall" in body) → partial opportunity + `ParsedOpportunity.meta["needs_manual_verify"]` guidance flag (never auto-submit, ADR-004); og:title split heuristic ("Engineer at Acme | LinkedIn" → title/company, rsplit on " at "); JSON-LD JobPosting path reused; non-paywall HTTP ≥400 → UnresolvableError; application_strategy manual.
+- `ParsedOpportunity` gained optional `meta: dict` (additive; guidance flags home) — recorded in 11_DECISIONS (D-009).
+- Validation: 6 new tests (host gating, paywall partial+flag, authwall-on-200, 404 raise, title/company heuristic); full regression 1024 passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-1-06 (Wellfound URL adapter) — DONE
+- Files: `src/copilot/ingestion/adapters/wellfound_url.py`, `tests/copilot/{test_wellfound_url_adapter.py,fixtures/wellfound_job.html}`.
+- Thin subclass of GenericUrlAdapter: `source_id=wellfound_url` + host gating (`wellfound.com`); reuses JSON-LD/OG deterministic normalization + provenance.
+- Validation: 3 new tests (host gating, fixture normalize incl. salary/employment/city, provenance all parser); full regression 1024 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-1-12 (Status read view) — DONE
 - Files: `src/copilot/oppstore/status_view.py`, `tests/copilot/test_status_view.py`.

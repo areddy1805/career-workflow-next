@@ -22,8 +22,8 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-1-02 | Text/HTML/PDF/URL extraction utils | Critical | DONE | 1-01 | M | 6h |
 | CP-1-03 | Manual queue adapter | Critical | DONE | 1-01 | S | 2h |
 | CP-1-04 | Generic URL adapter | Critical | DONE | 1-02 | M | 6h |
-| CP-1-05 | LinkedIn URL adapter | High | TODO (ready) | 1-02 | M | 4h |
-| CP-1-06 | Wellfound URL adapter | High | TODO (ready) | 1-02 | M | 4h |
+| CP-1-05 | LinkedIn URL adapter | High | DONE | 1-02 | M | 4h |
+| CP-1-06 | Wellfound URL adapter | High | DONE | 1-02 | M | 4h |
 | CP-1-07 | Careers URL adapter | High | TODO (ready) | 1-04 | M | 4h |
 | CP-1-08 | Pasted text adapter | High | TODO (ready) | 1-02 | M | 6h |
 | CP-1-09 | PDF adapter | High | TODO | 1-02,1-08 | M | 4h |
