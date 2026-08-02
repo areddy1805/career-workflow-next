@@ -414,6 +414,7 @@ export default function Inbox() {
               className="h-6 w-6 text-emerald-600 hover:bg-emerald-500/10"
               title="Apply (a)"
               aria-label={`Apply to ${o.title}`}
+              aria-keyshortcuts="a"
               disabled={applying || !!applyingId}
               onClick={() => void handleApply(o)}
             >
@@ -424,6 +425,7 @@ export default function Inbox() {
               className="h-6 w-6 text-muted-foreground hover:text-amber-500"
               title="Skip (s)"
               aria-label={`Skip ${o.title}`}
+              aria-keyshortcuts="s"
               onClick={() => handleSkip(o)}
             >
               <SkipForward className="h-3 w-3" />
@@ -433,6 +435,7 @@ export default function Inbox() {
               className="h-6 w-6 text-muted-foreground hover:text-red-500"
               title="Dismiss (d)"
               aria-label={`Dismiss ${o.title}`}
+              aria-keyshortcuts="d"
               onClick={() => handleDismiss(o)}
             >
               <XCircle className="h-3 w-3" />
@@ -566,7 +569,7 @@ export default function Inbox() {
 
       {/* Action error banner */}
       {actionError && (
-        <div className="flex items-center gap-2 px-6 py-2 border-b border-destructive/20 bg-destructive/5 text-xs text-destructive shrink-0">
+        <div role="alert" className="flex items-center gap-2 px-6 py-2 border-b border-destructive/20 bg-destructive/5 text-xs text-destructive shrink-0">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>{actionError}</span>
           <button
@@ -581,7 +584,7 @@ export default function Inbox() {
 
       {/* Stale-data error banner (kept when rows are still visible) */}
       {query.isError && rows.length > 0 && (
-        <div className="flex items-center gap-2 px-6 py-2 border-b border-destructive/20 bg-destructive/5 text-xs text-destructive shrink-0">
+        <div role="alert" className="flex items-center gap-2 px-6 py-2 border-b border-destructive/20 bg-destructive/5 text-xs text-destructive shrink-0">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>Couldn't refresh opportunities — showing last known data.</span>
           <button
@@ -716,7 +719,12 @@ export default function Inbox() {
                       isSelected ? 'bg-secondary' : 'hover:bg-muted/50',
                     )}
                     onClick={() => selectRow(o.opportunity_id)}
-                    onKeyDown={e => { if (e.key === 'Enter') selectRow(o.opportunity_id); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectRow(o.opportunity_id);
+                      }
+                    }}
                   >
                     {row.getVisibleCells().map(cell => (
                       <div

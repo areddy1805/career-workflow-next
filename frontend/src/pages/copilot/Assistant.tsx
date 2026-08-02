@@ -517,7 +517,7 @@ function FieldRow({
           </label>
           <input
             id={`edit-${field.field_id}`}
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={editValue}
             onChange={(e) => onEditChange(e.target.value)}
             autoFocus

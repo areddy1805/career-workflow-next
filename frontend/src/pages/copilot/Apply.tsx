@@ -165,7 +165,7 @@ function AnswerStatusChip({ status }: { status: string }) {
     <span
       className={cn(
         'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono uppercase tracking-wide leading-none whitespace-nowrap',
-        ANSWER_STATUS_STYLES[status] ?? 'bg-zinc-500/8 text-zinc-500',
+        ANSWER_STATUS_STYLES[status] ?? 'bg-muted/40 text-muted-foreground',
       )}
     >
       {upper}
@@ -1216,6 +1216,7 @@ function ResumeStep({
   busy: boolean;
   onChoose: () => void;
 }) {
+  const radioRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   return (
     <div className="space-y-4">
       <div>
@@ -1252,7 +1253,25 @@ function ResumeStep({
         </p>
       )}
 
-      <div role="radiogroup" aria-label="Resume variant" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div
+        role="radiogroup"
+        aria-label="Resume variant"
+        onKeyDown={(e) => {
+          const dir =
+            e.key === 'ArrowRight' || e.key === 'ArrowDown'
+              ? 1
+              : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+                ? -1
+                : 0;
+          if (!dir || candidates.length < 2) return;
+          e.preventDefault();
+          const idx = candidates.indexOf(selected ?? candidates[0]);
+          const next = candidates[Math.min(Math.max(idx + dir, 0), candidates.length - 1)];
+          onSelect(next);
+          radioRefs.current[next]?.focus();
+        }}
+        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+      >
         {candidates.map((t) => {
           const isSelected = selected === t;
           const isRecommended = rec?.resume_type === t;
@@ -1262,6 +1281,9 @@ function ResumeStep({
               type="button"
               role="radio"
               aria-checked={isSelected}
+              ref={(el) => {
+                radioRefs.current[t] = el;
+              }}
               onClick={() => onSelect(t)}
               className={cn(
                 'rounded-xl border bg-card p-4 text-left transition-colors',

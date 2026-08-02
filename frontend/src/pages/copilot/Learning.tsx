@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
+import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   BarChart3,
@@ -68,6 +68,7 @@ export default function Learning() {
   const [profileId, setProfileId] = useState<string>(loadProfile);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const profileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const [q, setQ] = useState('');
   const deferredQ = useDeferredValue(q);
@@ -341,6 +342,22 @@ export default function Learning() {
               <div
                 role="radiogroup"
                 aria-label="Answer profile"
+                onKeyDown={(e) => {
+                  const dir =
+                    e.key === 'ArrowRight' || e.key === 'ArrowDown'
+                      ? 1
+                      : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+                        ? -1
+                        : 0;
+                  if (!dir || switching) return;
+                  e.preventDefault();
+                  const idx = PROFILES.findIndex((p) => p.id === profileId);
+                  const next = PROFILES[Math.min(Math.max(idx + dir, 0), PROFILES.length - 1)];
+                  if (next.id !== profileId) {
+                    void handleProfileSwitch(next.id);
+                    profileRefs.current[next.id]?.focus();
+                  }
+                }}
                 className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-1 gap-1"
               >
                 {PROFILES.map((p) => (
@@ -350,6 +367,9 @@ export default function Learning() {
                     role="radio"
                     aria-checked={profileId === p.id}
                     disabled={switching}
+                    ref={(el) => {
+                      profileRefs.current[p.id] = el;
+                    }}
                     onClick={() => handleProfileSwitch(p.id)}
                     className={cn(
                       'px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors',
