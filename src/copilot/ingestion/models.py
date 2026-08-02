@@ -79,9 +79,11 @@ class ParsedOpportunity:
 
     ``source`` is the producing adapter's source_id; ``data`` holds the
     normalized fields; ``provenance`` maps each field to the trust sources
-    that produced it (``03_OPPORTUNITY_MODEL.md`` §3: parser|provider|llm|human).
+    that produced it (``03_OPPORTUNITY_MODEL.md`` §3: parser|provider|llm|human);
+    ``meta`` carries non-field guidance flags (e.g. ``needs_manual_verify``).
     """
 
     source: str
     data: dict[str, Any]
     provenance: dict[str, list[str]]
+    meta: dict[str, Any] = field(default_factory=dict)
