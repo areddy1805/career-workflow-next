@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 44 | CP-6-05 DONE | UI 4/9; see session log |
+| PH6 | In progress | 56 | CP-6-08 DONE | UI 5/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-08 (Settings) — DONE
+- Files: `frontend/src/pages/copilot/Settings.tsx` (replaces the placeholder).
+- Per frozen 07_UI §3.8: profiles (frozen ai/fde/generic cards, read-only), confidence thresholds (reference table mirroring 04_BROWSER_ASSISTANT §6 exactly: ≥0.95 silent / 0.80–0.95 flag / <0.80 ask / sensitive always ask / manual_review never fill / unknown skip+review), autopilot toggle (OFF default, `role=switch`, client-side only — backend defers autopilot to v5.2.0, D-006), source enablement (frozen 17-value `OpportunitySource` list per 03 §2 as native checkboxes, all-on default), effort caps + LLM budget (“—” not computed yet). Persistence: component-local `useCopilotSettings` hook → `localStorage["cw-copilot-settings"]` (mirrors the `preferences.ts` persist pattern); the backend has no settings endpoint, so nothing is written server-side (documented in code + D-row note).
+- Data gaps (documented): no backend settings/config-write API exists — v1 Settings is a reference + client-preference surface; config/copilot.yaml write-back is deferred.
+- Validation: `npm run gate` green; no backend change.
 
 ### 2026-08-02 — CP-6-05 (History) — DONE
 - Files: `frontend/src/pages/copilot/History.tsx` (replaces the placeholder). Backend `GET /api/copilot/sessions` (list, newest first) landed in the PH6 plumbing commit (`src/copilot/session/store.py` `list_sessions`, `WorkspaceService.list_sessions`, session API endpoint + test) so the page has data.
