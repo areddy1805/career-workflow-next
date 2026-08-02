@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 92 | CP-1-08 DONE | 12/13 tasks; next: CP-1-09 (PDF) |
+| PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-09 (PDF adapter) — DONE
+- Files: `src/copilot/ingestion/adapters/pdf.py`, `tests/copilot/test_pdf_adapter.py`, `api/routers/copilot.py` (registry); `extract/pdf.py` + `extract/text.py` touched additively.
+- `PdfAdapter` (source_id `pdf`): payload `{kind: pdf, data: {path} | {ref}}`; `fetch` → `pdf_to_text` (unreadable/missing → ParseError), carries ref in `RawSourceContent.meta`; `parse` reuses the shared `structure_text` rules (CP-1-08) so PDFs normalize identically to pasted text, plus `raw_ref` = path/ref; provenance `parser`. Scanned/image-only PDF (empty text) → partial opportunity + `meta={needs_manual_verify: True, guidance: "scanned_pdf"}` (mirrors LinkedIn paywall pattern, D-009); text present but no title+company → UnresolvableError (03 §6). No LLM seam on PDF (ponytail: rules + guidance cover the spec; add with the gated LLM infra if needed).
+- `pdf_to_text` now preserves line structure via new `extract/text.py` `normalize_lines` (per-line whitespace collapse, keeps `\n`) — the shared rules are line-based and `normalize_text` collapses newlines; `pasted_text.fetch` uses the same helper. Additive; existing pdf extraction tests unchanged.
+- Validation: 6 new integration tests (supports incl. ref payload, text-PDF structures like pasted text, ref→raw_ref, scanned→guidance partial, missing file→ParseError, no-identity text→UnresolvableError); full regression 1049 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-1-08 (Pasted text adapter) — DONE
 - Files: `src/copilot/ingestion/adapters/pasted_text.py`, `tests/copilot/{test_pasted_text_adapter.py,fixtures/pasted_structured.txt,fixtures/pasted_prose.txt}`; registered in `api/routers/copilot.py` `get_ingestion_registry()`.

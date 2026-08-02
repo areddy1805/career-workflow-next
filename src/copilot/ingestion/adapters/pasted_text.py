@@ -18,7 +18,7 @@ from typing import Any, Callable
 from src.copilot.constants import ApplicationStrategy, OpportunitySource
 from src.copilot.ingestion.adapters.generic_url import _first
 from src.copilot.ingestion.base import IngestionAdapter
-from src.copilot.ingestion.extract.text import normalize_text
+from src.copilot.ingestion.extract.text import normalize_lines, normalize_text
 from src.copilot.ingestion.models import (
     IngestionPayload,
     ParsedOpportunity,
@@ -482,12 +482,10 @@ class PastedTextAdapter(IngestionAdapter):
         text = _resolve_text(payload)
         if text is None:
             raise UnresolvableError("pasted text payload has no text")
-        # keep line structure (structure_text is line-based); collapse
-        # whitespace within each line
-        raw_text = "\n".join(
-            " ".join(line.split()) for line in text.splitlines()
+        # keep line structure (structure_text is line-based)
+        return RawSourceContent(
+            source=self.source_id, raw_text=normalize_lines(text)
         )
-        return RawSourceContent(source=self.source_id, raw_text=raw_text)
 
     def parse(self, content: RawSourceContent) -> ParsedOpportunity:
         data, _provenance = structure_text(content.raw_text)

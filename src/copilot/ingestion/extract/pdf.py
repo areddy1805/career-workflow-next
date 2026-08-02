@@ -9,12 +9,16 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from src.copilot.ingestion.extract.text import normalize_text
+from src.copilot.ingestion.extract.text import normalize_lines
 from src.copilot.ingestion.models import ParseError
 
 
 def pdf_to_text(path: str | Path) -> str:
-    """Return normalized text of ``path``; raise ParseError when unreadable."""
+    """Return per-line normalized text of ``path``; raise ParseError when unreadable.
+
+    Line structure is preserved (``normalize_lines``) so the shared
+    pasted-text structuring rules (CP-1-08 ``structure_text``) work on PDFs.
+    """
     try:
         reader = PdfReader(str(path))
     except Exception as exc:
@@ -27,4 +31,4 @@ def pdf_to_text(path: str | Path) -> str:
             continue  # ponytail: tolerate one bad page, keep the rest
         if text:
             pages.append(text)
-    return normalize_text("\n".join(pages))
+    return normalize_lines("\n".join(pages))
