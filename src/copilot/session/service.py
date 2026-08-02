@@ -238,6 +238,12 @@ class WorkspaceService:
         """The session row, or None when absent."""
         return session_store.load_session(self._conn, session_id)
 
+    def list_sessions(self, *, limit: int = 100, offset: int = 0) -> list[Session]:
+        """All sessions, newest first (CP-6-05 History page)."""
+        return session_store.list_sessions(
+            self._conn, limit=limit, offset=offset
+        )
+
     def events(self, session_id: str) -> list[dict[str, Any]]:
         """Per-session event log (frozen §7.8), ordered, for the API (CP-4-05)."""
         return [

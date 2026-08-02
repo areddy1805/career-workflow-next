@@ -80,6 +80,21 @@ def load_session(
     return _session_from_row(row)
 
 
+def list_sessions(
+    conn: sqlite3.Connection,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[Session]:
+    """All sessions, newest first (CP-6-05 History page)."""
+    rows = conn.execute(
+        f"SELECT {SNAPSHOT_COLUMNS} FROM copilot_sessions "
+        "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    ).fetchall()
+    return [_session_from_row(row) for row in rows]
+
+
 def create_session(
     conn: sqlite3.Connection,
     opportunity_id: str,

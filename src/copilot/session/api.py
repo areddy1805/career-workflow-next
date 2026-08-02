@@ -83,6 +83,17 @@ def copilot_session_create(
     return {"ok": True, "data": session.to_dict()}
 
 
+@router.get("/sessions")
+def copilot_session_list(
+    limit: int = 100,
+    offset: int = 0,
+    service: WorkspaceService = Depends(get_session_service),
+) -> Any:
+    """All sessions, newest first (CP-6-05 History page)."""
+    sessions = service.list_sessions(limit=limit, offset=offset)
+    return {"ok": True, "data": [s.to_dict() for s in sessions]}
+
+
 @router.get("/sessions/{session_id}")
 def copilot_session_get(
     session_id: str,

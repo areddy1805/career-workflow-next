@@ -150,6 +150,21 @@ def test_create_session_missing_opportunity_404(client):
     assert body["error"]["type"] == "NotFound"
 
 
+def test_list_sessions_newest_first(client):
+    """CP-6-05: GET /sessions returns all sessions, newest first."""
+    _, conn, _, _ = client
+    first = create_session(client, seed_opportunity(conn, title="Alpha Co"))
+    second = create_session(client, seed_opportunity(conn, title="Beta Co"))
+    r = client[0].get("/api/copilot/sessions")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    ids = [s["session_id"] for s in data]
+    assert second["session_id"] in ids and first["session_id"] in ids
+    assert ids.index(second["session_id"]) < ids.index(first["session_id"])
+    r2 = client[0].get("/api/copilot/sessions?limit=1")
+    assert len(r2.json()["data"]) == 1
+
+
 # ------------------------------------------------------------------ get
 
 
