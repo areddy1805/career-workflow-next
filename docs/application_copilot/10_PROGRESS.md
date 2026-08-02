@@ -14,11 +14,26 @@
 | PH6 | ✅ Complete (certified) | 100 | CP-6-09 DONE | 9/9; see PH6 Certification below |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
 | PH8 | ✅ Complete (certified) | 100 | CP-8-03 DONE | 3/3; see PH8 Certification below |
-| PH9 | In progress | 0 | — | Hardening + release; CP-9-01..05 |
+| PH9 | In progress | 60 | CP-9-03 DONE | Hardening 3/5; see session log |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-9-03 (Performance tuning) — DONE
+- Files: `tests/copilot/test_performance.py`.
+- Cold brief guard (AC <5s; assert <10s wall for CI slack — deterministic build measured ~ms), cached second-read <1s, frontend poll cadence asserted statically (inbox 30s / session 1s-while-active / analytics 30s per 07_UI §5). Browser single-instance was already enforced (CP-5-01 one-at-a-time + module-singleton controller) and LLM budget adherence is the flags-off posture (test_security_review).
+- Validation: 3 new tests; full regression **1522**; ruff + mypy clean; frontend gate green.
+
+### 2026-08-02 — CP-9-02 (Security review) — DONE
+- Files: `tests/copilot/test_security_review.py`.
+- The Phase G security checklist as **guard tests**: (1) no static pipeline imports anywhere in `src/copilot` (ADR-007 — regex scan over all copilot .py files); (2) no secrets in copilot code/config (sk-/AKIA/key/password/secret patterns over .py/.yaml/.json/.env.example); (3) playwright pinned `==x.y.z` in requirements.txt (user mandate); (4) the PII guard (`is_sensitive`/`sensitive_fields`) exists and the resolver honors `sensitive=`; (5) all three feature flags (`BROWSER_ENABLED`, `OUTCOME_CAPTURE_ENABLED`, `LEARNING_BIAS_ENABLED`) **off by default** (v5.1.0 rollback posture).
+- Validation: 5 new tests; full regression **1522**; ruff + mypy clean.
+
+### 2026-08-02 — CP-9-01 (Regression + browser e2e) — DONE
+- Files: `tests/copilot/test_browser_e2e.py`.
+- Phase G browser e2e (15_TESTING_PLAN.md): one full journey through the real stack against the vendored Chromium (headed=False) — opportunity → `open` → `form` (10 fields) → fill pass (9/10 typed values; the upload staged, never auto-filled) → `checkpoint` cp2 (upload) → confirm → cp3 (submit) → **cp3 dismiss rejected (never bypass)** → `submit` without gesture **403** → with gesture → submitted + outcome → audit feed asserts every action present (§10.5) → `browser.*` event set emitted (§7.7) → **no-retries-after-submit** (§10.4).
+- Validation: 1 new e2e test; full Phase G CI run: **1522** backend tests, ruff clean, mypy clean, frontend `npm run gate` green.
 
 ### 2026-08-02 — CP-6-06 (Analytics page) — DONE
 - Files: `frontend/src/pages/copilot/Analytics.tsx` (replaces the placeholder), `frontend/src/lib/api/copilot.ts` (+`fetchAnalytics`), `frontend/src/lib/hooks.ts` (+`useAnalytics` 30s poll), `frontend/src/lib/types/copilot.ts` (+analytics types mirroring the backend exactly).

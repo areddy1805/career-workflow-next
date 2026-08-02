@@ -107,8 +107,8 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH9 — Hardening & Release
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-9-01 | Regression + e2e suite | Critical | TODO | all | H | 12h |
-| CP-9-02 | Security review | Critical | TODO | 9-01 | M | 6h |
-| CP-9-03 | Performance tuning | High | TODO | 9-01 | M | 6h |
-| CP-9-04 | Docs freeze + release notes | High | TODO | 9-01..03 | S | 3h |
+| CP-9-01 | Regression + e2e suite | Critical | DONE | all | H | 12h |
+| CP-9-02 | Security review | Critical | DONE | 9-01 | M | 6h |
+| CP-9-03 | Performance tuning | High | DONE | 9-01 | M | 6h |
+| CP-9-04 | Docs freeze + release notes | High | TODO (ready) | 9-01..03 | S | 3h |
 | CP-9-05 | Release v5.1.0 alpha | Critical | TODO | 9-04 | S | 2h |
