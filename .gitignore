@@ -159,6 +159,9 @@ temp/
 .playwright-mcp/
 review_bundle/
 
+# PH5: pinned Playwright browser binaries (scripts/install_playwright.sh)
+.playwright/
+
 
 # ==============================================================================
 # Jupyter
