@@ -12,7 +12,7 @@
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
 | PH6 | In progress | 78 | CP-6-07 DONE | UI 7/9; see session log |
-| PH7 | In progress | 100 | CP-7-06 DONE | Learning 6/6 — certification report below |
+| PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
 
@@ -669,3 +669,57 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — PH5 certified. Next: PH6 (frontend workspace + assistant UI; `cd frontend && npm run build && npx oxlint src` per task).
+
+---
+
+## PH7 Certification Report
+
+**Phase:** PH7 — Learning System (Epic LRN) · **Date:** 2026-08-02
+
+### Completed Tasks (6/6)
+| ID | Task | Result |
+|---|---|---|
+| CP-7-01 | Outcome store (idempotent persisted outcomes + ledger reconciliation matrix) | DONE |
+| CP-7-02 | Signal collection (outcome/answer-quality/provider-ATS/resume-profile derivations) | DONE |
+| CP-7-03 | Ranking feedback (persisted bounded learning bias + priority-engine seam + brief-probability hook) | DONE |
+| CP-7-04 | Answer weighting (outcome-quality feedback into `copilot_answers`) | DONE |
+| CP-7-05 | Provider/ATS success (conversion analytics + routing preference) | DONE |
+| CP-7-06 | Interview/offer tracking (monotonic server-status + manual reconciliation) | DONE |
+
+### Acceptance Criteria Verification
+- **Outcome rows idempotent; reconciliation correct** (CP-7-01): `save_outcome` upserts on `session_id` (ON CONFLICT DO UPDATE — re-recording **advances** the outcome, D-014 progression; identity fields first-write-wins); `reconcile` matrix verified with a fake status reader: match / advance / pipeline-UNKNOWN→no-guess / never-regress; production status reader is an importlib seam into `WorkflowQueue` (ADR-007 — no pipeline writes, no static imports). ✅
+- **Signals derivable from stores** (CP-7-02): outcome/answer-quality/conversion derivations all read-only over `copilot_learning_outcomes` + `copilot_answers` + oppstore. ✅
+- **Bias bounded + flag-gated; existing ranking tests unchanged at bias=0** (CP-7-03): `PriorityEngine(learning_bias_provider=None)` → 0.0 — the old in-memory stub replaced by a seam whose default is byte-identical (`components["learning"]` shape unchanged); `tests/orchestration/test_priority_engine.py` + `test_production_simulation.py` green unchanged; provider output clamped to ±1.0 (bounded-range AC); monotonic bounded EMA `clamp(old + δ/(1+samples), ±1.0)`; `LEARNING_BIAS_ENABLED=False` gates consumption — rollback = flag off → identical to today; brief probability consumes the bias via `adjusted_probability` (bounded ±0.15, identity when off). ✅
+- **Weights update correctly** (CP-7-04): `update_quality` clamp/α math + snapshot-driven feedback (stored/deterministic only, never llm/manual/locked; +0.05 interview/offer, −0.03 rejected). ✅
+- **Conversion analytics correct** (CP-7-05): rates, medians, `best_strategy` tie-breaks, `routing_preference` ordering all unit-tested. ✅
+- **Lifecycle advances monotonically** (CP-7-06): applied→interview→offer advances, no-regress, rejected sticky (D-029), unknown status no-op, manual-track validation. ✅
+- **PH7 exit gate**: outcomes persist (store + API-adjacent derivations); ranking bias live but **reversible** (flag off = today's behavior); answer weighting active (`update_quality` + feedback-from-outcomes). ✅
+
+### Tests Executed
+- 64 new copilot tests: store 8, signals 6, bias 19, answer quality 9, provider success 10, tracking 12. Copilot suite now **691 tests**.
+- Full regression: **1494 passed, 0 failed** (1421 → 1475 → 1484 → 1494 across CP-7-01..06; pipeline untouched except the single priority-engine seam edit, which is byte-identical at bias=0).
+- ruff clean (`src/copilot`, `src/orchestration/priority_engine.py`, `tests/copilot`); mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- Full suite `pytest --cov=src/copilot --cov=api/routers/copilot.py`: **92%** (3720 stmts, 287 missed) — stable vs PH5 (92%); the browser greenlet-tracing artifact (PH5 report) still understates Playwright-touching modules; the new learning modules are pure-logic and measured accurately (bias/store/signals/tracking/answer_quality/provider_success all ~90–100%).
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-6-07/PH7 (58 entries); `09_TASK_BOARD.md` PH7 6/6 DONE; `11_DECISIONS.md` D-027 (store readings), D-028 (bias flag scope + EMA + seam), D-029 (feedback eligibility + sticky-rejected + tie-breaks) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- `copilot_learning_outcomes`/`copilot_learning_weights` used as-is (§7.8); D-014 outcome vocabulary respected everywhere; ADR-007: all pipeline reads via importlib seams (`WorkflowQueue` status, `normalize_server_status`), zero pipeline writes from learning code; no static pipeline imports in `src/copilot`.
+- The single pipeline-touching change (priority-engine `learning_bias_provider` seam) is injectable-only and provably identical at bias=0.
+- `learn.*` events and `copilot_learning_weights` rows remain the only learning-visible state beyond the existing tables.
+
+### Known Issues
+- `LEARNING_BIAS_ENABLED` off by default — bias is accumulated by `apply_outcome_feedback` (reconcile runs) but not consumed until the flag flips (D-028: consumption-gated).
+- Brief-probability bias consumption refreshes the module cache via `get_bias(conn)` at the brief API boundary — correct but process-cache scoped.
+- Email-driven tracking (`track_from_email`) is a documented alias — no email adapter exists yet.
+
+### Risks (next phase)
+- PH8 analytics (funnel + effort) builds on PH1/PH4 data — needs `copilot_sessions` + outcomes + opportunities (all present).
+- CP-6-06 Analytics page and CP-6-09 polish remain in PH6.
+- Bias calibration quality depends on outcome accumulation (16_SUCCESS_METRICS M09) — expected to stay near 0 for months.
+
+### Recommendation
+- **GO** — PH7 certified. Next: PH8 (analytics backend) → CP-6-06 (Analytics page) → CP-6-09 (a11y polish) → PH9 (release).
