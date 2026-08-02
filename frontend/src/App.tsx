@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Briefcase, Play, Inbox, Zap, Search, ChevronRight,
   Settings, PlaySquare, BarChart2, Server, BookOpen, Brain, Activity,
   Terminal, Wrench, Shield, PanelLeftClose, PanelLeftOpen,
+  Send, FileText, Bot, History, TrendingUp, GraduationCap, Cog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePreferences } from '@/store/preferences';
@@ -14,6 +15,7 @@ import {
   CommandItem, CommandList,
 } from '@/components/ui/command';
 import { fetchManualReviewQueue, fetchExternalApplyQueue } from '@/lib/api';
+import { useCopilotHealth } from '@/lib/hooks';
 
 import Dashboard from '@/pages/Dashboard';
 import Jobs from '@/pages/Jobs';
@@ -31,6 +33,14 @@ import Providers from '@/pages/Providers';
 import System from '@/pages/System';
 import Developer from '@/pages/Developer';
 import About from '@/pages/About';
+import CopilotInbox from '@/pages/copilot/Inbox';
+import CopilotApply from '@/pages/copilot/Apply';
+import CopilotBrief from '@/pages/copilot/Brief';
+import CopilotAssistant from '@/pages/copilot/Assistant';
+import CopilotHistory from '@/pages/copilot/History';
+import CopilotAnalytics from '@/pages/copilot/Analytics';
+import CopilotLearning from '@/pages/copilot/Learning';
+import CopilotSettings from '@/pages/copilot/Settings';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -51,7 +61,20 @@ const NAV_GROUPS = [
     label: 'Workflows',
     items: [
       { name: 'Jobs',           path: '/jobs',          icon: Briefcase       },
-      { name: 'Applications',   path: '/applications',  icon: Inbox, badge: true },
+      { name: 'Applications',   path: '/applications',  icon: Inbox, badge: 'queue' },
+    ],
+  },
+  {
+    label: 'Copilot',
+    items: [
+      { name: 'Inbox',          path: '/copilot/inbox',              icon: Inbox, badge: 'health' },
+      { name: 'Apply',          path: '/copilot/apply/:id',          icon: Send           },
+      { name: 'Brief',          path: '/copilot/brief/:id',          icon: FileText       },
+      { name: 'Assistant',      path: '/copilot/assistant/:sessionId', icon: Bot          },
+      { name: 'History',        path: '/copilot/history',            icon: History        },
+      { name: 'Analytics',      path: '/copilot/analytics',          icon: TrendingUp     },
+      { name: 'Learning',       path: '/copilot/learning',           icon: GraduationCap  },
+      { name: 'Settings',       path: '/copilot/settings',           icon: Cog            },
     ],
   },
   {
@@ -99,11 +122,24 @@ function useInboxCount() {
   return count > 0 ? count : null;
 }
 
+// Copilot Inbox badge: driven by subsystem health until the real pending
+// count exists (PH6). Shows how many subsystems are down; '!' when the
+// health endpoint itself is unreachable.
+function useCopilotHealthBadge(): number | string | null {
+  const { data, isError } = useCopilotHealth();
+  if (isError) return '!';
+  if (!data) return null;
+  if (data.ok) return null;
+  const down = Object.values(data.data?.subsystems ?? {}).filter(s => s !== 'ok').length;
+  return down > 0 ? down : '!';
+}
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 function Sidebar() {
   const { sidebarOpen, toggleSidebar } = usePreferences();
   const inboxCount = useInboxCount();
+  const copilotBadge = useCopilotHealthBadge();
 
   return (
     <div className={cn(
@@ -144,7 +180,8 @@ function Sidebar() {
                   key={item.path}
                   item={item}
                   collapsed={!sidebarOpen}
-                  badge={item.badge ? inboxCount : null}
+                  badge={item.badge === 'queue' ? inboxCount
+                    : item.badge === 'health' ? copilotBadge : null}
                 />
               ))}
             </div>
@@ -189,7 +226,7 @@ function NavItem({
 }: {
   item: typeof ALL_NAV_ITEMS[0];
   collapsed: boolean;
-  badge?: number | null;
+  badge?: number | string | null;
 }) {
   return (
     <NavLink
@@ -212,7 +249,7 @@ function NavItem({
           {!collapsed && <span className="flex-1 tracking-tight">{item.name}</span>}
           {!collapsed && badge != null && (
             <span className="ml-auto text-[9px] font-bold bg-muted-foreground/10 text-foreground px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
-              {badge > 99 ? '99+' : badge}
+              {typeof badge === 'number' && badge > 99 ? '99+' : badge}
             </span>
           )}
           {collapsed && badge != null && (
@@ -387,6 +424,14 @@ function App() {
                 <Route path="/system"        element={<System />} />
                 <Route path="/developer"     element={<Developer />} />
                 <Route path="/about"         element={<About />} />
+                <Route path="/copilot/inbox" element={<CopilotInbox />} />
+                <Route path="/copilot/apply/:id" element={<CopilotApply />} />
+                <Route path="/copilot/brief/:id" element={<CopilotBrief />} />
+                <Route path="/copilot/assistant/:sessionId" element={<CopilotAssistant />} />
+                <Route path="/copilot/history" element={<CopilotHistory />} />
+                <Route path="/copilot/analytics" element={<CopilotAnalytics />} />
+                <Route path="/copilot/learning" element={<CopilotLearning />} />
+                <Route path="/copilot/settings" element={<CopilotSettings />} />
               </Routes>
             </Layout>
           </Router>

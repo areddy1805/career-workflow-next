@@ -13,12 +13,12 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-0-02 | copilot.db schema + migrations | Critical | DONE | 0-01 | M | 4h |
 | CP-0-03 | CopilotEvent model + emitter | High | DONE | 0-02 | S | 2h |
 | CP-0-04 | Copilot API router + health | Critical | DONE | 0-02 | S | 2h |
-| CP-0-05 | Frontend Copilot shell | High | TODO (ready) | 0-04 | M | 4h |
+| CP-0-05 | Frontend Copilot shell | High | DONE | 0-04 | M | 4h |
 
 ## PH1 — Ingestion
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-1-01 | Ingestion interface + registry + pipeline | Critical | TODO | 0-01 | M | 4h |
+| CP-1-01 | Ingestion interface + registry + pipeline | Critical | TODO (ready) | 0-01 | M | 4h |
 | CP-1-02 | Text/HTML/PDF/URL extraction utils | Critical | TODO | 1-01 | M | 6h |
 | CP-1-03 | Manual queue adapter | Critical | TODO | 1-01 | S | 2h |
 | CP-1-04 | Generic URL adapter | Critical | TODO | 1-02 | M | 6h |
@@ -27,7 +27,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-1-07 | Careers URL adapter | High | TODO | 1-04 | M | 4h |
 | CP-1-08 | Pasted text adapter | High | TODO | 1-02 | M | 6h |
 | CP-1-09 | PDF adapter | High | TODO | 1-02,1-08 | M | 4h |
-| CP-1-10 | CopilotOpportunity model | Critical | TODO | 0-01 | M | 4h |
+| CP-1-10 | CopilotOpportunity model | Critical | TODO (ready) | 0-01 | M | 4h |
 | CP-1-11 | Opportunity store + dedup + mapping | Critical | TODO | 1-10,0-02 | M | 6h |
 | CP-1-12 | Status read view | High | TODO | 1-11 | M | 4h |
 | CP-1-13 | Ingest/list/detail API | Critical | TODO | 1-01,1-11 | M | 6h |
@@ -46,7 +46,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH3 — Answer Bank
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-3-01 | Question fingerprinting | Critical | TODO | 0-01 | M | 5h |
+| CP-3-01 | Question fingerprinting | Critical | TODO (ready) | 0-01 | M | 5h |
 | CP-3-02 | Resolution engine wrapper + cache | Critical | TODO | 3-01 | M | 6h |
 | CP-3-03 | Answer store CRUD + profiles | Critical | TODO | 3-01,0-02 | M | 6h |
 | CP-3-04 | Confirmation workflow | High | TODO | 3-03 | M | 4h |
@@ -65,7 +65,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH5 — Browser Assistant
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-5-01 | Browser controller | Critical | TODO | 0-01 | M | 6h |
+| CP-5-01 | Browser controller | Critical | TODO (ready) | 0-01 | M | 6h |
 | CP-5-02 | Form field model | Critical | TODO | 5-01 | H | 10h |
 | CP-5-03 | Field resolver | Critical | TODO | 5-02,3-02 | M | 6h |
 | CP-5-04 | Checkpoint engine | High | TODO | 5-03 | M | 5h |
