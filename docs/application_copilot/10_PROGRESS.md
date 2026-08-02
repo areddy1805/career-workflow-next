@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 43 | CP-2-03 DONE | 3/7 tasks; next: CP-2-04 probability |
+| PH2 | In progress | 57 | CP-2-04 DONE | 4/7 tasks; next: CP-2-05 questions |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-04 (Interview probability v1) — DONE
+- Files: `src/copilot/brief/probability.py`, `tests/copilot/test_probability.py`; `brief/models.py` + `brief/assembler.py` extended additively.
+- `interview_probability(opportunity, *, priors, resume_profile)` → float. Bucket priors from the learning store (05 §2 #5): key = `(role_family, resume_profile, score_band)` with score bands low < 50 / mid 50–79 / high ≥ 80 (unknown band when no score); `priors` injected read-only (CP-7-01 seam — table does not exist yet); cold start / bucket miss → default **0.12**; no LLM. `resume_profile` overrides the profile inferred from the opportunity's resume recommendation (lowercased type, else "generic").
+- `ApplicationBrief` gained `interview_probability: float | None` (+ to_dict); `assemble_brief(interview_probability=...)` fills section 5 (source deterministic). Does not gate the verdict.
+- Validation: 11 new unit tests (cold default, bucket miss, prior hit, rounding, all four score bands, unknown band, role-family default, profile inference + override, brief section/to_dict); full regression 1111 passed; ruff + mypy clean. Calibration vs actual outcomes is a success metric (16_SUCCESS_METRICS) tracked once outcomes accumulate.
 
 ### 2026-08-02 — CP-2-03 (Effort estimator) — DONE
 - Files: `src/copilot/brief/effort.py`, `tests/copilot/test_effort.py`; `brief/models.py` + `brief/assembler.py` extended additively.

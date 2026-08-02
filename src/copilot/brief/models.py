@@ -127,6 +127,7 @@ class ApplicationBrief:
     confidence: float
     salary: SalaryAssessment | None = None  # CP-2-02
     effort: EffortEstimate | None = None  # CP-2-03
+    interview_probability: float | None = None  # CP-2-04
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
@@ -199,4 +200,5 @@ class ApplicationBrief:
                 if self.effort
                 else None
             ),
+            "interview_probability": self.interview_probability,
         }

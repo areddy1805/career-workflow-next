@@ -153,6 +153,7 @@ def assemble_brief(
     salary_below_band: bool = False,
     salary: SalaryAssessment | None = None,
     effort: EffortEstimate | None = None,
+    interview_probability: float | None = None,
 ) -> ApplicationBrief:
     """Deterministic aggregation → :class:`ApplicationBrief`.
 
@@ -179,6 +180,8 @@ def assemble_brief(
         sections.append("salary")
     if effort is not None:
         sections.append("effort")
+    if interview_probability is not None:
+        sections.append("interview_probability")
     return ApplicationBrief(
         opportunity_id=opportunity.opportunity_id,
         verdict=verdict,
@@ -199,4 +202,5 @@ def assemble_brief(
         confidence=_confidence(opportunity, flags.low_confidence_provenance),
         salary=salary,
         effort=effort,
+        interview_probability=interview_probability,
     )
