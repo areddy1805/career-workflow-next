@@ -101,6 +101,8 @@ def fill_action(fill: FieldFill, kind: FieldKind, *, sensitive: bool = False) ->
         return "upload"
     if fill.confidence is None:
         return "unknown"  # unresolved → skip, surface in the review list
+    if not fill.filled:
+        return "ask"  # value exists but does not type-match → ask the human
     if fill.confidence < FLAG_FILL_CONFIDENCE:
         return "ask"  # < 0.80 → do not fill, raise inline question
     if fill.confidence < SILENT_FILL_CONFIDENCE:

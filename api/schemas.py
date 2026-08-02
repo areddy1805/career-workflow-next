@@ -87,3 +87,32 @@ class ProfileSwitchRequest(BaseModel):
     """CP-3-06: atomic profile switch (frozen §7.4 switch_profile)."""
 
     profile_id: str
+
+
+class BrowserOpenRequest(BaseModel):
+    """CP-5-08: open a browser session for an opportunity's apply_url."""
+
+    opportunity_id: str
+    session_id: str
+    profile_id: str = "generic"
+    url: Optional[str] = None  # override apply_url (tests / manual)
+
+
+class CheckpointConfirmRequest(BaseModel):
+    """CP-5-08: acknowledge the current checkpoint (dismiss allowed on cp1/cp2)."""
+
+    checkpoint_id: str
+    action: str = "confirm"
+
+
+class SubmitRequest(BaseModel):
+    """CP-5-08: final submit. Fail-closed: the human gesture must be sent
+    explicitly as true (ADR-002; autopilot deferred, D-006)."""
+
+    human_gesture: bool = False
+
+
+class BrowserAbortRequest(BaseModel):
+    """CP-5-08: kill-switch (04 §9) with an audit reason."""
+
+    reason: str = "aborted by user"

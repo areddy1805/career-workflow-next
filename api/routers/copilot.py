@@ -17,6 +17,7 @@ from api.schemas import IngestRequest
 from src.copilot import __version__
 from src.copilot.answerbank.api import router as answerbank_router
 from src.copilot.brief.api import router as brief_router
+from src.copilot.browser.api import router as browser_router
 from src.copilot.config.loader import load_copilot_config
 from src.copilot.db.db import open_copilot_db
 from src.copilot.exceptions import CopilotError
@@ -35,6 +36,7 @@ from src.copilot.session.api import router as session_router
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 router.include_router(brief_router)
+router.include_router(browser_router)
 router.include_router(session_router)
 router.include_router(answerbank_router)
 

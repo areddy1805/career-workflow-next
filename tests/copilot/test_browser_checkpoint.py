@@ -71,6 +71,20 @@ def test_fill_action_matrix(confidence, kind, sensitive, expected):
     assert action == expected
 
 
+def test_type_match_failure_surfaces_as_ask():
+    """A value that cannot be mapped to the field (filled=False, high
+    confidence) must surface for the human, not pass silently."""
+    fill = FieldFill(
+        field_id="f1",
+        resolution={"status": "auto", "typed_value": None},
+        filled=False,
+        confidence=1.0,
+        source="stored",
+        reason="no type match for kind select",
+    )
+    assert fill_action(fill, FieldKind.SELECT) == "ask"
+
+
 def test_categorize_buckets():
     categories = categorize(
         [

@@ -72,7 +72,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-5-05 | Recovery | High | DONE | 5-02 | M | 5h |
 | CP-5-06 | ATS adapters | High | DONE | 5-02 | M | 8h |
 | CP-5-07 | Safety + audit | Critical | DONE | 5-01 | M | 5h |
-| CP-5-08 | Assistant API + events | High | TODO (ready) | 5-04,5-07 | M | 6h |
+| CP-5-08 | Assistant API + events | High | DONE | 5-04,5-07 | M | 6h |
 
 ## PH6 — UI
 | ID | Task | Pri | Status | Dep | Cplx | Effort |

@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 88 | CP-5-07 DONE | Playwright pinned (c911288); Browser Assistant 7/8 |
+| PH5 | ✅ Complete (all 8) | 100 | CP-5-08 DONE | Browser Assistant 8/8 — certification report below |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-08 (Assistant API + events) — DONE
+- Files: `src/copilot/browser/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`BrowserOpenRequest`/`CheckpointConfirmRequest`/`SubmitRequest`/`BrowserAbortRequest`), `src/copilot/browser/safety.py` (+`looks_like_success`), `src/copilot/browser/checkpoint.py` (+type-match-failure → `ask`), `tests/copilot/test_browser_api.py`.
+- `browser/api.py` implements the frozen §7.6 surface at `/api/copilot/browser/*` (D-015 mount-point reading; D-025 addressing reading): `AssistantService` (conn + shared controller + resolution seams) + endpoints `POST /browser/open` (opportunity → apply_url, 404/400, one session at a time 409), `GET /browser/form` (extract + adapt + sensitive-detect + resolve the whole fill pass → §7.6 FormModel), `POST /browser/fill/{field_id}` (resolve → §6 action → DOM write for silent/flag, staged otherwise; 400 unknown field), `GET /browser/checkpoint` + `POST /browser/confirm` (gate sequence, cp3 never dismissible, strict order), `POST /browser/submit` (ceremony + `human_gesture` required — fail-closed schema default false; the ONE automated click of the session; outcome success/failure/unknown; no retries), `POST /browser/guidance` (works even after takeover), `POST /browser/abort` (kill-switch anytime, slot released). Every action → `copilot_browser_actions` row with audit note (§10.5) + `browser.*` CopilotEvent (opened/form_model/field_filled/checkpoint/checkpoint_confirmed/submitted/guidance/aborted, EventNamespace.BROWSER §7.7). The controller + per-session runtimes are module-level singletons (`reset_assistant` test seam) because Playwright sync is thread-bound and the service is per-request. After takeover the assistant fills nothing — guidance only (04 §7).
+- D-025 recorded (implicit-session addressing, single automated submit click, outcome vocabulary, fail-closed gesture); `fill_action` gained the type-match-failure → `ask` rule (a resolved value that cannot be mapped to the field must surface, not pass silently).
+- Validation: 19 new tests (18 API + 1 checkpoint matrix): open/audit/event, 404, 400 no-apply_url, 409 busy, form model + audit, fill stored→DOM contract + audit + event, fill unknown 400, full cp1→cp2→cp3 gate sequence via API incl. cp3-dismiss 409, submit ceremony (403 not-authorized, 403 no-gesture), submit full flow (matching engine → submit → outcome → no-retry 403), guidance plan, abort + reopen + 409-without-session, **real DOM writes** (text fill, select option, radio check — direct service), sensitive DOB staged never written, takeover blocks fill but allows guidance, feature gate raises `BrowserNotEnabled`; full regression **1420** passed (+19); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-07 (Safety + audit) — DONE
 - Files: `src/copilot/browser/safety.py`, `tests/copilot/test_browser_safety.py`.

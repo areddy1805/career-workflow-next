@@ -82,6 +82,17 @@ _FAILURE_MARKERS: tuple[str, ...] = (
     "unavailable",
 )
 
+_SUCCESS_MARKERS: tuple[str, ...] = (
+    "application-complete",
+    "application complete",
+    "submitted",
+    "success",
+    "thanks",
+    "thank-you",
+    "confirmation",
+    "applied",
+)
+
 
 class SafetyViolation(CopilotError):
     """Raised when a §10 rule would be violated."""
@@ -108,6 +119,12 @@ def looks_like_failure(url: str) -> bool:
     """Heuristic for rejection/failure pages (§10.4 annotation/guidance)."""
     text = url.lower()
     return any(marker in text for marker in _FAILURE_MARKERS)
+
+
+def looks_like_success(url: str) -> bool:
+    """Heuristic for submission-confirmation pages (§7 outcome parse)."""
+    text = url.lower()
+    return any(marker in text for marker in _SUCCESS_MARKERS)
 
 
 def record_action(
