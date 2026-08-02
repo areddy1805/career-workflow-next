@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 22 | CP-6-02 DONE | UI 2/9; see session log |
+| PH6 | In progress | 33 | CP-6-03 DONE | UI 3/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-03 (Workspace wizard) — DONE
+- Files: `frontend/src/pages/copilot/Apply.tsx` (replaces the placeholder; 5-step wizard), `frontend/src/store/copilot.ts` (+`opportunityId`/`sessionId`/`setSession`/`editingAnswerFp`/`setEditingAnswerFp`), `frontend/src/lib/api/base.ts` (+copilot envelope error message surfacing).
+- Per frozen 07_UI §3.2: progress rail (5 `WORKSPACE_STEPS`); step 1 Brief (read-only summary + Begin); step 2 Answers (snapshot chips auto/confirm/manual/locked, inline edit → `POST /answers/confirm` + local snapshot patch, `confirm-all` skips locked, `1-9` jump slots, `e` edit, Enter/Space/Esc); step 3 Resume (recommended resume + AI/FDE alternatives → `RESUME_CHOSEN`); step 4 Assistant (placeholder card linking to `/copilot/assistant/:sessionId`; the wizard intentionally stalls at RESUME_SELECTED until the real panel drives `FORM_FILLED` — submit is unreachable by design until CP-6-04); step 5 Submit (**hold-to-confirm** ~1s gesture — pointer + keyboard, releases cancel — sends `HUMAN_SUBMIT` `{human_gesture: true}`, outcome panel after SUBMITTED, ABORTED banner). Session created on mount (`createSession`), 1s polling while active, auto-advance **only forward** (manual back-nav survives the poll), action gating per transition validity (resume choose valid from ANSWERS_REVIEWED — verified against `state_machine.py`).
+- D-026 recorded: inline edits use the answer-bank `confirm` (a post-edit `ANSWERS_CONFIRMED` re-advance 409s — valid only from BRIEF_READY, D-011); `fetchApi` now surfaces the nested `{ok, error:{message}}` envelope so 400/409 reasons reach the UI.
+- Validation: `npm run gate` green (typecheck + oxlint + build); no backend change.
 
 ### 2026-08-02 — CP-6-02 (Brief view) — DONE
 - Files: `frontend/src/pages/copilot/Brief.tsx` (replaces the placeholder).
