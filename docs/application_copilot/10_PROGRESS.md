@@ -1,11 +1,11 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH0 in progress — CP-0-02 complete.
+**Phase:** PH0 in progress — CP-0-04 complete.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
-| PH0 | In progress | 20 | CP-0-02 DONE | Package + DB bootstrapped; next: CP-0-03 |
+| PH0 | In progress | 80 | CP-0-04 DONE | Package + DB + events + API live; next: CP-0-05 |
 | PH1 | Pending | 0 | — | Blocked on PH0 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Pending | 0 | — | Blocked on PH0 |
@@ -20,10 +20,15 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ## Session Log
 
-### 2026-08-02 — CP-0-02 (copilot.db schema + migrations) — DONE
-- Files: `src/copilot/db/{__init__,schema.sql,db.py,migrate.py}`, `tests/copilot/test_db.py`.
-- Schema implements the frozen §7.8 table set exactly (10 tables — see D-008 for the 10-vs-11 count).
-- Versioning via `PRAGMA user_version` (no bookkeeping table); migrations transactional (explicit BEGIN/ROLLBACK — sqlite3 implicit transactions only cover DML and would let DDL auto-commit); WAL + FK + Row factory on connect; bootstrap via `open_copilot_db()`.
-- Validation: 9 new unit tests green (fresh + idempotent + version-gate + rollback + WAL + column-freeze); full regression 823 passed; ruff + mypy clean.
-- Real bootstrap smoke-tested: `data/copilot.db` created, 10 tables, WAL, version 1.
+### 2026-08-02 — CP-0-03 (CopilotEvent model + emitter) — DONE
+- Files: `src/copilot/events/{__init__,models,emitter}.py`, `tests/copilot/test_events.py`.
+- Frozen §7.7 shape; event types validated against the frozen `EventNamespace` set; `trace_id` explicit or generated (uuid hex), propagated by callers (repo convention, cf. `src/inference/events.py`); emit = insert + commit + one log line.
+- Validation: 23 new unit tests; full regression 846 passed; ruff + mypy clean.
+- No behavior change to pipeline.
+
+### 2026-08-02 — CP-0-04 (Copilot API router + health) — DONE
+- Files: `api/routers/copilot.py`, `api/main.py` (router mounted at `/api/copilot`), `tests/copilot/test_api.py`.
+- GET `/api/copilot/health` returns `{ok, data:{status, version, subsystems}}` per §7.9; bootstraps copilot.db on first use; CORS via existing global middleware (consistent).
+- `api/schemas.py` untouched: no request models needed for health; first models arrive with CP-1-13.
+- Validation: 3 new integration tests; full regression 849 passed; ruff/mypy clean on new files (main.py E402s are pre-existing load_dotenv convention).
 - No behavior change to pipeline.
