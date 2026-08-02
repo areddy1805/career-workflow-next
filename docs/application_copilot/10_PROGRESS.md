@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 46 | CP-1-04 DONE | 6/13 tasks; next: CP-1-12 / CP-1-05 / CP-1-13 |
+| PH1 | In progress | 54 | CP-1-12 DONE | 7/13 tasks; next: CP-1-05 / CP-1-06 / CP-1-13 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-12 (Status read view) — DONE
+- Files: `src/copilot/oppstore/status_view.py`, `tests/copilot/test_status_view.py`.
+- Frozen mapping tables (ADR-012, 03 §7) in `reconcile(lifecycle_state, workflow_status, ledger_stage) -> OpportunityStatusView` — pure, no pipeline imports: ledger funnel (post-submit: SUBMITTED/VIEWED/SHORTLISTED/INTERVIEW/OFFER/REJECTED) > canonical JobState (15 values incl. ROUTED_*/QUEUED→REVIEW, PRE_APPLICATION_REJECTED/APPLICATION_FAILED/DEFERRED→CLOSED, ALREADY_APPLIED→TRACKING) > WorkflowStatus (9 values) > NEW. Keys are exact pipeline string values; pipeline stays decoupled (ADR-007).
+- `StatusViewResolver` lazily wires real read-only sources (JobLifecycleStore.current_state, WorkflowQueue.get, OpportunityRepository.get_status via ApplicationLedger) via importlib; sources injectable for tests.
+- Validation: 42 new tests (full lifecycle/workflow/funnel matrices, precedence, unknown→NEW, resolver with fakes + real JobLifecycleStore(:memory:) + real WorkflowQueue(tmp)); full regression 1016 passed; ruff + mypy clean.
+- Additive; resolver not yet called by the store/API (wired at CP-1-13).
 
 ### 2026-08-02 — CP-1-04 (Generic URL adapter) — DONE
 - Files: `src/copilot/ingestion/adapters/generic_url.py`, `tests/copilot/{test_generic_url_adapter.py,fixtures/generic_job_rich.html,fixtures/generic_job_og_only.html}`.
