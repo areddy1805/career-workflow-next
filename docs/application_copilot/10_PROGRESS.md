@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 38 | CP-5-03 DONE | Playwright pinned (c911288); Browser Assistant 3/8 |
+| PH5 | In progress | 50 | CP-5-04 DONE | Playwright pinned (c911288); Browser Assistant 4/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-04 (Checkpoint engine) — DONE
+- Files: `src/copilot/browser/checkpoint.py`, `tests/copilot/test_browser_checkpoint.py`.
+- `checkpoint.py` implements the frozen gates of 04 §6 (per-fill decision matrix) and the §7 three-checkpoint workflow. `fill_action(fill, kind, *, sensitive)` is the §6 matrix verbatim: sensitive→`sensitive` (never auto-fill, always ask), upload→`upload` (confirm at checkpoint), `confidence is None`→`unknown` (skip, surface in review list), <0.80→`ask` (do not fill, inline question), 0.80–0.95→`flag` (fill + review), ≥0.95→`silent`. `categorize` buckets fills; `build_checkpoints` yields `cp1 review_flagged` (flag + unknown), `cp2 upload_sensitive` (upload + sensitive), `cp3 submit` (ask) — cp1/cp2 dismissible, **cp3 never dismissible** (human gesture REQUIRED, ADR-002).
+- `CheckpointEngine` owns the gate sequence (D-021): `evaluate(fills, kinds, sensitive=)` returns the next open gate in §7 order (non-submit gates with no pending are skipped; cp3 is always presented once earlier gates are confirmed), `confirm(checkpoint_id, action)` records acknowledgement and rejects out-of-order gates + any dismissal of cp3, `submit_authorized` is True only after cp3 is confirmed — the submit gate can never be bypassed (AC). Checkpoint shape per §7.6: `{checkpoint_id, type, gates_open, pending: [{type, field_id, reason}], dismissible}`.
+- D-021 recorded (checkpoint taxonomy, strict sequence, unresolved→unknown mapping).
+- Validation: 22 new unit tests (full §6 matrix parametrized incl. threshold boundaries 0.95/0.80/0.79 and sensitivity-wins; categorize buckets; build order + dismissibility; silent fills reach submit gate; flag→submit sequence with out-of-order reject; upload+sensitive gate; cp3 dismiss rejected; never-bypass full sequence; wrong-gate confirm rejected; ask surfaces at submit gate; to_dict shapes; empty form reaches submit); full regression **1346** passed (+22); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-03 (Field resolver) — DONE
 - Files: `src/copilot/browser/resolver.py`, `tests/copilot/test_browser_resolver.py`.
