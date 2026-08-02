@@ -261,3 +261,53 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — proceed to PH2 (CP-2-01 Brief assembler).
+
+## PH2 Certification Report
+
+**Phase:** PH2 — Application Brief · **Date:** 2026-08-02
+
+### Completed Tasks (7/7)
+| ID | Task | Result |
+|---|---|---|
+| CP-2-01 | Brief assembler + ApplicationBrief model | DONE |
+| CP-2-02 | Salary assessment service | DONE |
+| CP-2-03 | Effort estimator | DONE |
+| CP-2-04 | Interview probability v1 | DONE |
+| CP-2-05 | Likely questions service | DONE |
+| CP-2-06 | LLM prose augmentation (gated) | DONE |
+| CP-2-07 | Brief persistence + cache + endpoints | DONE |
+
+### Acceptance Criteria Verification
+- Every opportunity gets a **complete, cached Brief** (PH2 exit gate): GET `/api/copilot/opportunities/{id}/brief` builds all deterministic sections (verdict, fit breakdown, missing skills, resume rec, strategy, risk, salary, effort, probability, questions) + gated prose; in-memory cache hit (<100ms, dict lookup) → DB (`copilot_briefs`) → cold deterministic build (<5s, pure rules + sqlite). ✅
+- Verdict rule correct (05 §4): verdict matrix green (fit bands, threshold 68 edge, all four blockers, consider-via-salary, custom threshold). ✅
+- Salary classification correct for fixture ranges (within/above/below/unknown incl. single-bound and boundary-equal). ✅
+- Effort frozen heuristics (05 §6): per-ATS field counts → `fields*0.4 + pages*1.2`, floored, capped; Workday/Rippling high + guidance. ✅
+- Interview probability: priors read from injectable learning-store table; **0.12 cold default**; no LLM. ✅
+- LLM augmentation: gated (flag OFF by default), one cached pass, temp 0, input/output budgets, provenance `llm`. ✅
+- Build cold <5s / cached <100ms by construction (deterministic + in-memory); invalidate works (cache + DB drop, rebuild verified). ✅
+
+### Tests Executed
+- 96 new copilot tests across CP-2-01..07 (assembler 25, salary 15, effort 11, probability 11, questions 10, llm 9, store 11, brief API 4).
+- Full regression: **1145 passed, 0 failed** (1049 PH1 → 1145; pipeline untouched). Copilot suite now 352 tests.
+- ruff clean on all new files; mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- `src/copilot` + `api/routers/copilot.py`: **97%** (1653 stmts, 47 missed — config/error-guard branches).
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-2-07; `09_TASK_BOARD.md` 7/7 DONE; `11_DECISIONS.md` D-008/D-009 Active (no new decisions required — sections followed 05 §2 exactly). Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- Frozen 05 §2–§6 implemented exactly (12-section shape, §4 verdict, §6 effort heuristics, §5 source/confidence); no pipeline imports in `src/copilot` (injectable seams: DecisionExplanation components, learning priors, Answer Bank corpus, LLM provider); provenance enforced; LLM gated off by default; `copilot_briefs` frozen §7.8 table used as-is; `brief.generated` event (CP-0-03) emitted on build.
+
+### Known Issues
+- Verdict acceptance ≥80% (PH2 exit gate, 16_SUCCESS_METRICS) requires a **manual sample** — not machine-verifiable; pending user feedback loop.
+- Interview probability calibration (±5pp over 30+ outcomes) pending outcome accumulation (PH7 learning store).
+- Answer Bank corpus + learning priors are injected seams with starter defaults until CP-3-02 / CP-7-01 land.
+- In-memory brief cache is unbounded per-opportunity dict (ponytail: bounded by opportunity count; durable cache is the DB).
+
+### Risks (next phase)
+- PH4 (Session) is the critical-path next phase (dep CP-0-03 events — READY); PH3 (Answer Bank) schedulable in parallel. Gated LLM stays off by default.
+
+### Recommendation
+- **GO** — proceed to PH4 (CP-4-01 Session state machine); PH3 (CP-3-01 answerbank fingerprinting) parallel-ready.
