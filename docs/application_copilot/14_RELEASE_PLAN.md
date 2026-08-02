@@ -5,7 +5,7 @@
 ## v5.1.0 — Copilot Alpha (SHIPPED 2026-08-02, tag `v5.1.0-alpha`)
 **Scope (all certified):** PH0–PH8 complete — Tier 1 ingestion, Brief, Answer Bank, Session, Browser assist (visible browser, form model, resolver, checkpoints, recovery, ATS adapters, safety+audit), full Copilot UI (Inbox/Workspace/Brief/Assistant/History/Analytics/Learning/Settings + a11y polish), Learning system (outcome store, signals, bounded bias, answer weighting, tracking), Analytics (`/api/copilot/analytics` + telemetry).
 **Gates:** PH0–PH8 checkpoints green; Phase G CI green (unit+integration+browser e2e+regression+perf+security guards); regression **1522**; coverage 93%; frontend `npm run gate` green; `<30s` assisted-apply demo is **manual** (pending user sample, carried caveat).
-**Flags (all OFF by default):** `BROWSER_ENABLED`, `OUTCOME_CAPTURE_ENABLED`, `LEARNING_BIAS_ENABLED` — rollback = leave off, pipeline untouched (ADR-007).
+**Flags (env-driven, D-031):** `COPILOT_BROWSER_ENABLED=true` (default) · `COPILOT_OUTCOME_CAPTURE_ENABLED=true` (default) — the two flags REQUIRED for the complete workflow are ON; `COPILOT_LEARNING_BIAS_ENABLED` (v5.2.0) and `COPILOT_BRIEF_LLM_ENABLED` (optional) default false. Toggle via env — no code change needed.
 **Rollback:** disable flags; tag revert.
 **Known gaps:** autopilot deferred (v5.2.0, D-006); ≥85% auto-fill + <30s demo are manual-sample metrics pending user feedback; M02/M06/M07/M12/M13/M14 return null-with-note in analytics; email ingestion / screenshot OCR / Workday-Rippling polish deferred.
 

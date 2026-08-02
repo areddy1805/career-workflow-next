@@ -79,12 +79,17 @@ def test_pii_guard_wired_into_resolver_path():
     assert "sensitive" in resolver.resolve_field.__code__.co_varnames
 
 
-def test_flags_off_by_default():
-    """v5.1.0 rollback posture: every Copilot feature flag is off."""
+def test_flags_production_posture():
+    """Production integration (D-031): the flags REQUIRED for the complete
+    workflow are ON (browser assistant, outcome capture); the experimental /
+    optional ones stay OFF (learning bias = v5.2.0 scope, brief LLM prose =
+    optional). Rollback for each is flipping the constant back."""
+    import src.copilot.brief.llm as brief_llm
     import src.copilot.browser.controller as controller
     import src.copilot.learning.bias as bias
     import src.copilot.session.outcome as outcome
 
-    assert controller.BROWSER_ENABLED is False
-    assert outcome.OUTCOME_CAPTURE_ENABLED is False
+    assert controller.BROWSER_ENABLED is True
+    assert outcome.OUTCOME_CAPTURE_ENABLED is True
     assert bias.LEARNING_BIAS_ENABLED is False
+    assert brief_llm.BRIEF_LLM_ENABLED is False

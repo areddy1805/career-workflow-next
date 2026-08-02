@@ -23,6 +23,7 @@ stays inside the workflow machine's transition rules.
 
 import importlib
 import json
+import os
 import sqlite3
 from typing import Any, Callable
 
@@ -33,7 +34,11 @@ from src.copilot.oppstore import store as oppstore
 from src.copilot.session import store as session_store
 from src.copilot.session.models import Session, now_iso
 
-OUTCOME_CAPTURE_ENABLED = False  # feature flag; off by default (08 CP-4-04 DoD)
+OUTCOME_CAPTURE_ENABLED = (  # env-driven (D-031); production default ON
+    os.getenv("COPILOT_OUTCOME_CAPTURE_ENABLED", "true").lower() == "true"
+)
+# gates the pipeline transition + learning insert for outcomes — disable via
+# env without a code change
 
 # Outcome vocabulary -> pipeline WorkflowStatus value (D-014). Every value is
 # a legal machine state; the queue seam still validates the transition from

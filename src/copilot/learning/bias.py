@@ -20,13 +20,18 @@ samples before the flag flips.
 """
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 
 from src.copilot.db.db import open_copilot_db
 
-# Flag off by default — rollback = leave off, behavior identical to today.
-LEARNING_BIAS_ENABLED = False
+# Env-driven (D-031): bias consumption is OFF by default (v5.2.0 scope per
+# the release plan) — enable via env without a code change. The collector
+# writes regardless of the flag (the flag gates consumption, not collection).
+LEARNING_BIAS_ENABLED = (
+    os.getenv("COPILOT_LEARNING_BIAS_ENABLED", "false").lower() == "true"
+)
 
 # Bounded range: |bias| can never exceed MAX_BIAS.
 MAX_BIAS = 1.0

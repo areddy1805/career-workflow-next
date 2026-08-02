@@ -138,7 +138,7 @@ def test_every_endpoint_returns_data(api):
     data = _ok(c, "get", "/api/copilot/settings")
     assert data["profiles"] == ["ai", "fde", "generic"]
     assert data["confidence_thresholds"]["silent_fill"] == 0.95
-    assert data["flags"]["browser_enabled"] is False
+    assert data["flags"]["browser_enabled"] is True  # production default (D-031)
 
     # ── answers ───────────────────────────────────────────────────────
     data = _ok(c, "get", "/api/copilot/answers")

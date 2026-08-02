@@ -8,11 +8,14 @@ import); the cache is in-memory until the brief store (CP-2-07) provides the
 durable brief cache.
 """
 
+import os
 from typing import Callable
 
 from src.copilot.oppstore.model import CopilotOpportunity
 
-BRIEF_LLM_ENABLED = False  # feature flag; off by default (08 CP-2-06 DoD)
+BRIEF_LLM_ENABLED = (  # env-driven (D-031); optional prose augmentation, OFF
+    os.getenv("COPILOT_BRIEF_LLM_ENABLED", "false").lower() == "true"
+)
 
 _MAX_INPUT_CHARS = 4000
 _MAX_OUTPUT_CHARS = 600

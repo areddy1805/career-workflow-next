@@ -20,6 +20,11 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ## Session Log
 
+### 2026-08-02 — Integration: env-driven Copilot feature flags (D-031) — DONE
+- Files: `src/copilot/browser/controller.py` (`BROWSER_ENABLED` → `COPILOT_BROWSER_ENABLED`, default true), `src/copilot/session/outcome.py` (`OUTCOME_CAPTURE_ENABLED` → `COPILOT_OUTCOME_CAPTURE_ENABLED`, default true), `src/copilot/learning/bias.py` (`COPILOT_LEARNING_BIAS_ENABLED`, default false), `src/copilot/brief/llm.py` (`COPILOT_BRIEF_LLM_ENABLED`, default false), `tests/copilot/test_security_review.py` (+posture test; disabled-state tests now set `enabled=False` explicitly), `tests/copilot/test_browser_controller.py`, `tests/copilot/test_outcome.py`, `tests/copilot/test_endpoint_matrix.py`, `11_DECISIONS.md` (D-031), `14_RELEASE_PLAN.md`.
+- Production posture: the two flags REQUIRED for the complete workflow (Inbox → Browser Assistant → Submit → Outcome → Lifecycle → Learning) are ON by default; experimental/optional (bias, brief LLM prose) stay OFF. Toggling is env-only — no code change, CI/tests can override.
+- Validation: full regression **1546** passed; ruff + mypy clean; env-override check verified (`COPILOT_BROWSER_ENABLED=false` → disabled).
+
 ### 2026-08-02 — CP-9-04 (Docs freeze + release notes) — DONE
 - Files: `docs/application_copilot/14_RELEASE_PLAN.md` (v5.1.0 alpha shipped block), `09_TASK_BOARD.md` (CP-6-09 marked DONE — stale row from the CP-6-09 commit, caught by the cross-reference audit), `10_PROGRESS.md` (this entry).
 - Cross-reference audit: 09 board all tasks DONE except CP-9-05; 10 session log 62 entries; 11 decisions D-001..D-030 all Active; flags `BROWSER_ENABLED`/`OUTCOME_CAPTURE_ENABLED`/`LEARNING_BIAS_ENABLED` all False; frozen docs/ADRs untouched (only 14_RELEASE_PLAN.md gained its release-notes block, which is its purpose).

@@ -26,6 +26,7 @@ vendor, scripts/install_playwright.sh).
 """
 
 import logging
+import os
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
@@ -35,7 +36,10 @@ from src.copilot.exceptions import CopilotError
 
 logger = logging.getLogger("copilot.browser.controller")
 
-BROWSER_ENABLED = False  # feature flag; off by default (08 CP-5-01 DoD)
+BROWSER_ENABLED = (  # env-driven (D-031); production default ON
+    os.getenv("COPILOT_BROWSER_ENABLED", "true").lower() == "true"
+)
+# gates the browser assistant — disable via env without a code change
 
 # Frozen session states (04 §8 lifecycle + §9 kill-switch).
 SESSION_OPENED = "opened"

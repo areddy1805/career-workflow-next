@@ -258,13 +258,14 @@ def test_transition_exception_does_not_crash_session(fresh_db):
     assert "RuntimeError" in event.payload["pipeline"]["reason"]
 
 
-def test_disabled_flag_records_session_only(fresh_db):
-    """Off by default: session outcome persists, pipeline + learning skipped."""
+def test_explicitly_disabled_flag_records_session_only(fresh_db):
+    """Explicit ``enabled=False`` (rollback path, D-031): session outcome
+    persists, pipeline + learning skipped. Production default is now ON."""
     session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
 
-    advanced = service.record_outcome(session_id, "applied")  # default enabled=False
+    advanced = service.record_outcome(session_id, "applied", enabled=False)
     assert advanced.outcome == "applied"
     assert queue.calls == []
     assert learning_rows(fresh_db) == []

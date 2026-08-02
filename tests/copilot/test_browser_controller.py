@@ -62,9 +62,11 @@ def controller(browser_env):
 
 
 def test_feature_gate_blocks_open(html_page):
-    """DoD rollback: with BROWSER_ENABLED off the controller refuses to run."""
-    ctl = BrowserController()  # defaults to BROWSER_ENABLED
-    assert ctl.enabled is BROWSER_ENABLED and BROWSER_ENABLED is False
+    """Production posture (D-031): the browser assistant is enabled by
+    default; an explicitly-disabled controller still refuses to run."""
+    assert BROWSER_ENABLED is True  # production default (D-031)
+    ctl = BrowserController(enabled=False)
+    assert ctl.enabled is False
     with pytest.raises(BrowserNotEnabled):
         ctl.open(
             html_page.as_uri(), session_id="s1", opportunity_id="opp-1"
