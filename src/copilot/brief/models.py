@@ -139,6 +139,63 @@ class ApplicationBrief:
     questions: list[LikelyQuestion] | None = None  # CP-2-05
     prose_summary: str | None = None  # CP-2-06 (llm provenance when present)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ApplicationBrief":
+        """Rebuild from :meth:`to_dict` output (store round-trip)."""
+        effort = data.get("effort")
+        salary = data.get("salary")
+        questions = data.get("questions")
+        return cls(
+            opportunity_id=data["opportunity_id"],
+            verdict=Verdict(data["verdict"]),
+            verdict_reason=data["verdict_reason"],
+            fit=FitBreakdown(**data["fit"]),
+            missing_skills=[MissingSkill(**m) for m in data["missing_skills"]],
+            resume_recommendation=(
+                ResumeRecommendation(**data["resume_recommendation"])
+                if data.get("resume_recommendation")
+                else None
+            ),
+            strategy=StrategySection(**data["strategy"]),
+            risk_flags=RiskFlags(**data["risk_flags"]),
+            section_sources=dict(data["section_sources"]),
+            provenance_summary={
+                field: list(sources)
+                for field, sources in data["provenance_summary"].items()
+            },
+            confidence=data["confidence"],
+            salary=(
+                SalaryAssessment(
+                    SalaryStatus(salary["status"]),
+                    **{
+                        key: value
+                        for key, value in salary.items()
+                        if key != "status"
+                    },
+                )
+                if salary
+                else None
+            ),
+            effort=(
+                EffortEstimate(
+                    fields=effort["fields"],
+                    pages=effort["pages"],
+                    ats_type=effort["ats_type"],
+                    auto_fillable_frac=effort["auto_fillable_frac"],
+                    minutes=effort["estimated_minutes"],
+                )
+                if effort
+                else None
+            ),
+            interview_probability=data.get("interview_probability"),
+            questions=(
+                [LikelyQuestion(**q) for q in questions]
+                if questions
+                else None
+            ),
+            prose_summary=data.get("prose_summary"),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
         return {

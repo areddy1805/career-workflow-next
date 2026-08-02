@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from api.schemas import IngestRequest
 from src.copilot import __version__
+from src.copilot.brief.api import router as brief_router
 from src.copilot.config.loader import load_copilot_config
 from src.copilot.db.db import open_copilot_db
 from src.copilot.exceptions import CopilotError
@@ -31,6 +32,7 @@ from src.copilot.oppstore import store
 from src.copilot.oppstore.model import CopilotOpportunity
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
+router.include_router(brief_router)
 
 
 def get_ingestion_registry() -> IngestionRegistry:

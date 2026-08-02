@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 86 | CP-2-06 DONE | 6/7 tasks; next: CP-2-07 store+API |
+| PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-07 (Brief persistence + cache + endpoints) — DONE
+- Files: `src/copilot/brief/{store,api}.py`, `tests/copilot/{test_brief_store,test_brief_api}.py`; `brief/models.py` (+`ApplicationBrief.from_dict` round-trip) + `api/routers/copilot.py` (includes brief router).
+- `store.py`: frozen `copilot_briefs` (§7.8) upsert/load/delete (brief_json, generated_at, model_used deterministic|llm, sections_version="1"); `build_brief` = full deterministic assembly (assembler + salary + effort + probability + questions + gated prose) → persist + in-memory cache + `brief.generated` event (CP-0-03); `get_brief` implements the 05 §3 pipeline (cache hit → DB → cold build); `invalidate_brief` drops cache + DB.
+- `api.py`: GET `/api/copilot/opportunities/{id}/brief` (build-on-demand, 404 envelope for missing opportunity, brief-build 500 guard) — included into the copilot router; `{ok, data, error}` envelope per CP-1-13.
+- Validation: 15 new tests (to_dict/from_dict round-trip incl. all sections, upsert, metadata, cache hit/DB-load/cold-build paths, invalidate + rebuild, brief.generated event, API build-on-demand/cached/missing-404/low-fit-skip); full regression 1145 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-06 (LLM prose augmentation, gated) — DONE
 - Files: `src/copilot/brief/llm.py`, `tests/copilot/test_llm.py`; `brief/models.py` + `brief/assembler.py` extended additively.
