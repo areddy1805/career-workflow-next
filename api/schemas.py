@@ -52,3 +52,38 @@ class SessionAdvanceRequest(BaseModel):
 
     event: str
     payload: Dict[str, Any] = {}
+
+
+class AnswerSaveRequest(BaseModel):
+    """CP-3-06: update one answer row (defaults: source=manual, status=confirmed)."""
+
+    semantic_answer: Any
+    serialized_answer: Optional[Any] = None
+    source: Optional[str] = None
+    status: Optional[str] = None
+    confidence: Optional[float] = None
+    canonical_label: Optional[str] = None
+    category: Optional[str] = None
+
+
+class AnswerConfirmRequest(BaseModel):
+    """CP-3-06: human confirmation (frozen §7.4 confirm)."""
+
+    question_fp: str
+    profile_id: str = "generic"
+    answer: Any
+    actor: str = "user"
+
+
+class AnswerLockRequest(BaseModel):
+    """CP-3-06: pin/unpin an answer (frozen §7.4 set_locked)."""
+
+    question_fp: str
+    profile_id: str = "generic"
+    locked: bool = True
+
+
+class ProfileSwitchRequest(BaseModel):
+    """CP-3-06: atomic profile switch (frozen §7.4 switch_profile)."""
+
+    profile_id: str

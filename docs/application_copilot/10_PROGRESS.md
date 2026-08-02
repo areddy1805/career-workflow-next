@@ -8,7 +8,7 @@
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | In Progress | 80 | CP-3-05 DONE | CP-3-06 answer bank API next |
+| PH3 | In Progress | 90 | CP-3-06 DONE | PH3 exit gate + certification next |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
@@ -19,6 +19,11 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-3-06 (Answer bank API) — DONE
+- Files: `src/copilot/answerbank/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`AnswerSaveRequest`/`AnswerConfirmRequest`/`AnswerLockRequest`/`ProfileSwitchRequest`), `tests/copilot/test_answerbank_api.py`.
+- Frozen §7.9 surface mounted at `/api/copilot` via `src/copilot/answerbank/api.py` included into the copilot router (D-015 reading — the router file is the mount point; endpoints live in copilot-owned modules): `GET /answers` (per-profile namespace + status/text filters + pagination; default profile `generic`), `PUT /answers/{fp}` (upsert; `serialized_answer` falls back to `semantic_answer`; defaults source=manual/status=confirmed), `POST /answers/confirm` (frozen §7.4 `confirm`; locked → 400), `POST /answers/lock` (frozen §7.4 `set_locked`; pin/unpin/idempotent; missing → 400), `POST /profiles/switch` (`switch_profile` → `{profile_id, resume_type}` context). `{ok, data, error}` envelope; no pipeline seams (store/confirm/profiles take the connection directly, mirroring `brief/api.py`).
+- Validation: 11 new integration tests (empty list, profile-namespace isolation via API, status filter, update defaults + overwrite single row, confirm creates human answer with actor reason, confirm-on-locked 400, lock pin/unpin/idempotent flow, lock missing 400, profile switch context, switch leaves answers undisturbed); full regression 1289 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-3-05 (Profile switching service) — DONE
 - Files: `src/copilot/answerbank/profiles.py`, `tests/copilot/test_answerbank_profiles.py`.
