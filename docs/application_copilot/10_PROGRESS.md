@@ -8,7 +8,7 @@
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
+| PH3 | In Progress | 15 | CP-3-01 DONE | CP-3-02 next (blocks CP-4-03) |
 | PH4 | In Progress | 10 | CP-4-02 DONE | CP-4-03 next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-3-01 (Question fingerprinting + canonical labels) — DONE
+- Files: `src/copilot/answerbank/{fingerprint,canonical}.py`, `tests/copilot/test_answerbank_fingerprint.py`.
+- `fingerprint.py`: frozen 06 §4 `Question{label, options, kind}` (+`from_dict`); `normalize_label` (lowercase, punctuation → space, collapse); `fingerprint(question) = sha256(normalized_label | normalized_options_keys | kind)[:16]` — stable, 16-hex, sensitive to options/kind/label. `normalized_options_keys` = option labels normalized + `|`-joined.
+- `canonical.py`: `CANONICAL_SLOTS` registry (06 §2 taxonomy: identity.*, profile.*, experience.* per-tech years, summary.*, capability.*, preference.*) — ordered most-specific-first, first word-boundary match wins (D-012); `canonical_label(text)` → slot or None (unknown phrasings fall through to normal resolution, never guessed; registry grows from real questionnaires per 06 §4).
+- Note: CP-3-01/3-02 sit on the PH4 critical path — 08 §PH4 lists CP-4-03 as Dep CP-3-02 — so PH3 tasks 1–2 were pulled ahead of CP-4-03 per the frozen dependency table.
+- Validation: 13 new unit tests (normalization, stability + hex, variant-phrasing equivalence, options/kind/label sensitivity, from_dict, synonym table 9 slots × variant phrasings, most-specific-first shadowing, unknown → None, registry sanity); full regression 1198 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-4-02 (Session persistence + events) — DONE
 - Files: `src/copilot/session/{store,events}.py`, `tests/copilot/test_session_store.py`.
