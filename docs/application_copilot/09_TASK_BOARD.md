@@ -90,12 +90,12 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH7 — Learning
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-7-01 | Outcome store + reconcile | Critical | TODO | 4-04 | M | 5h |
-| CP-7-02 | Signal collection | High | TODO | 7-01 | M | 5h |
-| CP-7-03 | Ranking feedback (bias) | High | TODO | 7-02 | H | 10h |
-| CP-7-04 | Answer weighting | Medium | TODO | 7-01 | S | 3h |
-| CP-7-05 | Provider/ATS success | Medium | TODO | 7-01 | S | 3h |
-| CP-7-06 | Interview/offer tracking | High | TODO | 7-01 | M | 6h |
+| CP-7-01 | Outcome store + reconcile | Critical | DONE | 4-04 | M | 5h |
+| CP-7-02 | Signal collection | High | DONE | 7-01 | M | 5h |
+| CP-7-03 | Ranking feedback (bias) | High | TODO (ready) | 7-02 | H | 10h |
+| CP-7-04 | Answer weighting | Medium | TODO (ready) | 7-01 | S | 3h |
+| CP-7-05 | Provider/ATS success | Medium | TODO (ready) | 7-01 | S | 3h |
+| CP-7-06 | Interview/offer tracking | High | TODO (ready) | 7-01 | M | 6h |
 
 ## PH8 — Analytics
 | ID | Task | Pri | Status | Dep | Cplx | Effort |

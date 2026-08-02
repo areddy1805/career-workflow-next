@@ -12,13 +12,25 @@
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
 | PH6 | In progress | 67 | CP-6-04 DONE | UI 6/9; see session log |
-| PH7 | Pending | 0 | — | Blocked on PH4 |
+| PH7 | In progress | 33 | CP-7-02 DONE | Learning 2/6; see session log |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-7-02 (Signal collection) — DONE
+- Files: `src/copilot/learning/signals.py`, `tests/copilot/test_learning_signals.py`.
+- Pure read-only derivations over the copilot stores (CP-7-02 AC: signals derivable from stores): `outcome_signals` (per outcome row: provider_id/ats_type/resume_profile + `days_to_outcome` from timestamps_json + `opportunity_age_days` from the opportunity's acquired_at via the public oppstore read), `answer_quality_signals` (per (question_fp, profile_id): use_count, last_used_at, outcome_quality, status distribution, correction proxy = source manual + status confirmed), `conversion_signals` (per provider_id / ats_type / resume_profile: total + applied/interview/offer counts + interview_rate + offer_rate).
+- Ambiguity resolutions (recorded in D-027): status distribution per (fp, profile) group is one row (composite PK), so the distribution is `{status: 1}` per group; opportunity age uses the model `acquired_at` (public oppstore read) — equivalent to the table created_at.
+- Validation: 6 new unit tests; full regression **1435** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-7-01 (Outcome store) — DONE
+- Files: `src/copilot/learning/{__init__,models,store}.py`, `tests/copilot/test_learning_store.py`.
+- `models.py`: frozen `LearningOutcome` dataclass mirroring the `copilot_learning_outcomes` row + `OUTCOME_VOCABULARY`/`OUTCOME_TO_STATUS` (D-014). `store.py`: `save_outcome` (upsert — `ON CONFLICT(session_id) DO UPDATE` outcome/timestamps/created_at so a later outcome **advances** the record (applied→interview→offer is legal, D-014); identity fields first-write-wins), `get_outcome`, `list_outcomes` (newest first, optional outcome filter), `reconcile` — the DoD reconciliation matrix: for each outcome row, read the pipeline lifecycle stage via an injectable `status_reader` seam (production: importlib into `src.application.workflow_queue` — no static pipeline import; failures → None): stage==outcome → match; stage later → record advances to the stage; pipeline UNKNOWN/missing → no guess (`resolved_outcome=None`); stage earlier → never regress (keep the recorded outcome). Never writes to the pipeline.
+- Ambiguity resolutions (D-027): the table has no separate outcome_at column — `created_at` holds the outcome time (matching CP-4-04's `_record_learning`); reconcile rank treats offer→rejected as unreachable (OFFER is terminal in the machine), archived is the final graveyard.
+- Validation: 8 new unit tests (idempotent save, advance-on-rerecord, filters, full reconciliation matrix with a fake status_reader, production seam importlib behavior); full regression **1429** passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-6-04 (Assistant panel) — DONE
 - Files: `frontend/src/pages/copilot/Assistant.tsx` (replaces the placeholder), `src/copilot/browser/safety.py` (+`list_actions`), `src/copilot/browser/api.py` (+`AssistantService.audit_feed` + `GET /api/copilot/browser/actions` endpoint), `frontend/src/lib/api/copilot.ts` (+`browserActions`/`AuditAction`), `tests/copilot/test_browser_api.py` (+audit-feed test).
