@@ -1,7 +1,7 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH1 in progress (CP-1-01 DONE).
+**Phase:** PH1 complete (certified) — see PH1 Certification below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
@@ -164,3 +164,57 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — proceed to PH1.
+
+## PH1 Certification Report
+
+**Phase:** PH1 — Ingestion & Opportunity Normalization (Tier 1) · **Date:** 2026-08-02
+
+### Completed Tasks (13/13)
+| ID | Task | Result |
+|---|---|---|
+| CP-1-01 | IngestionAdapter interface + registry + pipeline | DONE |
+| CP-1-02 | Text/HTML/JSON-LD/PDF extraction + URL fetcher | DONE |
+| CP-1-03 | Manual queue adapter | DONE |
+| CP-1-04 | Generic URL adapter | DONE |
+| CP-1-05 | LinkedIn URL adapter | DONE |
+| CP-1-06 | Wellfound URL adapter | DONE |
+| CP-1-07 | Careers URL adapter | DONE |
+| CP-1-08 | Pasted text adapter | DONE |
+| CP-1-09 | PDF adapter | DONE |
+| CP-1-10 | CopilotOpportunity model | DONE |
+| CP-1-11 | Opportunity store + dedup + mapping | DONE |
+| CP-1-12 | Status read view | DONE |
+| CP-1-13 | Ingest/list/detail API | DONE |
+
+### Acceptance Criteria Verification
+- 7 Tier-1 adapters normalize via `run_ingestion` → `ParsedOpportunity`: manual_queue, generic_url, linkedin_url, wellfound_url, careers_url, pasted_text, pdf (ADR-004 Tier 1). Fixtures green per adapter (CP-1-03..09). ✅
+- Opportunities persisted + deduped: `store.upsert` fingerprint dedup (03 §4), per-field richer-wins merge, list/provenance union, original id/acquired_at kept; API `/ingest` persists through the registry. Dedup matrix green (8 dedicated tests). ✅
+- Status view accurate: `reconcile()` (ledger funnel > lifecycle > workflow > NEW) + `StatusViewResolver` wired to real read-only pipeline sources; 42 matrix tests (full lifecycle/workflow/funnel precedence). ✅
+- Fixture suite green: all adapter + extraction fixtures pass (256 copilot tests). ✅
+- Frozen §7.1 contract implemented exactly; provenance enforced; typed error taxonomy (unsupported/parse/timeout/unresolvable) under `CopilotError`. ✅
+
+### Tests Executed
+- 256 copilot unit/integration tests (ingestion 28, extraction/fetcher 27, manual queue 6, generic URL 7, LinkedIn 6, Wellfound 3, careers 3, pasted text 9, PDF 6, model 40, store 17, status view 42, API 10, events 23, package 21, db 9).
+- Full regression: **1049 passed, 0 failed** (849 PH0 baseline → 1049; pipeline untouched).
+- ruff clean on all new files (baseline 1352 pre-existing errors untouched); mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- `src/copilot` + `api/routers/copilot.py`: **96%** (1312 stmts, 46 missed — config error paths and guidance branches).
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-1-09; `09_TASK_BOARD.md` 13/13 DONE; `11_DECISIONS.md` D-008 (10 tables) + D-009 (`ParsedOpportunity.meta`) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- Frozen interfaces §7.1–7.9 implemented exactly; no pipeline imports inside `src/copilot` (importlib lazy loads + string-keyed maps, ADR-007); only Copilot-owned writes to `copilot.db` (ADR-007/010); provenance restricted to frozen `Provenance` values; enums match frozen vocabularies (fail-fast on drift); LLM use gated (confidence ≥ 0.7) and disabled by default.
+
+### Known Issues
+- Scanned/image-only PDFs produce empty-title/company partial opportunities by design, flagged `guidance=scanned_pdf` + `needs_manual_verify` (D-009 pattern) — OCR out of scope.
+- `pdf_to_text` now preserves line structure (`normalize_lines`) — additive change required by the shared line-based structuring rules; existing tests unchanged.
+- `ParsedOpportunity.meta` model change landed as a follow-up commit to CP-1-07 (documented in session log).
+- No other known issues within PH1 scope.
+
+### Risks (next phase)
+- PH2 (Brief assembler) depends on CP-1-11 store — READY. Gated LLM infrastructure (CP-2-06, confidence-gated) arrives in PH2; pasted_text/generic_url seams already wired. Frontend untouched (PH6).
+
+### Recommendation
+- **GO** — proceed to PH2 (CP-2-01 Brief assembler).
