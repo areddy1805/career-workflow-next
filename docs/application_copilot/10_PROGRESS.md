@@ -1,16 +1,16 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH4 complete (certified) — PH3 (parallel) and PH5+ remain; see certification reports below.
+**Phase:** PH3 + PH4 complete (certified) — PH5+ remain; see certification reports below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | In Progress | 90 | CP-3-06 DONE | PH3 exit gate + certification next |
+| PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | Pending | 0 | — | Blocked on PH3 |
+| PH5 | Pending | 0 | — | Blocked on playwright dep confirmation |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -381,6 +381,56 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — proceed to PH4 (CP-4-01 Session state machine); PH3 (CP-3-01 answerbank fingerprinting) parallel-ready.
+
+## PH3 Certification Report
+
+**Phase:** PH3 — Answer Bank (Epic ANS) · **Date:** 2026-08-02
+
+### Completed Tasks (6/6)
+| ID | Task | Result |
+|---|---|---|
+| CP-3-01 | Question fingerprinting + canonical labels | DONE |
+| CP-3-02 | Resolution engine wrapper + cache | DONE |
+| CP-3-03 | Answer store CRUD + profiles | DONE |
+| CP-3-04 | Confirmation workflow + override | DONE |
+| CP-3-05 | Profile switching service | DONE |
+| CP-3-06 | Answer bank API | DONE |
+
+### Acceptance Criteria Verification
+- **Variant phrasings → same canonical slot; stable hash** (CP-3-01): `fingerprint = sha256(normalized_label | normalized_options_keys | kind)[:16]` (06 §4); canonical registry most-specific-first, word-boundary first-match (D-012); 13 synonym-table tests. ✅
+- **Resolution order frozen §3; cached generated answers** (CP-3-02): stored (status != superseded) → deterministic (constraint/serialization failure short-circuits to confirm) → generated LLM (cache-first by fp+profile, ≥0.95 → auto); 11 tests. ✅
+- **Namespace isolation; confirm/lock semantics** (CP-3-03): `(question_fp, profile_id)` composite PK = per-profile namespace; supersede tombstone is skipped by the resolver; 8 tests. ✅
+- **Transitions validated; override wins** (CP-3-04): confirm from absent/auto/confirm/confirmed/superseded → confirmed with `source=manual` (D-016); locked rejects confirm until unlock; set_locked pin/unpin transitions validated; 14 tests. ✅
+- **Atomic swap; no cross-leak** (CP-3-05): `switch_profile` is a pure context handoff — nothing in `copilot_answers` is mutated, the old namespace stays invisible/intact; resume mapping `{ai: AI, fde: FDE, generic: generic}` (D-017); 7 tests. ✅
+- **Contract §7.9** (CP-3-06): GET /answers, PUT /answers/{fp}, POST /answers/confirm, /lock, /profiles/switch with `{ok, data, error}` envelope + Pydantic bodies; 11 tests. ✅
+- **PH3 exit gate**: confirmed answers persist per profile — store + confirm + resolver integration green (confirmed/locked human answers served as stored on every resolve, D-013 passthrough). “≥90% of screening questions resolve” is an auto-resolve-rate metric (06 §9) requiring a real questionnaire sample — **manual, pending user feedback** (same caveat as PH2's verdict metric).
+
+### Tests Executed
+- 64 new copilot tests across CP-3-01..06 (fingerprint 13, resolver 11, store 8, confirm 14, profiles 7, API 11). Copilot suite now **496 tests**.
+- Full regression: **1289 passed, 0 failed** (1249 PH4-cert → 1289; pipeline untouched).
+- ruff clean on all new files; mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- `src/copilot` + `api/routers/copilot.py`: **97%** (2337 stmts, 78 missed — config/error-guard branches). Answer bank modules: store/confirm/profiles 100%, resolver + fingerprint + canonical + API all exercised via the 64-test suite.
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-3-06 (34 entries); `09_TASK_BOARD.md` 6/6 DONE; `11_DECISIONS.md` D-012 (canonical first-match), D-013 (stored status passthrough), D-016 (overrides stored as `source=manual`), D-017 (profile→resume map) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- Frozen 06 §2 taxonomy, §3 resolution order, §4 fingerprinting, §5 profiles, §6 confirmation, §8 persistence implemented; §7.4 surface (`resolve`/`fingerprint`/`confirm`/`set_locked`/`switch_profile`) complete; §7.8 `copilot_answers` schema used as-is; §7.9 endpoints mounted.
+- ADR-009: pipeline `HybridQuestionResolver` + deterministic stack reached only via importlib seams (no static pipeline imports); ADR-007: candidate truth read-only; enums frozen (D-016 explicitly refuses a 5th source value).
+
+### Known Issues
+- “≥90% resolve” (PH3 exit gate / 06 §9) is a **manual-sample** metric pending user feedback on a real questionnaire corpus.
+- Canonical registry grows from real questionnaires (backlog per 06 §4) — novel phrasing coverage depends on corpus accumulation.
+- Generated/auto answers are served from the in-memory cache, not persisted: only human-confirmed answers land in `copilot_answers` (06 §6's silent-fill still works via resolution); durable generated-answer promotion + `outcome_quality` feedback is the PH7 learning loop (`copilot_answers.outcome_quality` column ready).
+
+### Risks (next phase)
+- PH5 (browser assistant) needs the **playwright dependency** (pin version + browser binaries per user recommendation) — answers from PH3 now unblock PH5 form-field resolution.
+- PH7 learning store consumes `copilot_learning_outcomes` + answer `outcome_quality`; interview-probability calibration (16_SUCCESS_METRICS M09) pending outcome accumulation.
+
+### Recommendation
+- **GO** — PH3 certified. Next: PH5 (pending playwright confirmation) or parallel backlog/UI work.
 
 ## PH4 Certification Report
 
