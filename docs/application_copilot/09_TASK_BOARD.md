@@ -78,8 +78,8 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
 | CP-6-01 | Inbox | Critical | DONE | 1-13,2-07 | M | 8h |
-| CP-6-02 | Brief view | High | TODO (ready) | 2-07 | S | 5h |
-| CP-6-03 | Workspace wizard | Critical | TODO | 4-05,6-02 | H | 12h |
+| CP-6-02 | Brief view | High | DONE | 2-07 | S | 5h |
+| CP-6-03 | Workspace wizard | Critical | TODO (ready) | 4-05,6-02 | H | 12h |
 | CP-6-04 | Assistant panel | Critical | TODO | 5-08,6-03 | H | 12h |
 | CP-6-05 | History | Medium | TODO | 4-05 | S | 5h |
 | CP-6-06 | Analytics page | Medium | TODO | 8-01 | M | 8h |

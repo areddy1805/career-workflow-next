@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 11 | CP-6-01 DONE | UI 1/9; see session log |
+| PH6 | In progress | 22 | CP-6-02 DONE | UI 2/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,11 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-02 (Brief view) — DONE
+- Files: `frontend/src/pages/copilot/Brief.tsx` (replaces the placeholder).
+- Per frozen 07_UI §3.3: renders all brief sections as cards (title + `whitespace-pre-wrap` content), verdict banner (label→color mapping: APPLY emerald / CONSIDER amber / SKIP red — the API's `verdict.class` is deliberately ignored, deterministic label mapping), provenance chips per section, “LLM” marker chips on `llm_augmented`, collapsible “show only certain facts” toggle (filters to non-LLM sections, hidden-count status line), CTA → `/copilot/apply/:id`. Header shows opportunity title/company via `useCopilotOpportunity` + `generated_at`/`model_used`. Loading skeleton / error+retry / empty / missing-id states.
+- Validation: `npm run gate` green; no backend change.
 
 ### 2026-08-02 — CP-6-01 (Inbox) — DONE
 - Files: `frontend/src/pages/copilot/Inbox.tsx` (replaces the placeholder; same default export).
