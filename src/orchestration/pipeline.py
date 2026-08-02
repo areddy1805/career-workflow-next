@@ -36,6 +36,24 @@ from src.orchestration.stages import (
 )
 from src.orchestration.job_lifecycle import JobState
 
+# States from which a job may (re)enter the eligibility pool. Everything else
+# (SELECTED_AUTO, APPLYING, DEFERRED, routed/queued, and the terminal states)
+# is committed: re-classification must never resurrect a committed job, or the
+# AUTO + deferred accounting identities break (a selected job must end in
+# submitted/failed/already_applied/stuck-selected, never silently re-enter
+# ELIGIBLE and drift into DEFERRED or another state).
+_PRE_COMMIT_STATES: frozenset[JobState] = frozenset({
+    JobState.ACQUIRED,
+    JobState.CLASSIFYING,
+    JobState.ELIGIBLE,
+})
+
+
+def _is_pre_commit(lifecycle, job_id: str) -> bool:
+    """True when the job exists and is still in a pre-commit state."""
+    record = lifecycle.get(job_id)
+    return record is not None and record.current_state in _PRE_COMMIT_STATES
+
 
 def _mode_to_job_state(mode: str) -> JobState | None:
     """Map a CapacityPlanner mode string to a JobState."""
@@ -805,15 +823,20 @@ class CareerWorkflowPipeline:
                     reason=rj.get("rejection_reason", rj.get("reason", "Classifier rejection")),
                     metadata={"code": rj.get("rejection_code", rj.get("code", "UNKNOWN"))},
                 )
-        # Jobs that passed all filters are ELIGIBLE for selection
+        # Jobs that passed all filters are ELIGIBLE for selection — but only
+        # while they are still pre-commit. A job that already reached
+        # SELECTED_AUTO, a routed/queued/terminal state, or DEFERRED is
+        # committed: never resurrect it (accounting identities treat those
+        # states as final).
         for j in jobs:
             jid = str(j.get("job_id", j.get("id", "")))
-            if self.context.lifecycle.get(jid):
-                self.context.lifecycle.transition(
-                    jid,
-                    JobState.ELIGIBLE,
-                    reason="Passed all classifier filters",
-                )
+            if not _is_pre_commit(self.context.lifecycle, jid):
+                continue
+            self.context.lifecycle.transition(
+                jid,
+                JobState.ELIGIBLE,
+                reason="Passed all classifier filters",
+            )
         final_jobs = enrich_application_metadata(final_jobs)
 
         self.context.classified_jobs = final_jobs
@@ -1116,20 +1139,26 @@ class CareerWorkflowPipeline:
 
         # Non-AUTO jobs are recorded in the lifecycle store as routing states.
         # The ApplicationScheduler will handle actual dispatch in apply().
+        # Only pre-commit jobs may be routed — committed jobs are already
+        # accounted and must not be moved again.
         for p in plan.planned:
             if p.mode == "AUTO":
                 continue
             opp = p.opportunity
             reason = p.explanation.summary if p.explanation else f"Routed: {p.mode}"
             state = _mode_to_job_state(p.mode)
-            if state and self.context.lifecycle.get(opp.job_id):
+            if state and _is_pre_commit(self.context.lifecycle, opp.job_id):
                 self.context.lifecycle.transition(
                     opp.job_id, state, reason=reason,
                 )
 
-        # Handle deferred opportunities in the lifecycle store.
+        # Handle deferred opportunities in the lifecycle store. Only pre-commit
+        # jobs may be deferred — a job already deferred (e.g. in a prior run)
+        # or otherwise committed stays put.
         for d in plan.deferred:
             opp = d.opportunity
+            if not _is_pre_commit(self.context.lifecycle, opp.job_id):
+                continue
             reason = d.explanation.deferred_reason if d.explanation else "Deferred"
             self.exec_context.defer(
                 opp, reason=reason,
@@ -1137,9 +1166,12 @@ class CareerWorkflowPipeline:
                 lifecycle=self.context.lifecycle,
             )
 
-        # Record SELECTED jobs in exec_context (lifecycle transitions via exec_context)
+        # Record SELECTED jobs in exec_context (lifecycle transitions via
+        # exec_context). Only pre-commit jobs may be selected.
         for j in selected_jobs:
             job_id = str(j.job_id)
+            if not _is_pre_commit(self.context.lifecycle, job_id):
+                continue
             self.exec_context.select(
                 j, {"cause": "Planned via V2 orchestrator"},
                 lifecycle=self.context.lifecycle,
@@ -1818,13 +1850,18 @@ class CareerWorkflowPipeline:
                     f"selected but never reached a terminal outcome"
                 )
 
-            # V2 accounting: deferred should match plan deferred count
+            # V2 accounting: deferred should match plan deferred count. The
+            # lifecycle store is cumulative across runs, so compare this run's
+            # NEW DEFERRED transitions (after the run started) with the plan
+            # instead of the absolute current-state count.
             plan = getattr(self.context, "application_plan", None)
             if plan is not None:
                 planned_deferred = len(plan.deferred)
-                if result.deferred != planned_deferred:
+                run_start = self.context.started_at.isoformat()
+                new_deferred = self.context.lifecycle.count_deferred_since(run_start)
+                if new_deferred != planned_deferred:
                     diagnostics.append(
-                        f"Deferred accounting mismatch: result.deferred({result.deferred}) != "
+                        f"Deferred accounting mismatch: new_deferred({new_deferred}) != "
                         f"plan.deferred({planned_deferred})"
                     )
 
