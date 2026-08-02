@@ -49,7 +49,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-3-01 | Question fingerprinting | Critical | DONE | 0-01 | M | 5h |
 | CP-3-02 | Resolution engine wrapper + cache | Critical | DONE | 3-01 | M | 6h |
 | CP-3-03 | Answer store CRUD + profiles | Critical | DONE | 3-01,0-02 | M | 6h |
-| CP-3-04 | Confirmation workflow | High | TODO | 3-03 | M | 4h |
+| CP-3-04 | Confirmation workflow | High | DONE | 3-03 | M | 4h |
 | CP-3-05 | Profile switching | High | TODO | 3-03 | S | 3h |
 | CP-3-06 | Answer bank API | High | TODO | 3-04,3-05 | M | 4h |
 

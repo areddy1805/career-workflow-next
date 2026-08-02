@@ -8,7 +8,7 @@
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | In Progress | 50 | CP-3-03 DONE | CP-3-04 confirmation next |
+| PH3 | In Progress | 65 | CP-3-04 DONE | CP-3-05 profiles next |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-3-04 (Confirmation workflow + override) — DONE
+- Files: `src/copilot/answerbank/confirm.py`, `tests/copilot/test_answerbank_confirm.py`.
+- `confirm.py` implements frozen §7.4 `confirm(question_fp, profile_id, answer, actor)` + `set_locked(question_fp, profile_id, locked)` per 06 §6: confirm stores the human override as authoritative (`source=manual`, `status=confirmed`, confidence 1.0, reason `confirmed by <actor>`, preserves canonical_label/category); **locked rows reject confirm** until unlocked (06 §6 "never auto-overwritten"); `set_locked(True)` pins from auto/confirm/confirmed (idempotent on locked, rejects superseded tombstones), `set_locked(False)` returns locked → confirmed (rejects non-locked). Missing-row lock → `CopilotError`.
+- D-016: 06 §6 says overrides carry "human provenance" but the frozen §7.4 source vocabulary is `stored|deterministic|llm|manual` — overrides are stored with `source=manual` (frozen vocabulary wins; `AnswerSource` enum untouched).
+- Resolver integration: a confirmed/locked human answer is served as the stored answer (06 §3 step 1) with its status passed through verbatim (D-013) — overrides truly win over generated/deterministic on every resolve.
+- Validation: 14 new tests (confirm creates human answer with actor reason, override wins over confirm/confirmed rows, locked rejects confirm + lock survives, confirm-after-unlock, canonical metadata preserved, pin/unpin transitions, lock idempotent, missing/superseded/not-locked guards, resolver serves confirmed + locked answers with D-013 passthrough); full regression 1271 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-3-03 (Answer store CRUD + profiles) — DONE
 - Files: `src/copilot/answerbank/store.py`, `tests/copilot/test_answerbank_store.py`.
