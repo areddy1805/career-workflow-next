@@ -829,34 +829,57 @@ class NaukriJobClient:
             "latLong": lat_long,
         }
 
-        res = self._session.get(url, headers=self._search_headers(), params=params)
+        # Akamai Bot Manager intermittently returns a 406 "recaptcha required"
+        # challenge for a small fraction of requests (~10%). These are transient
+        # and recover on retry, so we retry with a short backoff and only treat
+        # a run of consecutive challenges as a real block.
+        max_challenge_retries = 3
+        challenge_retry_delay = 2.0
+        consecutive_challenges = 0
 
-        # print("\nSEARCH DEBUG")
-        # print("STATUS:", res.status_code)
-        # print("URL:", res.url)
-        # print("CONTENT-TYPE:", res.headers.get("content-type"))
-        # print("RESPONSE:", res.text[:2000])
+        while True:
+            res = self._session.get(url, headers=self._search_headers(), params=params)
 
-        if res.status_code == 403:
-            raise NaukriAuthError("403 Forbidden — nkparam token likely expired")
+            if res.status_code == 403:
+                raise NaukriAuthError("403 Forbidden — nkparam token likely expired")
 
-        if res.status_code == 406:
-            try:
-                payload = res.json()
-            except Exception:
-                payload = {}
+            if res.status_code == 406:
+                try:
+                    payload = res.json()
+                except Exception:
+                    payload = {}
 
-            message = str(payload.get("message") or res.text or "").lower()
+                message = str(payload.get("message") or res.text or "").lower()
 
-            if "recaptcha" in message or "captcha" in message:
-                raise NaukriSearchChallengeError(
-                    "Job search blocked by CAPTCHA challenge"
+                if "recaptcha" in message or "captcha" in message:
+                    consecutive_challenges += 1
+                    if consecutive_challenges >= max_challenge_retries:
+                        raise NaukriSearchChallengeError(
+                            "Job search blocked by CAPTCHA challenge"
+                        )
+
+                    logger.warning(
+                        "Search challenge (HTTP 406) attempt %d/%d for keyword=%r "
+                        "page=%d; retrying in %.1fs",
+                        consecutive_challenges,
+                        max_challenge_retries,
+                        keyword,
+                        page,
+                        challenge_retry_delay,
+                    )
+                    time.sleep(challenge_retry_delay)
+                    continue
+
+                raise NaukriParseError(
+                    f"Search validation failed: 406 — {res.text}"
                 )
 
-            raise NaukriParseError(f"Search validation failed: 406 — {res.text}")
+            if not res.ok:
+                raise NaukriParseError(
+                    f"Search failed: {res.status_code} — {res.text}"
+                )
 
-        if not res.ok:
-            raise NaukriParseError(f"Search failed: {res.status_code} — {res.text}")
+            break
 
         data = res.json()
         raw_jobs = data.get("jobDetails") or data.get("jobs") or []
