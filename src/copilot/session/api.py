@@ -94,6 +94,18 @@ def copilot_session_list(
     return {"ok": True, "data": [s.to_dict() for s in sessions]}
 
 
+@router.get("/history")
+def copilot_history(
+    limit: int = 100,
+    offset: int = 0,
+    service: WorkspaceService = Depends(get_session_service),
+) -> Any:
+    """History surface (integration checklist): the sessions list, newest
+    first — same data as ``GET /sessions``."""
+    sessions = service.list_sessions(limit=limit, offset=offset)
+    return {"ok": True, "data": [s.to_dict() for s in sessions]}
+
+
 @router.get("/sessions/{session_id}")
 def copilot_session_get(
     session_id: str,

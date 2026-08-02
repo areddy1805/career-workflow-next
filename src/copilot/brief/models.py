@@ -117,6 +117,55 @@ class StrategySection:
     reason: str
 
 
+# The 12 brief sections (05_APPLICATION_BRIEF.md §2) as they appear in the
+# serialized payload, in display order, with card titles.
+_SECTION_TITLES: list[tuple[str, str]] = [
+    ("verdict", "Verdict"),
+    ("fit", "Role Fit"),
+    ("missing_skills", "Missing Skills"),
+    ("resume_recommendation", "Resume Recommendation"),
+    ("strategy", "Strategy"),
+    ("risk_flags", "Risk Flags"),
+    ("salary", "Salary"),
+    ("effort", "Effort"),
+    ("interview_probability", "Interview Probability"),
+    ("questions", "Likely Questions"),
+    ("prose_summary", "Summary"),
+    ("provenance_summary", "Provenance"),
+]
+
+
+def _brief_sections(
+    payload: dict[str, Any], section_sources: dict[str, str]
+) -> list[dict[str, Any]]:
+    """The 12 sections as cards ``{key, title, content, provenance,
+    llm_augmented}`` (the UI contract — 07_UI §3.3). Content is the
+    serialized payload value rendered as text; provenance comes from
+    ``section_sources`` (§5 source kind), defaulting to ``deterministic``."""
+    import json as _json
+
+    sections: list[dict[str, Any]] = []
+    for key, title in _SECTION_TITLES:
+        if key not in payload or payload[key] is None:
+            continue
+        value = payload[key]
+        if isinstance(value, (dict, list)):
+            content = _json.dumps(value, indent=1, sort_keys=True, default=str)
+        else:
+            content = str(value)
+        provenance = section_sources.get(key, "deterministic")
+        sections.append(
+            {
+                "key": key,
+                "title": title,
+                "content": content,
+                "provenance": provenance,
+                "llm_augmented": provenance == "llm",
+            }
+        )
+    return sections
+
+
 @dataclass(frozen=True)
 class ApplicationBrief:
     """The brief (05 §2). CP-2-01 fills the deterministic sections; later
@@ -198,7 +247,7 @@ class ApplicationBrief:
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
-        return {
+        data = {
             "opportunity_id": self.opportunity_id,
             "verdict": self.verdict.value,
             "verdict_reason": self.verdict_reason,
@@ -278,3 +327,5 @@ class ApplicationBrief:
             ),
             "prose_summary": self.prose_summary,
         }
+        data["sections"] = _brief_sections(data, self.section_sources)
+        return data

@@ -10,6 +10,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { createSession } from '@/lib/api/copilot';
 import { useBrief, useCopilotOpportunities } from '@/lib/hooks';
 import type { CopilotOpportunity } from '@/lib/types/copilot';
+import { verdictLabel } from '@/lib/types/copilot';
 import { cn, formatSalary } from '@/lib/utils';
 import { useSortable, sortData } from '@/hooks/useSortable';
 import { sortIndicator, type SortType } from '@/lib/sort';
@@ -188,11 +189,12 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
                 </div>
               ) : (
                 <div className="px-5 py-4 space-y-4">
-                  {brief.verdict?.label && (
-                    <div className={cn('rounded-lg border px-3 py-2.5 text-xs font-medium', verdictClass(brief.verdict.class))}>
-                      {brief.verdict.label}
+                  {brief.verdict ? (
+                    <div className={cn('rounded-lg border px-3 py-2.5 text-xs font-medium', verdictClass(verdictLabel(brief.verdict) ?? undefined))}>
+                      <span className="font-semibold uppercase">{verdictLabel(brief.verdict)}</span>
+                      {brief.verdict_reason ? ` — ${brief.verdict_reason}` : ''}
                     </div>
-                  )}
+                  ) : null}
                   {brief.sections.map(section => (
                     <div key={section.key} className="bg-muted/20 border border-border/30 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-2">

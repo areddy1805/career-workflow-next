@@ -31,12 +31,14 @@ from src.copilot.ingestion.adapters.pasted_text import PastedTextAdapter
 from src.copilot.ingestion.adapters.pdf import PdfAdapter
 from src.copilot.ingestion.adapters.wellfound_url import WellfoundUrlAdapter
 from src.copilot.ingestion.models import IngestionError
+from src.copilot.learning.api import router as learning_router
 from src.copilot.oppstore import store
 from src.copilot.oppstore.model import CopilotOpportunity
 from src.copilot.session.api import router as session_router
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 router.include_router(analytics_router)
+router.include_router(learning_router)
 router.include_router(brief_router)
 router.include_router(browser_router)
 router.include_router(session_router)

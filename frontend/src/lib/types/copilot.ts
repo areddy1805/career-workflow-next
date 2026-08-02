@@ -85,8 +85,17 @@ export interface BriefResponse {
     model_used: string | null;
     sections_version: string | null;
     sections: BriefSection[];
-    verdict?: { label: string; class: string } | null;
+    // The backend emits verdict as a plain string ("APPLY"|"CONSIDER"|"SKIP")
+    // plus verdict_reason; accept the object shape too for compatibility.
+    verdict?: string | { label: string; class: string } | null;
+    verdict_reason?: string | null;
   };
+}
+
+/** Normalize the brief verdict to a plain label string (or null). */
+export function verdictLabel(verdict: BriefResponse['data']['verdict']): string | null {
+  if (typeof verdict === 'string') return verdict;
+  return verdict?.label ?? null;
 }
 
 // ─── Sessions (CP-4-05 / §7.9) ─────────────────────────────────────────────

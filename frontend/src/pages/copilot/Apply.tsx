@@ -26,6 +26,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { cn, formatSalary } from '@/lib/utils';
 import type { CopilotSession, SessionEvent, StoredAnswer } from '@/lib/types/copilot';
+import { verdictLabel } from '@/lib/types/copilot';
 
 /**
  * Application Workspace wizard (docs/application_copilot/07_UI.md §3.2, CP-6-03).
@@ -867,7 +868,8 @@ function BriefStep({
   busy: boolean;
   onBegin: () => void;
 }) {
-  const verdict = briefSnap?.verdict ?? briefQuery.data?.verdict?.label ?? null;
+  const verdict =
+    briefSnap?.verdict ?? verdictLabel(briefQuery.data?.verdict) ?? null;
   const sections = briefQuery.data?.sections ?? null;
 
   return (

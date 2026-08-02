@@ -4,6 +4,7 @@ import { AlertCircle, ArrowRight, Bot, FileText, Loader2, SlidersHorizontal } fr
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/RelativeTime';
 import { useBrief, useCopilotOpportunity } from '@/lib/hooks';
+import { verdictLabel } from '@/lib/types/copilot';
 import { cn } from '@/lib/utils';
 
 // Verdict banner colors keyed by verdict label (05_APPLICATION_BRIEF.md §4:
@@ -28,6 +29,9 @@ export default function Brief() {
     const all = briefQ.data?.sections ?? [];
     return onlyCertain ? all.filter((s) => !s.llm_augmented) : all;
   }, [briefQ.data, onlyCertain]);
+
+  const verdict = verdictLabel(briefQ.data?.verdict);
+  const verdictReason = briefQ.data?.verdict_reason ?? null;
 
   const hiddenCount = useMemo(() => {
     const all = briefQ.data?.sections ?? [];
@@ -83,11 +87,11 @@ export default function Brief() {
           )}
         {briefQ.data && briefQ.data.sections.length > 0 && (
           <div className="max-w-3xl mx-auto space-y-4 pb-8">
-            {briefQ.data.verdict && (
+            {verdict && (
               <div
                 className={cn(
                   'rounded-lg border px-4 py-3 flex items-center justify-between gap-4',
-                  VERDICT_STYLES[briefQ.data.verdict.label.toUpperCase()] ??
+                  VERDICT_STYLES[verdict.toUpperCase()] ??
                     'border-border bg-card text-foreground',
                 )}
               >
@@ -95,7 +99,10 @@ export default function Brief() {
                   <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">
                     Verdict
                   </p>
-                  <p className="text-base font-semibold">{briefQ.data.verdict.label}</p>
+                  <p className="text-base font-semibold">{verdict}</p>
+                  {verdictReason && (
+                    <p className="text-xs text-muted-foreground mt-1">{verdictReason}</p>
+                  )}
                 </div>
                 <div className="text-right text-[11px] text-muted-foreground space-y-0.5">
                   <p>
