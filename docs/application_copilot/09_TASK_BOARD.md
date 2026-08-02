@@ -18,9 +18,9 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH1 — Ingestion
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-1-01 | Ingestion interface + registry + pipeline | Critical | TODO (ready) | 0-01 | M | 4h |
-| CP-1-02 | Text/HTML/PDF/URL extraction utils | Critical | TODO | 1-01 | M | 6h |
-| CP-1-03 | Manual queue adapter | Critical | TODO | 1-01 | S | 2h |
+| CP-1-01 | Ingestion interface + registry + pipeline | Critical | DONE | 0-01 | M | 4h |
+| CP-1-02 | Text/HTML/PDF/URL extraction utils | Critical | TODO (ready) | 1-01 | M | 6h |
+| CP-1-03 | Manual queue adapter | Critical | TODO (ready) | 1-01 | S | 2h |
 | CP-1-04 | Generic URL adapter | Critical | TODO | 1-02 | M | 6h |
 | CP-1-05 | LinkedIn URL adapter | High | TODO | 1-02 | M | 4h |
 | CP-1-06 | Wellfound URL adapter | High | TODO | 1-02 | M | 4h |

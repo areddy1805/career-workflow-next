@@ -1,12 +1,12 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH0 COMPLETE — certified. PH1 next.
+**Phase:** PH1 in progress (CP-1-01 DONE).
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | Ready | 0 | — | First task: CP-1-01 |
+| PH1 | In progress | 8 | CP-1-01 DONE | 1/13 tasks; next: CP-1-02 / CP-1-03 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -20,6 +20,12 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ## Session Log
 
+### 2026-08-02 — CP-1-01 (IngestionAdapter interface + registry + pipeline) — DONE
+- Files: `src/copilot/ingestion/{__init__,base,registry,pipeline,models}.py`, `tests/copilot/test_ingestion.py`.
+- Frozen §7.1 contract implemented exactly: `IngestionAdapter` ABC (`source_id`, `supports/fetch/parse` with `payload: Any` per contract); `IngestionPayload` envelope (`kind`/`data`/`meta`); `RawSourceContent` (`source/raw_text/raw_html?/attachments?/url?/meta`); `ParsedOpportunity` (normalized dict + field provenance). Registry: module-level `register`/`adapter_for` over `default_registry` + `IngestionRegistry` class (first-match-wins, duplicate `source_id` rejected, same-object re-register idempotent). Pipeline: `run_ingestion` = adapter_for → fetch → parse; typed boundary — raw `TimeoutError` → `FetchTimeoutError`, non-`RawSourceContent`/`ParsedOpportunity` results → `ParseError`.
+- Error taxonomy subclasses `CopilotError` (per CP-0-01 docstring): `IngestionError` base + `UnsupportedSourceError`, `ParseError`, `FetchTimeoutError`, `UnresolvableError` (unsupported/parse/timeout/unresolvable per 08 §CP-1-01). Taxonomy lives in `ingestion/models.py` (within the planned 4-file scope).
+- Validation: 28 new unit tests (dispatch, first-wins, duplicate register, pipeline happy-path simulation, error mapping, frozen models, taxonomy hierarchy); full regression 877 passed; ruff + mypy clean on new files.
+- No behavior change to pipeline; no real adapters registered yet (rollback: additive).
 ### 2026-08-02 — CP-0-03 (CopilotEvent model + emitter) — DONE
 - Files: `src/copilot/events/{__init__,models,emitter}.py`, `tests/copilot/test_events.py`.
 - Frozen §7.7 shape; event types validated against the frozen `EventNamespace` set; `trace_id` explicit or generated (uuid hex), propagated by callers (repo convention, cf. `src/inference/events.py`); emit = insert + commit + one log line.
