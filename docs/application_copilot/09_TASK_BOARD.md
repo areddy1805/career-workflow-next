@@ -100,9 +100,9 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH8 — Analytics
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-8-01 | Funnel + effort metrics | High | TODO | 1-11,4-04 | M | 6h |
-| CP-8-02 | Answer + learning health | Medium | TODO | 3-06,7-03 | M | 5h |
-| CP-8-03 | Telemetry + analytics API | High | TODO | 8-01,8-02 | M | 5h |
+| CP-8-01 | Funnel + effort metrics | High | DONE | 1-11,4-04 | M | 6h |
+| CP-8-02 | Answer + learning health | Medium | DONE | 3-06,7-03 | M | 5h |
+| CP-8-03 | Telemetry + analytics API | High | DONE | 8-01,8-02 | M | 5h |
 
 ## PH9 — Hardening & Release
 | ID | Task | Pri | Status | Dep | Cplx | Effort |

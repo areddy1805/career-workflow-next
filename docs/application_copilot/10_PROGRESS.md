@@ -13,12 +13,28 @@
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
 | PH6 | In progress | 78 | CP-6-07 DONE | UI 7/9; see session log |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
-| PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
+| PH8 | In progress | 100 | CP-8-03 DONE | Analytics 3/3 — certification report below |
 | PH9 | Pending | 0 | — | Blocked on all |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-8-03 (Telemetry + analytics API) — DONE
+- Files: `src/copilot/analytics/api.py`, `src/copilot/telemetry/__init__.py`, `api/routers/copilot.py` (+include, D-015), `tests/copilot/test_analytics_api.py`.
+- `GET /api/copilot/analytics` → `{ok, data: {funnel, effort, answer_health, llm_trend, calibration, success_metrics}}` (own conn, envelope). `success_metrics(conn)` covers **all 14 M-keys** (16_SUCCESS_METRICS): computable M01 (median_assisted_minutes), M03 (auto_resolve_rate), M04 (correction_rate), M05 (funnel_over_time), M08 (field_autofill_rate from browser fill audit rows), M09 (calibration MAE), M10 (llm_trend), M11 (effort); `{value: null, note}` for M02/M06/M07/M12/M13/M14 (no data source — action follow-through, manual audit, ledger suite, timing column, UI checklist, controller metrics). `src/copilot/telemetry/aggregate_events(conn, *, days)` — per-namespace (opp/brief/ans/ses/browser/learn/other) per-day event counts + totals.
+- D-030 recorded (viewed/shortlisted/LLM-trend proxies; null-with-note for missing telemetry).
+- Validation: 3 new integration tests (200 envelope + all M-keys + empty-db nulls; aggregate_events namespace counts); full regression **1513** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-8-02 (Answer + learning health) — DONE
+- Files: `src/copilot/analytics/health.py`, `tests/copilot/test_analytics_health.py`.
+- `answer_health` (by-source counts, `auto_resolve_rate` = stored+deterministic/total — M03 proxy, `correction_rate` = manual+confirmed/total — M04 proxy), `llm_call_trend(conn, *, days)` (per-day counts from `last_used_at` — D-030, no created_at column, no ans.* events), `calibration` (M09: predicted from `copilot_briefs.brief_json` interview_probability section vs actual interview/offer outcomes per opportunity; mean_abs_error; 0 pairs → null), `field_autofill_rate` (M08 helper: fill audit rows with `audit_note LIKE 'filled%'` / total fill actions; None when no fills).
+- Validation: 8 new unit tests (rates + union correction counting, MAE math incl. offer-implies-interview, trend zero-fill, empty-db); full regression **1505** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-8-01 (Funnel + effort metrics) — DONE
+- Files: `src/copilot/analytics/funnel.py`, `tests/copilot/test_analytics_funnel.py`.
+- `funnel(conn)` — the frozen funnel (ingested→briefed→viewed→applied→submitted→shortlisted→interview→offer) with per-stage conversions (None when prev=0); data sources: opportunities / briefs / sessions (FORM_FILLED+SUBMITTED / submitted_at) / learning outcomes (interview or offer, distinct sessions — offer implies interview); **viewed=briefed** and **shortlisted=interview** proxies (D-030). `effort_saved(conn)` — M01/M11: manual ≈ 15.0 min baseline, assisted = median(start→submit) (fallback 6.0 min), saved = manual − assisted + pct, `median_assisted_minutes`. `funnel_over_time(conn, *, days=30)` — zero-filled per-day buckets (M05).
+- Validation: 8 new unit tests (stage counts + conversion math, effort median/fallback, over-time buckets, empty-db zeros); full regression **1496** passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-6-07 (Learning page) — DONE
 - Files: `frontend/src/pages/copilot/Learning.tsx` (replaces the placeholder).
