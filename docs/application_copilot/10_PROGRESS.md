@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 67 | CP-6-04 DONE | UI 6/9; see session log |
+| PH6 | In progress | 78 | CP-6-07 DONE | UI 7/9; see session log |
 | PH7 | In progress | 100 | CP-7-06 DONE | Learning 6/6 — certification report below |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,11 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-07 (Learning page) — DONE
+- Files: `frontend/src/pages/copilot/Learning.tsx` (replaces the placeholder).
+- Per frozen 07_UI §3.7: **profile switcher** (`role=radiogroup` ai/fde/generic — `await switchProfile` THEN set the local profile so the answers query never races the atomic namespace swap; persists `localStorage["cw-copilot-profile"]`), **answer bank editor** (search via `useDeferredValue` debounce, status chips all/auto/confirm/confirmed/locked/superseded, per-row Confirm → `confirmAnswer` (source=manual/status=confirmed set server-side per frozen §7.4), Edit → inline textarea → `confirmAnswer` with the draft, Lock/Unlock → `lockAnswer`; locked rows show only Unlock, superseded tombstones no actions; mutation errors in a `role=alert` banner), **signals overview** (six stat tiles derived from the fetched rows: total/confirmed/locked/avg outcome_quality/avg confidence/total uses + two “pending PH8” cards for provider/ATS conversion + ranking-bias analytics), **evidence viewer** (read-only card — `CANDIDATE_EVIDENCE` is pipeline-owned, ADR-007, no frozen evidence endpoint → no fetch, documented), **ranking bias view** (read-only card — `copilot_learning_weights["learning_bias"]`, `LEARNING_BIAS_ENABLED=off` gates consumption, frozen ±1.0/±0.15 bounds, deterministic display).
+- Validation: `npm run gate` green; no backend change.
 
 ### 2026-08-02 — CP-7-06 (Interview/offer tracking) — DONE
 - Files: `src/copilot/learning/tracking.py`, `tests/copilot/test_learning_tracking.py`.
