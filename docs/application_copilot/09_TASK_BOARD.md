@@ -65,8 +65,8 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH5 — Browser Assistant
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-5-01 | Browser controller | Critical | TODO (ready) | 0-01 | M | 6h |
-| CP-5-02 | Form field model | Critical | TODO | 5-01 | H | 10h |
+| CP-5-01 | Browser controller | Critical | DONE | 0-01 | M | 6h |
+| CP-5-02 | Form field model | Critical | TODO (ready) | 5-01 | H | 10h |
 | CP-5-03 | Field resolver | Critical | TODO | 5-02,3-02 | M | 6h |
 | CP-5-04 | Checkpoint engine | High | TODO | 5-03 | M | 5h |
 | CP-5-05 | Recovery | High | TODO | 5-02 | M | 5h |

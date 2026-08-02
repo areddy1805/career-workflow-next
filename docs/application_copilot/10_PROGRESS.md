@@ -1,7 +1,7 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH3 + PH4 complete (certified) — PH5+ remain; see certification reports below.
+**Phase:** PH0–PH4 certified; PH5 in progress (Browser Assistant) — see certification reports below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | Pending | 0 | — | Blocked on playwright dep confirmation |
+| PH5 | In progress | 13 | CP-5-01 DONE | Playwright pinned (c911288); Browser Assistant 1/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,14 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-01 (Browser controller) — DONE
+- Files: `src/copilot/browser/controller.py`, `src/copilot/browser/__init__.py`, `tests/copilot/test_browser_controller.py`.
+- `controller.py` implements 04 §8 (Playwright session lifecycle, visible browser, launch/teardown, takeover) as `BrowserController` — a single Chromium instance behind the assistant with **one session at a time** (AC): `open(url, session_id, opportunity_id) -> BrowserSession` (launch-on-first-use, goto, session snapshot `{session_id, opportunity_id, url, state, page_url, title}`), `navigate` (controller-initiated multi-page nav), `close`/`abort` (teardown + slot release; `abort` returns the terminal `aborted` session), `current_session`/`page` reads. Visible browser by default (ADR-003); tests force `headless=True` (08 CP-5-01 AC: integration headed=False in CI). Feature-gated: `BROWSER_ENABLED = False` off by default, `open` raises `BrowserNotEnabled` while off (DoD rollback). Failed opens tear the browser down (no leak); a navigation failure is `BrowserError`, never a raw Playwright error. `BrowserSession.to_dict()` serves the §7.6 read shape.
+- **Takeover hook (D-018)**: `add_takeover_handler` registers callbacks; they fire when the human takes the wheel — detected as a main-frame navigation the controller did not initiate (`framenavigated` + controller-initiated flag; subframes ignored), or forced via `take_over(reason)` (Esc path, CP-5-08). After takeover the session is `taken_over` and `navigate` raises `BrowserSessionError` — the assistant annotates, never steers (04 §7).
+- Browser resolution: Playwright reads `PLAYWRIGHT_BROWSERS_PATH` → project-local vendor `<repo>/.playwright/` (setup c911288). Tests set it via fixture; teardown calls the sync API's `stop()` (not `close()`) so the dispatcher loop never leaks — without it every later launch trips Playwright's “Sync API inside the asyncio loop” guard.
+- D-018 recorded (takeover detection + stop-steering reading); 04 §8 freezes the hook, not the mechanism.
+- Validation: 9 new integration tests (feature gate, open→navigate→close smoke incl. title/page_url, one-session-at-a-time + slot release after abort, takeover on unexpected navigation + handler + stop-steering, forced take_over idempotent, abort-without-session error, failed open tears down + slot free for retry, to_dict shape, visible default); full regression **1298** passed (+9); ruff + mypy clean.
 
 ### 2026-08-02 — CP-3-06 (Answer bank API) — DONE
 - Files: `src/copilot/answerbank/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`AnswerSaveRequest`/`AnswerConfirmRequest`/`AnswerLockRequest`/`ProfileSwitchRequest`), `tests/copilot/test_answerbank_api.py`.
