@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
-| PH4 | In Progress | 5 | CP-4-01 DONE | CP-4-02 next |
+| PH4 | In Progress | 10 | CP-4-02 DONE | CP-4-03 next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-4-02 (Session persistence + events) — DONE
+- Files: `src/copilot/session/{store,events}.py`, `tests/copilot/test_session_store.py`.
+- `events.py`: `copilot_session_events` log (§7.8) — `SessionEvent{session_id, seq, event_type, occurred_at, payload}` with **per-session** auto-increment seq (`MAX(seq)+1`); `append_session_event` writes the log row AND emits the namespaced CopilotEvent `ses.<event.lower()>` (CP-0-03) so per-session log + global audit trail stay in sync; `list_session_events` ordered by seq.
+- `store.py`: `copilot_sessions` CRUD — `save_session` (upsert, full §7.8 row incl. brief/answers snapshot JSON + outcome cols), `load_session` (row → Session with state enum), `create_session` (machine creation path `transition(None, SESSION_CREATED)` → BRIEF_READY; records SESSION_CREATED log row + `ses.session_created`), `advance_session` (load → `Session.advance` via machine → save → log + emit `ses.*` with `{from, to, **payload}`; raises `InvalidTransitionError` before ANY write on invalid pairs; missing session → `CopilotError`).
+- Validation: 10 new integration tests (create persists + events, full-field round-trip, full chain ANSWERS_CONFIRMED→…→HUMAN_SUBMIT with submitted_at + OUTCOME_RECORDED self-loop with outcome payload, invalid transition persists nothing, missing session, abort, per-session seq isolation, upsert, standalone append); full regression 1185 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-4-01 (Session state machine) — DONE
 - Files: `src/copilot/session/{state_machine,models}.py`, `tests/copilot/test_session_state_machine.py`.
