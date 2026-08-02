@@ -9,6 +9,7 @@ are persisted as JSON text for workspace resume (CP-4-03).
 
 import sqlite3
 import uuid
+from dataclasses import replace
 
 from src.copilot.constants import SessionEventType, SessionState
 from src.copilot.exceptions import CopilotError
@@ -119,11 +120,14 @@ def advance_session(
     *,
     payload: dict | None = None,
     trace_id: str | None = None,
+    updates: dict | None = None,
 ) -> Session:
     """Apply a validated transition: load → machine → save → log + emit.
 
     Raises :class:`InvalidTransitionError` on a matrix violation; nothing is
     persisted or emitted on failure (the machine runs before any write).
+    ``updates`` are extra field overrides (e.g. snapshot JSON) merged into
+    the saved Session so state + snapshot stay consistent in one row write.
     The returned Session carries from/to state in the event payload.
     """
     session = load_session(conn, session_id)
@@ -131,6 +135,8 @@ def advance_session(
         raise CopilotError(f"session not found: {session_id}")
     from_state = session.state
     advanced = session.advance(event)
+    if updates:
+        advanced = replace(advanced, **updates)
     event_payload = {
         "from": from_state.value,
         "to": advanced.state.value,

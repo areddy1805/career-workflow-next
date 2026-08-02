@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
-| PH4 | In Progress | 10 | CP-4-02 DONE | CP-4-03 next |
+| PH4 | In Progress | 55 | CP-4-03 DONE | CP-4-04 outcome capture next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-4-03 (Workspace service) — DONE
+- Files: `src/copilot/session/{service,store}.py`, `tests/copilot/test_session_service.py`.
+- `service.py`: `WorkspaceService` orchestrates one application attempt through the frozen §7.5 chain with consistent snapshots: `start(opportunity_id, profile_id, resume_id)` → BRIEF_READY + `brief_snapshot_json` (CP-2-07 brief, 404-style `CopilotError` for missing opp/brief); `confirm_answers` → resolves the brief's likely questions through the CP-3-02 Answer Bank stack (06 §3) + writes `answers_snapshot_json` atomically with the ANSWERS_CONFIRMED transition (event payload carries answers/auto/confirm counts); `select_resume` → `ResumeRouter.route(job)` via importlib seam (02 §6), explicit `resume_id` wins, router failure falls back to the brief's resume recommendation (never blocks the session); `fill_form(form_summary)` → FORM_FILLED; `submit(human_gesture=True)` → HUMAN_SUBMIT → SUBMITTED, raises `CopilotError` without the gesture (ADR-002). Reads: `get`, `workspace_view` (session + parsed brief/answers snapshots for CP-4-05).
+- `store.advance_session` gained `updates=` (dataclass `replace` merged before save) so snapshots land in the same row write as the transition — no torn state.
+- Integration notes: `ResumeDeltaEngine.generate_delta` is exposed as the `resume_delta` seam (typed pipeline objects make it heavy); the brief snapshot's resume recommendation serves as the delta record until wired. Browser fill is PH5 — `fill_form` records the transition + optional summary.
+- Validation: 13 new integration tests (start snapshot + event, missing opp, confirm resolves+snapshots+counts incl. low-confidence confirm path, route recording + explicit id + router-failure fallback, fill summary, submit gesture guard + advance, full happy path with event trail, invalid ordering raises, workspace_view round-trip); full regression 1222 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-3-02 (Resolution engine wrapper + cache) — DONE
 - Files: `src/copilot/answerbank/{resolver,cache}.py`, `tests/copilot/test_answerbank_resolver.py`.
