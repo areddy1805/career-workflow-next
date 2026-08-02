@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 63 | CP-5-05 DONE | Playwright pinned (c911288); Browser Assistant 5/8 |
+| PH5 | In progress | 75 | CP-5-06 DONE | Playwright pinned (c911288); Browser Assistant 6/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-06 (ATS adapters) — DONE
+- Files: `src/copilot/browser/adapters/{__init__,base,greenhouse,lever,ashby}.py`, `tests/copilot/test_browser_adapters.py`.
+- `adapters/base.py`: `FieldSemantics{label, kind, required}` + `AtsAdapter{ats_type, semantics: {name: FieldSemantics}}` — `refine_one` overrides label/kind/required and upgrades confidence to the label-ladder top (1.0) when a canonical label applies (D-023). `adapters/{greenhouse,lever,ashby}.py` each declare `SEMANTICS` for their standard fields (greenhouse: first_name/last_name/email/phone/linkedin/resume/source/start_date/years/cover_letter; lever: name/email/phone/linkedin/github/agree/gender/how_heard/resume; ashby: full_name/email/phone/linkedin/visa/authorized/resume) + a module `*_ADAPTER`.
+- `adapters/__init__.py`: registry `ADAPTERS = {greenhouse, lever, ashby}` + `apply_adapter(fields, ats_type)` (unknown/unregistered → fields untouched — the generic fallback never blocks, ADR-005, AC “adapter never required”) + `adapt_model(model, ats_type)` (refines fields + stamps ats_type). Options always come from the live DOM — adapters never hardcode option sets. Rollback: unregister = remove from `ADAPTERS`.
+- D-023 recorded (name-keyed refinement, no hardcoded options, confidence upgrade semantics).
+- Validation: 8 new tests (registry membership; weak name-only label refined to canonical 1.0 on the live greenhouse fixture after stripping the label element — accuracy improves; kind pinned for text-typed emails/resumes; unknown fields pass through; unknown/unregistered ATS fallback intact for workday/generic/nope; unregister-adapter rollback; adapt_model stamps ats_type on the live lever fixture; ashby aria/name refinement); full regression **1366** passed (+8); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-05 (Recovery) — DONE
 - Files: `src/copilot/browser/recovery.py`, `src/copilot/browser/guidance.py`, `tests/copilot/test_browser_recovery.py`.
