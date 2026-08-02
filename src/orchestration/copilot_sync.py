@@ -111,7 +111,7 @@ def sync_pipeline_jobs_to_copilot(
                 opportunity_id=jid,
                 provider_id=record.provider_id or "",
                 provider_job_id=jid,
-                apply_url=extra.get("apply_url") or None,
+                apply_url=extra.get("apply_url") or extra.get("apply_link") or None,
                 status_view=_state_to_view(record.current_state),
             )
             oppstore.upsert(conn, opportunity)

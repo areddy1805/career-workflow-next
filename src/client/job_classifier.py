@@ -598,6 +598,9 @@ class JobFilterPipeline2:
                     "provider_name": job.get("provider_name", "unknown"),
                     "provider_source": job.get("provider_source", "unknown"),
                     "provider_job_id": job.get("provider_job_id", ""),
+                    # Integration: carry the acquisition apply URL through
+                    # classification (resolver reads apply_url or apply_link).
+                    "apply_url": job.get("apply_url") or "",
                 }
             )
 
