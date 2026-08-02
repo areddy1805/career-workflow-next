@@ -11,14 +11,19 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 78 | CP-6-07 DONE | UI 7/9; see session log |
+| PH6 | In progress | 89 | CP-6-06 DONE | UI 8/9; see session log |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
-| PH8 | In progress | 100 | CP-8-03 DONE | Analytics 3/3 — certification report below |
+| PH8 | ✅ Complete (certified) | 100 | CP-8-03 DONE | 3/3; see PH8 Certification below |
 | PH9 | Pending | 0 | — | Blocked on all |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-06 (Analytics page) — DONE
+- Files: `frontend/src/pages/copilot/Analytics.tsx` (replaces the placeholder), `frontend/src/lib/api/copilot.ts` (+`fetchAnalytics`), `frontend/src/lib/hooks.ts` (+`useAnalytics` 30s poll), `frontend/src/lib/types/copilot.ts` (+analytics types mirroring the backend exactly).
+- Per frozen 07_UI §3.6 + the CP-8-03 payload: **funnel** (proportional stacked bar, CSS widths — no chart lib added, `role=img` + aria-labels; backend stage order wins over the spec's §3.6 order, noted), **effort saved** (manual/assisted/saved tiles + comparison bars), **answer bank health** (auto-resolve/correction tiles, by-source rows, LLM trend as a CSS bar chart — 30 days, max-normalized, every-5th date label), **calibration** (MAE/sample tiles + predicted-vs-actual bars when sample_count>0), and three read-only **pending cards** for provider/ATS/resume-profile conversion (the derivations exist in `provider_success.py` but have no endpoint — documented, no fetch). Loading skeleton/error+Retry/empty states.
+- Validation: `npm run gate` green; no backend change.
 
 ### 2026-08-02 — CP-8-03 (Telemetry + analytics API) — DONE
 - Files: `src/copilot/analytics/api.py`, `src/copilot/telemetry/__init__.py`, `api/routers/copilot.py` (+include, D-015), `tests/copilot/test_analytics_api.py`.
@@ -739,3 +744,49 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — PH7 certified. Next: PH8 (analytics backend) → CP-6-06 (Analytics page) → CP-6-09 (a11y polish) → PH9 (release).
+
+---
+
+## PH8 Certification Report
+
+**Phase:** PH8 — Analytics (Epic ANL) · **Date:** 2026-08-02
+
+### Completed Tasks (3/3)
+| ID | Task | Result |
+|---|---|---|
+| CP-8-01 | Funnel + effort metrics (frozen funnel, conversion rates, effort saved) | DONE |
+| CP-8-02 | Answer + learning health (resolve/correction rates, LLM trend, calibration) | DONE |
+| CP-8-03 | Telemetry + analytics API (`/api/copilot/analytics`, events→metrics aggregation) | DONE |
+
+### Acceptance Criteria Verification
+- **Metric correctness** (CP-8-01): stage counts exact against seeded stores; conversions `stage[i]/stage[i−1]` (None when prev=0); effort math (manual 15.0 min baseline, assisted = median start→submit, fallback 6.0); over-time buckets zero-filled. ✅
+- **Health metrics** (CP-8-02): resolve rate (stored+deterministic/total — M03), correction rate (manual+confirmed/total — M04), LLM trend (per-day, zero-filled), calibration MAE (brief predicted vs actual outcomes; 0 pairs → null). ✅
+- **Contract §7.9 + telemetry** (CP-8-03): `GET /api/copilot/analytics` envelope with funnel/effort/answer_health/llm_trend/calibration/success_metrics; `success_metrics` covers **all 14 M-keys** (8 computable, 6 null-with-note where no data source exists — D-030); `aggregate_events` per-namespace counts. ✅
+- **PH8 exit gate**: all `16_SUCCESS_METRICS.md` data points are computable or explicitly null-with-note — M01/M03/M04/M05/M08/M09/M10/M11 computed from copilot stores; M02/M06/M07/M12/M13/M14 return `{value: null, note}` (action follow-through, manual guardrail audit, pipeline ledger suite, no timing column, UI checklist, controller metrics). ✅
+
+### Tests Executed
+- 19 new copilot tests: funnel 8, health 8, api 3. Copilot suite now **710 tests**.
+- Full regression: **1513 passed, 0 failed** (1494 → 1496 → 1505 → 1513 across CP-8-01..03).
+- ruff clean (`src/copilot`, `api/routers/copilot.py`, `tests/copilot`); mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- Full suite `pytest --cov=src/copilot --cov=api/routers/copilot.py`: **93%** (3846 stmts, 288 missed) — up from 92% (PH7); the browser greenlet-tracing artifact still understates Playwright-touching modules; analytics modules are pure-logic and measured accurately.
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-8-03 (61 entries); `09_TASK_BOARD.md` PH8 3/3 DONE; `11_DECISIONS.md` D-030 (analytics proxies: viewed=briefed, shortlisted=interview, LLM trend via last_used_at, null-with-note for missing telemetry) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- Read-only derivations over the copilot stores (ADR-007 — zero pipeline writes); `api/routers/copilot.py` stays the mount point (D-015); envelope everywhere; no static pipeline imports.
+- All proxies are deterministic and documented in code — no invented telemetry.
+
+### Known Issues
+- Viewed/shortlisted funnel stages are proxies (no brief-read or shortlist event table exists) — D-030.
+- LLM-call trend uses `last_used_at` (no `created_at` on `copilot_answers`, no `ans.*` events) — D-030.
+- M02/M06/M07/M12/M13/M14 remain null-with-note (data sources land in later phases or are manual/pipeline-owned).
+
+### Risks (next phase)
+- CP-6-06 Analytics page + CP-6-09 a11y polish complete PH6.
+- PH9 release: browser e2e (Phase G), security review (PII/no-secrets/dep scan incl. playwright), performance tuning (cold brief <5s, 30s/1s polls, browser single-instance), docs freeze + release notes, v5.1.0 alpha tag.
+
+### Recommendation
+- **GO** — PH8 certified. Next: CP-6-06 (Analytics page) + CP-6-09 (a11y polish) → PH9 (release).

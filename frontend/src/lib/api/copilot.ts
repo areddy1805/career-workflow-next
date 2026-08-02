@@ -5,6 +5,8 @@
 
 import { fetchApi } from './base';
 import type {
+  AnalyticsData,
+  AnalyticsResponse,
   AnswerListResponse,
   BriefResponse,
   CopilotHealthResponse,
@@ -155,6 +157,13 @@ export async function switchProfile(profileId: string) {
     method: 'POST',
     body: JSON.stringify({ profile_id: profileId }),
   });
+}
+
+// ─── Analytics (CP-8-03 / §7.9) ────────────────────────────────────────────
+
+export async function fetchAnalytics(): Promise<AnalyticsData> {
+  const res = await fetchApi<AnalyticsResponse>('/copilot/analytics');
+  return res.data;
 }
 
 // ─── Browser Assistant (CP-5-08 / §7.9) ────────────────────────────────────

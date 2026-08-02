@@ -276,3 +276,11 @@ export function useAnswers(params: { profile_id?: string; status?: string; q?: s
     queryFn: () => api.fetchAnswers(params),
   });
 }
+
+export function useAnalytics() {
+  return useQuery({
+    queryKey: ['copilot', 'analytics'],
+    queryFn: api.fetchAnalytics,
+    refetchInterval: 30_000, // 30s poll (07_UI §5)
+  });
+}

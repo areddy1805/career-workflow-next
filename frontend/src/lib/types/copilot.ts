@@ -144,3 +144,78 @@ export interface AnswerListResponse {
   ok: boolean;
   data: StoredAnswer[];
 }
+
+// ─── Analytics (CP-8-03 / §7.9) ─────────────────────────────────────────────
+
+export interface FunnelStageCounts {
+  ingested: number;
+  briefed: number;
+  viewed: number;
+  applied: number;
+  submitted: number;
+  shortlisted: number;
+  interview: number;
+  offer: number;
+}
+
+/** Per-stage conversion = stage[n] / stage[n-1]; null when the previous stage is 0. */
+export interface FunnelConversions {
+  briefed: number | null;
+  viewed: number | null;
+  applied: number | null;
+  submitted: number | null;
+  shortlisted: number | null;
+  interview: number | null;
+  offer: number | null;
+}
+
+export interface FunnelData {
+  stages: FunnelStageCounts;
+  conversions: FunnelConversions;
+}
+
+export interface EffortSavedData {
+  manual_estimate_min: number;
+  assisted_estimate_min: number;
+  saved_min: number;
+  saved_pct: number;
+  median_assisted_minutes: number;
+}
+
+export interface AnswerHealthData {
+  total: number;
+  by_source: Record<string, number>;
+  auto_resolve_rate: number;
+  correction_rate: number;
+}
+
+export interface LlmTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface CalibrationPair {
+  opportunity_id: string;
+  predicted: number;
+  actual: number;
+}
+
+export interface CalibrationData {
+  pairs: CalibrationPair[];
+  mean_abs_error: number | null;
+  sample_count: number;
+}
+
+export interface AnalyticsData {
+  funnel: FunnelData;
+  effort: EffortSavedData;
+  answer_health: AnswerHealthData;
+  llm_trend: LlmTrendPoint[];
+  calibration: CalibrationData;
+  success_metrics: Record<string, { value: unknown; note?: string }>;
+}
+
+export interface AnalyticsResponse {
+  ok: boolean;
+  data: AnalyticsData;
+}
