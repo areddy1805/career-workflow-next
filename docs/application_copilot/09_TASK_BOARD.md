@@ -81,10 +81,10 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-6-02 | Brief view | High | DONE | 2-07 | S | 5h |
 | CP-6-03 | Workspace wizard | Critical | DONE | 4-05,6-02 | H | 12h |
 | CP-6-04 | Assistant panel | Critical | TODO (ready) | 5-08,6-03 | H | 12h |
-| CP-6-05 | History | Medium | TODO (ready) | 4-05 | S | 5h |
+| CP-6-05 | History | Medium | DONE | 4-05 | S | 5h |
 | CP-6-06 | Analytics page | Medium | TODO | 8-01 | M | 8h |
 | CP-6-07 | Learning page | Medium | TODO | 3-06,7-03 | M | 8h |
-| CP-6-08 | Settings | Medium | TODO | 0-01 | S | 4h |
+| CP-6-08 | Settings | Medium | TODO (ready) | 0-01 | S | 4h |
 | CP-6-09 | Keyboard + a11y + polish | High | TODO | 6-01..08 | M | 8h |
 
 ## PH7 — Learning

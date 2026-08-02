@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 33 | CP-6-03 DONE | UI 3/9; see session log |
+| PH6 | In progress | 44 | CP-6-05 DONE | UI 4/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-05 (History) — DONE
+- Files: `frontend/src/pages/copilot/History.tsx` (replaces the placeholder). Backend `GET /api/copilot/sessions` (list, newest first) landed in the PH6 plumbing commit (`src/copilot/session/store.py` `list_sessions`, `WorkspaceService.list_sessions`, session API endpoint + test) so the page has data.
+- Per frozen 07_UI §3.5: sessions table (opportunity title/company lazily resolved from the opportunities list, fallback to raw id; strategy from the opportunity's `application_strategy`; state + outcome `StatusBadge`s; started/submitted/outcome times via `RelativeTime`; effort saved “—” not computed) + row-click disclosure → **session timeline** (`useSession` on demand, no polling — terminal states): ADR-012 reconciliation (session state + outcome side by side), profile/session ids, ordered event trail (`occurred_at` + `event_type` chips + seq). Keyboard-reachable rows (`tabIndex=0`, `role=button`, `aria-expanded`, Enter/Space toggle). Loading/error/empty states.
+- Data gaps (documented): response/interview/offer timestamps don't exist in the API yet — only started/submitted/outcome render.
+- Validation: `npm run gate` green; backend session-list test green (regression 1421).
 
 ### 2026-08-02 — CP-6-03 (Workspace wizard) — DONE
 - Files: `frontend/src/pages/copilot/Apply.tsx` (replaces the placeholder; 5-step wizard), `frontend/src/store/copilot.ts` (+`opportunityId`/`sessionId`/`setSession`/`editingAnswerFp`/`setEditingAnswerFp`), `frontend/src/lib/api/base.ts` (+copilot envelope error message surfacing).
