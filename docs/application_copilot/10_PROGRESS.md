@@ -11,7 +11,7 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 56 | CP-6-08 DONE | UI 5/9; see session log |
+| PH6 | In progress | 67 | CP-6-04 DONE | UI 6/9; see session log |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-6-04 (Assistant panel) — DONE
+- Files: `frontend/src/pages/copilot/Assistant.tsx` (replaces the placeholder), `src/copilot/browser/safety.py` (+`list_actions`), `src/copilot/browser/api.py` (+`AssistantService.audit_feed` + `GET /api/copilot/browser/actions` endpoint), `frontend/src/lib/api/copilot.ts` (+`browserActions`/`AuditAction`), `tests/copilot/test_browser_api.py` (+audit-feed test).
+- Per frozen 07_UI §3.4: live browser status card (page_url/title/state/ats/pages/auto_fillable + open-externally anchor — the Playwright window runs in the backend process, ADR-003, so no iframe; commented), field rail with deterministic fill-status mapping (pending/sensitive/upload/unknown/asked/filled/flagged + confidence `role=progressbar` bars + source chips + reason tooltips), checkpoint banner (exact pending reasons, Continue→`POST /browser/confirm`, Edit field→`confirmAnswer`+re-fill, Take over→guidance mode), live audit feed (`role=log aria-live=polite`, 1s poll, newest first). Driving loop: open (session's opportunity_id) → fill pass (one `browserFill` per tick) → checkpoint gates cp1→cp2→cp3 → `FORM_FILLED` `{form_summary:{filled,total}}` single-fire when all filled + gates cleared + auto_fillable + state opened → the wizard's submit step unlocks. Takeover (button or 409) → guidance view, never fights back (04 §7). 1s polling stops on terminal states.
+- Deviation (documented in code): form/checkpoint are event-driven, not 1s-polled — the backend records an audit row per form/checkpoint call, so polling would flood the live feed; observable behavior unchanged. `GET /browser/actions` is an additive audit read (the §7.9 table has no audit-read path; the §3.4 feed requires one — D-row note in session entry).
+- Validation: `npm run gate` green; backend: 19 browser API tests pass (+1 audit feed), ruff + mypy clean.
 
 ### 2026-08-02 — CP-6-08 (Settings) — DONE
 - Files: `frontend/src/pages/copilot/Settings.tsx` (replaces the placeholder).

@@ -62,6 +62,7 @@ from src.copilot.browser.resolver import FieldFill, resolve_field, resolve_field
 from src.copilot.browser.safety import (
     SafetyGuard,
     SafetyViolation,
+    list_actions,
     looks_like_failure,
     looks_like_success,
     record_action,
@@ -443,6 +444,13 @@ class AssistantService:
         )
         return aborted
 
+    def audit_feed(
+        self, *, session_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Live audit feed of assistant actions (§10.5, CP-6-04 panel)."""
+        sid = self._require_runtime(session_id).session_id
+        return list_actions(self._conn, sid, limit=limit)
+
     # -- internals ------------------------------------------------------
 
     def _context(self, runtime: AssistantRuntime) -> ResolveContext:
@@ -691,3 +699,17 @@ def copilot_browser_abort(
     except CopilotError as exc:
         return _browser_error_response(exc)
     return {"ok": True, "data": session.to_dict()}
+
+
+@router.get("/browser/actions")
+def copilot_browser_actions(
+    limit: int = 100,
+    session_id: str | None = None,
+    service: AssistantService = Depends(get_assistant_service),
+) -> Any:
+    """Live audit feed for the current session (§10.5, CP-6-04 panel)."""
+    try:
+        feed = service.audit_feed(session_id=session_id, limit=limit)
+    except CopilotError as exc:
+        return _browser_error_response(exc)
+    return {"ok": True, "data": feed}

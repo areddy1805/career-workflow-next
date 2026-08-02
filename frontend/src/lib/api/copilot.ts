@@ -224,6 +224,15 @@ export async function browserAbort(reason = 'aborted by user') {
   });
 }
 
+export async function browserActions(sessionId?: string, limit = 100) {
+  const qs = new URLSearchParams();
+  if (sessionId) qs.set('session_id', sessionId);
+  qs.set('limit', String(limit));
+  return fetchApi<{ ok: boolean; data: AuditAction[] }>(
+    `/copilot/browser/actions?${qs.toString()}`,
+  );
+}
+
 // ─── Browser shapes (§7.6) ─────────────────────────────────────────────────
 
 export interface BrowserSession {
@@ -296,4 +305,15 @@ export interface GuidanceStep {
 export interface GuidancePlan {
   reason: string;
   steps: GuidanceStep[];
+}
+
+export interface AuditAction {
+  id: number;
+  session_id: string;
+  occurred_at: string;
+  action: string;
+  target: string | null;
+  field_id: string | null;
+  resolution: Record<string, unknown>;
+  audit_note: string | null;
 }

@@ -127,6 +127,24 @@ def looks_like_success(url: str) -> bool:
     return any(marker in text for marker in _SUCCESS_MARKERS)
 
 
+def list_actions(
+    conn: sqlite3.Connection, session_id: str, *, limit: int = 100
+) -> list[dict[str, Any]]:
+    """Audit feed for one session, newest first (CP-6-04 panel)."""
+    rows = conn.execute(
+        "SELECT id, session_id, occurred_at, action, target, field_id, "
+        "resolution_json, audit_note FROM copilot_browser_actions "
+        "WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+        (session_id, limit),
+    ).fetchall()
+    feed: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["resolution"] = json.loads(item.pop("resolution_json") or "{}")
+        feed.append(item)
+    return feed
+
+
 def record_action(
     conn: sqlite3.Connection,
     session_id: str,

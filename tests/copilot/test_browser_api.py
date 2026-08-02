@@ -498,3 +498,18 @@ def test_feature_gate_blocks_open(direct_service):
     opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
     with pytest.raises(BrowserNotEnabled):
         disabled.open(opp_id, "s1")
+
+
+def test_audit_feed_endpoint(client):
+    """CP-6-04: GET /browser/actions returns the session's audit feed."""
+    c, conn, _ = client
+    opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
+    open_browser(c, opp_id)
+    c.get("/api/copilot/browser/form")
+    r = c.get("/api/copilot/browser/actions")
+    assert r.status_code == 200, r.text
+    feed = r.json()["data"]
+    actions = [a["action"] for a in feed]
+    assert actions == ["form", "open"]  # newest first
+    assert feed[0]["session_id"] == "s1"
+    assert set(feed[0]) >= {"id", "occurred_at", "action", "audit_note"}
