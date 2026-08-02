@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 8 | CP-1-01 DONE | 1/13 tasks; next: CP-1-02 / CP-1-03 |
+| PH1 | In progress | 15 | CP-1-10 DONE | 2/13 tasks; next: CP-1-02 / CP-1-11 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-10 (CopilotOpportunity model) — DONE
+- Files: `src/copilot/oppstore/{__init__,model}.py`, `tests/copilot/test_oppstore.py`.
+- Frozen 03 §2 contract implemented: `CopilotOpportunity` frozen dataclass (identity/role/company/compensation/skills/location/application/content/metadata/intelligence/status sections, ~50 fields) + sub-models `Attachment`, `ResumeRec`, `EffortEstimate`. `to_dict()`/`from_dict()` round-trip (JSON-safe, datetimes → ISO-8601, unknown keys ignored, required source/title/company enforced). `compute_fingerprint()` per 03 §4 / §7.2: sha256(normalize(title)|normalize(company)|normalize(city)|exp_bucket)[:16]; computed at construction when absent, preserved when provided.
+- Provenance enforced at construction (keys ⊆ fields, values ⊆ Provenance enum); enum-valued fields (source, application_strategy, status_view, seniority, employment_type, work_mode, role_family, ats_type, fit_class) restricted to frozen vocabularies — fail-fast on drift.
+- Validation: 40 new unit tests (round-trip incl. all types, fingerprint stability/bucketing, provenance + enum enforcement, immutability, defaults); full regression 917 passed; ruff + mypy clean.
+- No behavior change to pipeline; additive (store/API not wired yet).
 
 ### 2026-08-02 — CP-1-01 (IngestionAdapter interface + registry + pipeline) — DONE
 - Files: `src/copilot/ingestion/{__init__,base,registry,pipeline,models}.py`, `tests/copilot/test_ingestion.py`.
