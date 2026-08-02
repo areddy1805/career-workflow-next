@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | Pending | 0 | — | Blocked on PH1 |
+| PH2 | In progress | 14 | CP-2-01 DONE | 1/7 tasks; next: CP-2-02 salary |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-01 (Brief assembler) — DONE
+- Files: `src/copilot/brief/{__init__,models,assembler}.py`, `tests/copilot/test_brief_assembler.py`.
+- Frozen `05_APPLICATION_BRIEF.md` (ADR-013) §2 shape: `ApplicationBrief` (opportunity_id, verdict, verdict_reason, fit, missing_skills, resume_recommendation, strategy, risk_flags, section_sources, provenance_summary, confidence) + sub-models `Verdict`/`LearningCost` enums, `MissingSkill`, `FitBreakdown`, `ResumeRecommendation`, `RiskFlags` (with `blocks_apply` per §4 blocker set), `StrategySection`; `to_dict()` JSON-safe. Later sections (salary/effort/probability/questions) arrive additively with CP-2-02..05.
+- `assemble_brief(opportunity, *, components, learning_costs, resume_recommendation, risk_flags, quality_threshold=68, salary_below_band=False)`: deterministic aggregation — fit score (opportunity.score, default 0), components injectable (DecisionExplanation seam, 05 §2 #2), missing skills (default cost med, injectable per-skill), resume rec (injected > opportunity.resume_recommendation > generic fallback), strategy reason map (ADR-004), deterministic risk flags (suspicious = missing title/company/description; low-confidence provenance = llm provenance on identity fields or field confidence < 0.7), all section sources `deterministic`, confidence = mean of input field confidences (cap 0.5 when low-confidence), provenance summary from the opportunity.
+- Verdict rule (05 §4) exact: skip on deal-breaker/avoid-technology/expired/duplicate or fit < threshold; apply on fit ≥ threshold + no blocker + salary not below band; consider = salary gate (CP-2-02 seam, defaults unblocked). No pipeline imports (injectable-sources pattern like StatusViewResolver).
+- Validation: 25 new unit tests (verdict matrix: fit bands, threshold edge 68/67, all four blockers, consider-via-salary, non-blocking flags, custom threshold; fit/strategy; missing skills default+injected costs; resume rec precedence; risk detection; confidence; to_dict; frozen dataclass); full regression 1074 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-1-09 (PDF adapter) — DONE
 - Files: `src/copilot/ingestion/adapters/pdf.py`, `tests/copilot/test_pdf_adapter.py`, `api/routers/copilot.py` (registry); `extract/pdf.py` + `extract/text.py` touched additively.
