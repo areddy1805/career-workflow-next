@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 75 | CP-5-06 DONE | Playwright pinned (c911288); Browser Assistant 6/8 |
+| PH5 | In progress | 88 | CP-5-07 DONE | Playwright pinned (c911288); Browser Assistant 7/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-07 (Safety + audit) — DONE
+- Files: `src/copilot/browser/safety.py`, `tests/copilot/test_browser_safety.py`.
+- `safety.py` implements the non-negotiable 04 §10 rules on the frozen `copilot_browser_actions` schema (§7.8): (1) **read-only-until-submit** — `SafetyGuard` is a three-step ceremony that cannot be short-circuited: `arm_submission(engine_authorized=...)` (only the checkpoint engine authorizes, CP-5-04) → `assert_can_submit(human_gesture=...)` (gesture always required — ADR-002; the `autopilot` param exists but is inert, D-006 autopilot deferred to v5.2.0) → `mark_submitted()` (one submission per session; any further submit raises — no automated retries after rejection, §10.4); (2) **PII rules** — `is_sensitive`/`sensitive_fields` detect PAN/DOB/address/bank/identity-doc fields via curated whole-word phrases (D-024: deliberately not bare “address” — “email address” must stay non-sensitive, and whole-word “pan” — “company” must stay non-sensitive), feeding the resolver's `sensitive=` set so those fields are staged at the checkpoint and never auto-filled (§6, AC); (3) **audit** — `record_action(conn, session_id, *, action, target, field_id, resolution, audit_note)` appends one `copilot_browser_actions` row per action with `resolution_json` + audit note and commits (§10.5, AC “audit rows for every action”); (4) **failure pages** — `looks_like_failure(url)` URL-marker heuristic for annotation/guidance (§10.4); (5) anti-bot — CAPTCHA already forces guidance mode upstream (04 §3/§9), safety never retries past it. Rollback: subsystem feature-gated by `BROWSER_ENABLED` (CP-5-01).
+- D-024 recorded (sensitive-phrase algorithm + submission ceremony + failure markers).
+- Validation: 35 new tests (11 sensitive-positive labels incl. PAN/DOB/address/bank/SSN/passport; 8 non-sensitive incl. the email-address and company/“pan” false-positive guards; sensitive_fields set; audit row write with full §7.8 columns + json resolution round-trip + defaults; guard ceremony: not-armed, not-authorized, gesture-required, read-only-until-submit invariant (every shortcut fails), no-retries-after-submit, autopilot inert; failure heuristics positive/negative); full regression **1401** passed (+35); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-06 (ATS adapters) — DONE
 - Files: `src/copilot/browser/adapters/{__init__,base,greenhouse,lever,ashby}.py`, `tests/copilot/test_browser_adapters.py`.
