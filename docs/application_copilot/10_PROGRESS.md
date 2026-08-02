@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
-| PH4 | In Progress | 70 | CP-4-04 DONE | CP-4-05 session API next |
+| PH4 | In Progress | 90 | CP-4-05 DONE | PH4 exit gate + certification next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-4-05 (Session API) — DONE
+- Files: `src/copilot/session/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`SessionCreateRequest`/`SessionAdvanceRequest`), `src/copilot/session/service.py` (+`progress`/`abort`/`events` reads, `outcome_enabled` constructor flag, `NotFoundError` on missing opportunity in `start`), `src/copilot/exceptions.py` (+`NotFoundError`), `tests/copilot/test_session_api.py`.
+- Frozen §7.9 surface mounted at `/api/copilot` via `src/copilot/session/api.py` included into the copilot router — the same reading as CP-2-07 (the doc's "api/routers/copilot.py" is the mount point; endpoints live in copilot-owned modules, D-015): `POST /sessions` (create → BRIEF_READY + brief snapshot; 404 missing opportunity, 500 brief build failure), `GET /sessions/{id}` (session state + ordered per-session events), `POST /sessions/{id}/advance` (event name → `SessionEventType`; workspace events route to the service methods that carry snapshot/pipeline side effects — ANSWERS_CONFIRMED→confirm_answers, RESUME_CHOSEN→select_resume(+payload.resume_id), FORM_FILLED→fill_form(payload), HUMAN_SUBMIT→submit(human_gesture default true), OUTCOME_RECORDED→record_outcome(payload.outcome, missing → 400), FORM_FILLING/CHECKPOINT_PENDING→progress self-loop (D-011)), `POST /sessions/{id}/abort`. Envelope `{ok, data, error}`; status codes 404 (missing), 409 (InvalidTransitionError), 400 (unknown event / bad payload / gesture).
+- `get_session_service` is a FastAPI dependency (yields a `WorkspaceService` per request, owns its copilot.db conn) so integration tests override seams via `app.dependency_overrides` — the same DI pattern as `get_ingestion_registry`. `WorkspaceService` gained `outcome_enabled` constructor config (defaults to the CP-4-04 flag; per-call `enabled=` still honored) so the API's default service is off-by-default while test overrides can enable the pipeline write. `NotFoundError(CopilotError)` added to the exception taxonomy for precise 404s.
+- Validation: 15 new integration tests (create + snapshot + 404, get state+events + 404, full-chain advance with event trail, unknown event 400, invalid transition 409 with nothing persisted, RESUME_CHOSEN payload + FORM_FILLING self-loop, submit gesture 400, OUTCOME_RECORDED missing-outcome 400, outcome session-data with flag off, **outcome through the API with flag on reaches the queue seam + learning row**, abort + abort-after-submit 409 + abort 404); full regression 1249 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-4-04 (Outcome capture) — DONE
 - Files: `src/copilot/session/outcome.py`, `src/copilot/session/service.py` (+`queue_transition` seam, `record_outcome`), `src/copilot/oppstore/store.py` (+`get_pipeline_job_id`), `tests/copilot/test_outcome.py`.

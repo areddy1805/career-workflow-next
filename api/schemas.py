@@ -37,3 +37,18 @@ class IngestRequest(BaseModel):
 
     source: str
     data: Dict[str, Any] = {}
+
+
+class SessionCreateRequest(BaseModel):
+    """CP-4-05: create a session for an opportunity (brief snapshot)."""
+
+    opportunity_id: str
+    profile_id: Optional[str] = None
+    resume_id: Optional[str] = None
+
+
+class SessionAdvanceRequest(BaseModel):
+    """CP-4-05: advance a session via a frozen §7.5 event + optional payload."""
+
+    event: str
+    payload: Dict[str, Any] = {}

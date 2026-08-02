@@ -9,5 +9,9 @@ class CopilotError(Exception):
     """Base class for every error raised inside the Copilot package."""
 
 
+class NotFoundError(CopilotError):
+    """A requested entity does not exist (404 at the API boundary)."""
+
+
 class CopilotConfigurationError(CopilotError):
     """Raised when the Copilot configuration file is invalid or unreadable."""

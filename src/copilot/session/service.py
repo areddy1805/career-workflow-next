@@ -28,8 +28,9 @@ from src.copilot.answerbank.resolver import (
 )
 from src.copilot.brief import store as brief_store
 from src.copilot.constants import SessionEventType
-from src.copilot.exceptions import CopilotError
+from src.copilot.exceptions import CopilotError, NotFoundError
 from src.copilot.oppstore import store as oppstore
+from src.copilot.session import events as session_events
 from src.copilot.session import outcome as outcome_capture
 from src.copilot.session import store as session_store
 from src.copilot.session.models import Session
@@ -53,6 +54,7 @@ class WorkspaceService:
         resume_router: Callable[[dict], dict] | None = None,
         resume_delta: Callable[..., dict] | None = None,
         queue_transition: Callable[..., bool] | None = None,
+        outcome_enabled: bool = OUTCOME_CAPTURE_ENABLED,
     ) -> None:
         self._conn = conn
         self._profile = profile
@@ -61,6 +63,7 @@ class WorkspaceService:
         self._resume_router = resume_router
         self._resume_delta = resume_delta
         self._queue_transition = queue_transition
+        self._outcome_enabled = outcome_enabled
 
     # ------------------------------------------------------------------ ops
 
@@ -74,7 +77,7 @@ class WorkspaceService:
         """Create the session in BRIEF_READY with the brief snapshot."""
         opportunity = oppstore.get(self._conn, opportunity_id)
         if opportunity is None:
-            raise CopilotError(f"opportunity not found: {opportunity_id}")
+            raise NotFoundError(f"opportunity not found: {opportunity_id}")
         brief = brief_store.get_brief(
             self._conn, opportunity_id, opportunity=opportunity
         )
@@ -190,20 +193,43 @@ class WorkspaceService:
         session_id: str,
         outcome: str,
         *,
-        enabled: bool = OUTCOME_CAPTURE_ENABLED,
+        enabled: bool | None = None,
         trace_id: str | None = None,
     ) -> Session:
         """Interpret the submission result (CP-4-04): OUTCOME_RECORDED on the
         session + pipeline-visible outcome via ``WorkflowQueue.transition``
         (ADR-007) + learning signal. Gated by the feature flag (off by
-        default); pipeline failure never crashes the session."""
+        default; override per call or via ``outcome_enabled`` at
+        construction); pipeline failure never crashes the session."""
         return outcome_capture.record_outcome(
             self._conn,
             session_id,
             outcome,
             transition=self._queue_transition,
-            enabled=enabled,
+            enabled=self._outcome_enabled if enabled is None else enabled,
             trace_id=trace_id,
+        )
+
+    def progress(
+        self,
+        session_id: str,
+        event: SessionEventType,
+        *,
+        payload: dict[str, Any] | None = None,
+    ) -> Session:
+        """Self-loop progress events (FORM_FILLING / CHECKPOINT_PENDING,
+        D-011): recorded on the log, no state advance."""
+        return session_store.advance_session(
+            self._conn, session_id, event, payload=payload or {}
+        )
+
+    def abort(self, session_id: str, *, reason: str | None = None) -> Session:
+        """ABORTED transition from any pre-submit state (machine-validated)."""
+        return session_store.advance_session(
+            self._conn,
+            session_id,
+            SessionEventType.ABORTED,
+            payload={"reason": reason} if reason else {},
         )
 
     # --------------------------------------------------------------- reads
@@ -211,6 +237,13 @@ class WorkspaceService:
     def get(self, session_id: str) -> Session | None:
         """The session row, or None when absent."""
         return session_store.load_session(self._conn, session_id)
+
+    def events(self, session_id: str) -> list[dict[str, Any]]:
+        """Per-session event log (frozen §7.8), ordered, for the API (CP-4-05)."""
+        return [
+            e.to_dict()
+            for e in session_events.list_session_events(self._conn, session_id)
+        ]
 
     def workspace_view(self, session_id: str) -> dict[str, Any] | None:
         """Session + parsed snapshots (brief, answers) for the API (CP-4-05)."""
