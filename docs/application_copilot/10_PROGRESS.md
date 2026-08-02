@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 85 | CP-1-07 DONE | 11/13 tasks; next: CP-1-08 / CP-1-09 |
+| PH1 | In progress | 92 | CP-1-08 DONE | 12/13 tasks; next: CP-1-09 (PDF) |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-08 (Pasted text adapter) — DONE
+- Files: `src/copilot/ingestion/adapters/pasted_text.py`, `tests/copilot/{test_pasted_text_adapter.py,fixtures/pasted_structured.txt,fixtures/pasted_prose.txt}`; registered in `api/routers/copilot.py` `get_ingestion_registry()`.
+- `PastedTextAdapter` (source_id `pasted_text`): payload `{kind: pasted_text, data: {text} | "text"}`; `fetch` preserves line structure (the rule engine is line-based — `normalize_text` collapses newlines). Shared deterministic engine `structure_text(raw_text) -> (data, provenance)` (every field provenance `parser`): labeled fields (`Job Title:/Title:/Company:/Location:/Salary:/Employment Type:/Work Mode:/Experience:/Required|Preferred Skills:/Tools:` with `:` or `：`), first-line heuristics ("X at Y", "X is hiring a Y", short bare first line), salary ranges ($80k–$120k, $90,000–$120,000, €/£; comp_min/max + currency, USD default), location → city/region/country (+ remote), employment_type (full_time/part_time/contract/internship), work_mode (hybrid > remote > on_site), experience_required ("5+ years"), required/preferred skills + tools via labeled sections plus a whole-text word-boundary keyword catalog (~60 skills/tools) with preferred-section routing, description_text = normalized full text.
+- Rejection (03 §6): title+company both missing → UnresolvableError; optional confidence-gated `llm_struct_fn` seam (gate 0.7, disabled default, provenance `llm` appended) identical to generic_url. `structure_text` is the shared rules home for the CP-1-09 PDF adapter.
+- Validation: 9 new integration/unit tests (supports incl. string-data payload, structured-header fixture, plain-prose fixture, rejection, LLM seam accepted/not-invoked/low-confidence paths, shared-rules unit); full regression 1043 passed; ruff + mypy clean.
+- Also landed (follow-up commit fbd3f8f): `ParsedOpportunity.meta` model change from the D-009 decision (linkedin/careers adapters already constructed/read it; left uncommitted in the working tree).
 
 ### 2026-08-02 — CP-1-07 (Careers URL adapter) — DONE
 - Files: `src/copilot/ingestion/adapters/careers_url.py`, `tests/copilot/{test_careers_url_adapter.py,fixtures/careers_greenhouse.html}`; registered in `api/routers/copilot.py` `get_ingestion_registry()`.

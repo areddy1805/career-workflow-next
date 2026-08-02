@@ -23,6 +23,7 @@ from src.copilot.ingestion.adapters.careers_url import CareersUrlAdapter
 from src.copilot.ingestion.adapters.generic_url import GenericUrlAdapter
 from src.copilot.ingestion.adapters.linkedin_url import LinkedInUrlAdapter
 from src.copilot.ingestion.adapters.manual_queue import ManualQueueAdapter
+from src.copilot.ingestion.adapters.pasted_text import PastedTextAdapter
 from src.copilot.ingestion.adapters.wellfound_url import WellfoundUrlAdapter
 from src.copilot.ingestion.models import IngestionError
 from src.copilot.oppstore import store
@@ -39,6 +40,7 @@ def get_ingestion_registry() -> IngestionRegistry:
     registry.register(WellfoundUrlAdapter())
     registry.register(CareersUrlAdapter())
     registry.register(ManualQueueAdapter())
+    registry.register(PastedTextAdapter())
     return registry
 
 

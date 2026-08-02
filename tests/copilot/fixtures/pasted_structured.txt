@@ -1,0 +1,14 @@
+Job Title: Senior Backend Engineer
+Company: Acme Corp
+Location: Berlin, Germany
+Salary: $90,000 - $120,000
+Employment Type: Full-time
+Work Mode: Hybrid
+Experience: 5+ years
+Required Skills: Python, PostgreSQL, Docker, AWS
+Preferred Skills: Kafka, GraphQL
+Tools: Jira, Confluence
+
+About the role
+We are building the data platform that powers Acme's analytics products.
+You will own services end to end and ship weekly.
