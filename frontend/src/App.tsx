@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Briefcase, Play, Inbox, Zap, Search, ChevronRight,
   Settings, PlaySquare, BarChart2, Server, BookOpen, Brain, Activity,
   Terminal, Wrench, Shield, PanelLeftClose, PanelLeftOpen,
-  Send, FileText, Bot, History, TrendingUp, GraduationCap, Cog,
+  History, TrendingUp, GraduationCap, Cog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePreferences } from '@/store/preferences';
@@ -68,9 +68,10 @@ const NAV_GROUPS = [
     label: 'Copilot',
     items: [
       { name: 'Inbox',          path: '/copilot/inbox',              icon: Inbox, badge: 'health' },
-      { name: 'Apply',          path: '/copilot/apply/:id',          icon: Send           },
-      { name: 'Brief',          path: '/copilot/brief/:id',          icon: FileText       },
-      { name: 'Assistant',      path: '/copilot/assistant/:sessionId', icon: Bot          },
+      // Apply/Brief/Assistant are parameter routes — reachable only with a
+      // real id from the Inbox row / Brief CTA / workspace assistant link.
+      // A literal entry here would make the sidebar + ⌘K navigate to
+      // '/copilot/apply/:id' and the pages would request ':id' (Problem 3).
       { name: 'History',        path: '/copilot/history',            icon: History        },
       { name: 'Analytics',      path: '/copilot/analytics',          icon: TrendingUp     },
       { name: 'Learning',       path: '/copilot/learning',           icon: GraduationCap  },

@@ -7,7 +7,6 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { createSession } from '@/lib/api/copilot';
 import { useBrief, useCopilotOpportunities } from '@/lib/hooks';
 import type { CopilotOpportunity } from '@/lib/types/copilot';
 import { verdictLabel } from '@/lib/types/copilot';
@@ -272,15 +271,12 @@ export default function Inbox() {
     setApplyingId(opp.opportunity_id);
     setActionError(null);
     try {
-      const res = await createSession({ opportunity_id: opp.opportunity_id });
-      if (res.ok && res.data?.session_id) {
-        // Stash the session so the workspace (/copilot/apply/:id) can resume it.
-        sessionStorage.setItem(`copilot.session.${opp.opportunity_id}`, res.data.session_id);
-      }
+      // The workspace (Apply.tsx) creates the session on mount — navigate
+      // with the real opportunity id only (Problem 3/6).
       navigate(`/copilot/apply/${opp.opportunity_id}`);
     } catch (err) {
       console.error(err);
-      setActionError('Could not start an application session for this opportunity.');
+      setActionError('Could not open the workspace for this opportunity.');
     } finally {
       setApplyingId(null);
     }
