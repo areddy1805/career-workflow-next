@@ -1,7 +1,7 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH1 complete (certified) — see PH1 Certification below.
+**Phase:** PH2 complete (certified) — PH4 in progress; see certification reports below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
-| PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
+| PH4 | In Progress | 5 | CP-4-01 DONE | CP-4-02 next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-4-01 (Session state machine) — DONE
+- Files: `src/copilot/session/{state_machine,models}.py`, `tests/copilot/test_session_state_machine.py`.
+- `state_machine.py`: frozen §7.5 states/events via `TRANSITIONS` matrix (event → {from → to}); `transition(state, event)` validates and raises `InvalidTransitionError` (a `CopilotError`, API-catchable); `allowed_events(state)` (frozen declaration order, for UI/409 messages); `is_terminal` (SUBMITTED/ABORTED); `INITIAL_STATE = BRIEF_READY`; `SESSION_CREATED` valid only from the `None` sentinel (creation).
+- D-011 reading of the frozen event list: `FORM_FILLING`/`CHECKPOINT_PENDING` self-loop (progress events, no state advance); `HUMAN_SUBMIT` is the trigger `FORM_FILLED → SUBMITTED` (ADR-002 gesture) and `SUBMITTED` is the CopilotEvent emitted on that transition — never a trigger (keeps the gesture requirement unbypassable at the machine level); `OUTCOME_RECORDED` self-loops on `SUBMITTED` (outcome is data, schema §7.8 `outcome`/`outcome_at`).
+- `models.py`: `Session` aggregate mirroring the frozen §7.8 `copilot_sessions` row; `to_dict`/`from_dict` round-trip (string state coerced, unknown keys ignored); pure `advance(event)` applies a validated transition and stamps `updated_at` (+`submitted_at` on SUBMITTED).
+- Validation: 30 new unit tests — exhaustive (state × event) matrix green (every valid pair transitions, every invalid pair raises), explicit invalid spots, SESSION_CREATED only from INITIAL, SUBMITTED-never-trigger (D-011), error message lists allowed events, per-state `allowed_events`, terminal states, Session round-trip/coercion/advance/submitted_at; full regression 1175 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-07 (Brief persistence + cache + endpoints) — DONE
 - Files: `src/copilot/brief/{store,api}.py`, `tests/copilot/{test_brief_store,test_brief_api}.py`; `brief/models.py` (+`ApplicationBrief.from_dict` round-trip) + `api/routers/copilot.py` (includes brief router).

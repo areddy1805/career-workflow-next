@@ -56,7 +56,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 ## PH4 — Session
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
 |---|---|---|---|---|---|---|
-| CP-4-01 | Session state machine | Critical | TODO | 0-03 | S | 3h |
+| CP-4-01 | Session state machine | Critical | DONE | 0-03 | S | 3h |
 | CP-4-02 | Session persistence + events | Critical | TODO | 4-01,0-02 | S | 3h |
 | CP-4-03 | Workspace service | Critical | TODO | 4-02,2-07,3-02 | M | 8h |
 | CP-4-04 | Outcome capture | Critical | TODO | 4-03 | M | 5h |
