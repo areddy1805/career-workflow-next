@@ -12,5 +12,6 @@ Non-ADR operational decisions + reversals. Architectural decisions live in `13_A
 | D-006 | 2026-08-02 | Autopilot (opt-in per-session submit) deferred to v5.2.0 | Risk control; assist-first v1 | Deferred |
 | D-007 | 2026-08-02 | Screenshot/email ingestion adapters deferred to backlog | Scope control (ADR-004) | Deferred |
 | D-008 | 2026-08-02 | `copilot.db` schema implements the 10 tables of frozen §7.8 exactly; the “11 tables” count in CP-0-02's AC (08_IMPLEMENTATION_PLAN.md) is a miscount — no 11th table exists in any design doc | Documentation wins: §7.8 is the frozen interface; schema versioned via `PRAGMA user_version` (no bookkeeping table in the frozen set); no ADR needed (interface unchanged) | Active |
+| D-009 | 2026-08-02 | `ParsedOpportunity` (ingestion §7.1) carries an optional `meta: dict` in addition to the frozen `data` + `provenance` | §7.1 pins “normalized dict + field provenance”; guidance flags such as LinkedIn paywall's `needs_manual_verify` (CP-1-05 AC) have no home in `data` (would break `CopilotOpportunity(**data)`). `meta` is additive, defaults to `{}`, and is surfaced by the ingest API as `guidance` | Active |
 
 Reversals: none. Superseded: none.
