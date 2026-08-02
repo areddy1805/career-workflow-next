@@ -606,6 +606,11 @@ class CareerWorkflowPipeline:
                 company=str(getattr(job, "company", "")),
                 provider_id=str(getattr(job, "provider_id", "")),
                 score=float(getattr(job, "score", 0) or 0),
+                # Integration (D-033): stamp the canonical pipeline UUID at
+                # acquisition so lifecycle records carry it (the Copilot
+                # outcome seam reads pipeline_job_id). register() assigns
+                # and stamps the job idempotently.
+                pipeline_job_id=self.exec_context.registry.register(job),
             )
             self.exec_context.acquire(job, self.context.lifecycle)
             self.exec_context.complete(job)
