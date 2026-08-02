@@ -14,7 +14,7 @@
 | PH6 | ✅ Complete (certified) | 100 | CP-6-09 DONE | 9/9; see PH6 Certification below |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
 | PH8 | ✅ Complete (certified) | 100 | CP-8-03 DONE | 3/3; see PH8 Certification below |
-| PH9 | In progress | 80 | CP-9-04 DONE | Hardening 4/5; see session log |
+| PH9 | ✅ Complete (certified) | 100 | CP-9-05 DONE | v5.1.0-alpha shipped; see Release Certification below |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
@@ -867,3 +867,39 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — PH6 certified. Next: PH9 (hardening + release; STOP after the release certification).
+
+---
+
+## PH9 Release Certification Report
+
+**Phase:** PH9 — Hardening & Release (Epic HLD) · **Date:** 2026-08-02 · **Release: v5.1.0-alpha (tag)**
+
+### Completed Tasks (5/5)
+| ID | Task | Result |
+|---|---|---|
+| CP-9-01 | Regression + browser e2e suite (Phase G full CI) | DONE |
+| CP-9-02 | Security review (no-pipeline-import/secrets/pinning/flags guard tests) | DONE |
+| CP-9-03 | Performance tuning (cold brief budget, cached read, poll cadence) | DONE |
+| CP-9-04 | Docs freeze + v5.1.0 release notes + cross-reference audit | DONE |
+| CP-9-05 | Release v5.1.0 (Copilot alpha) — tag `v5.1.0-alpha` | DONE |
+
+### Acceptance Criteria Verification (Phase G release checklist)
+- **Full CI green** (CP-9-01): unit + integration + browser e2e + regression + perf + security — **1522 backend tests, 0 failed**; ruff clean (src/copilot, tests/copilot, api/routers/copilot.py, api/schemas.py); mypy clean (90 files); frontend `npm run gate` (typecheck + lint + build) green. The Phase G e2e drives the complete assistant journey (opportunity → open → form → fill → checkpoints → gesture → submit → audit/events/no-retries) through the real stack against the vendored Chromium headed=False. ✅
+- **Security checklist** (CP-9-02): no static pipeline imports in `src/copilot` (ADR-007); no secrets in copilot code/config; playwright pinned `==1.61.0` (user mandate, vendored project-local); PII guard wired into the resolver; all three feature flags off by default. ✅
+- **Perf targets** (CP-9-03): cold brief <5s (guarded <10s wall for CI slack; measured ~ms), cached brief <100ms target (guarded <1s), poll cadence per 07_UI §5, browser single-instance, LLM off by default. ✅
+- **Docs consistent** (CP-9-04): cross-reference audit — board all DONE, session log 63 entries, D-001..D-030 Active, flags off, frozen docs/ADRs untouched; v5.1.0 notes written in 14_RELEASE_PLAN.md. ✅
+- **Gate signed off; alpha shipped; flags off by default** (CP-9-05): `git tag v5.1.0-alpha` created; rollback = disable flags / revert tag (ADR-007 — pipeline untouched). ✅
+
+### Tests Executed
+- 9 new PH9 tests (e2e 1, security 5, perf 3); copilot suite now **719 tests**.
+- Full regression: **1522 passed, 0 failed** (1494 → 1513 → 1522 across PH8/PH9 additions).
+- Full coverage (PH8 cert): **93%** (3846 stmts, 288 missed).
+
+### Known Issues (carried)
+- **Manual-sample metrics pending user feedback**: ≥85% Tier1/Tier2 auto-fill (M08) and <30s assisted-apply demo (M01) require a real sample — not machine-verifiable from fixtures (carried caveat from PH2/PH5).
+- M02/M06/M07/M12/M13/M14 analytics keys return null-with-note (data sources land in later phases or are manual/pipeline-owned) — D-030.
+- Browser-coverage numbers for Playwright-touching modules remain understated by the greenlet tracing artifact (PH5 report) — assertion-based fixture tests are the real proof.
+- Vendored browsers need `PLAYWRIGHT_BROWSERS_PATH=<repo>/.playwright` in any launch environment.
+
+### Recommendation
+- **GO** — **v5.1.0-alpha shipped** (tag `v5.1.0-alpha`). All STOP conditions for this mandate are met: PH0–PH9 certified (54 tasks), regression 1522, coverage 93%, flags off by default, pipeline untouched. Next (v5.2.0, per 14_RELEASE_PLAN): learning bias live (flip flag), analytics polish, autopilot opt-in (D-006), manual-sample validation of M01/M08 with the user.

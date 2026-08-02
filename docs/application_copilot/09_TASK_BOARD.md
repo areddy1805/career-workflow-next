@@ -111,4 +111,4 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-9-02 | Security review | Critical | DONE | 9-01 | M | 6h |
 | CP-9-03 | Performance tuning | High | DONE | 9-01 | M | 6h |
 | CP-9-04 | Docs freeze + release notes | High | DONE | 9-01..03 | S | 3h |
-| CP-9-05 | Release v5.1.0 alpha | Critical | TODO (ready) | 9-04 | S | 2h |
+| CP-9-05 | Release v5.1.0 alpha | Critical | DONE | 9-04 | S | 2h |
