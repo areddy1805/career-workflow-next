@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head><title>Lever Application</title></head>
+<body>
+<h1>Product Manager</h1>
+<form>
+  <label>Full Name
+    <input name="name" type="text" required>
+  </label>
+
+  <label>Email
+    <input name="email" type="email" required>
+  </label>
+
+  <label>Phone
+    <input name="phone" type="tel">
+  </label>
+
+  <label>LinkedIn Profile URL
+    <input name="linkedin" type="url">
+  </label>
+
+  <label>GitHub Profile
+    <input name="github" type="url">
+  </label>
+
+  <label><input type="checkbox" name="agree" value="yes" required>
+    I agree to the data processing terms
+  </label>
+
+  <fieldset>
+    <legend>Gender</legend>
+    <label><input type="radio" name="gender" value="female"> Female</label>
+    <label><input type="radio" name="gender" value="male"> Male</label>
+    <label><input type="radio" name="gender" value="other"> Other / prefer not to say</label>
+  </fieldset>
+
+  <label for="how_heard">How did you hear about this role?</label>
+  <select id="how_heard" name="how_heard">
+    <option value="referral">Referral</option>
+    <option value="linkedin">LinkedIn</option>
+    <option value="job_board">Job Board</option>
+  </select>
+
+  <label for="resume">Resume</label>
+  <input id="resume" name="resume" type="file" required>
+
+  <input type="submit" value="Submit">
+</form>
+</body>
+</html>

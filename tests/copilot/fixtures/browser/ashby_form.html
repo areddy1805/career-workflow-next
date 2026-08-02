@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head><title>Ashby Application</title></head>
+<body>
+<h1>Forward Deployed Engineer</h1>
+<form id="ashby_form">
+  <input name="full_name" aria-label="Full name" type="text" required>
+
+  <input name="email" aria-labelledby="email_label" type="email" required>
+  <span id="email_label">Email address</span>
+
+  <input name="phone" placeholder="Phone number" type="tel">
+
+  <input name="linkedin" type="url">
+
+  <select name="visa" aria-label="Visa status" required>
+    <option value="">Select a status</option>
+    <option value="us">US Citizen</option>
+    <option value="h1b">H1B / Transfer</option>
+    <option value="none">No sponsorship needed</option>
+  </select>
+
+  <fieldset aria-label="Authorization">
+    <input type="radio" name="authorized" value="yes" aria-label="Yes, I am legally authorized">
+    <input type="radio" name="authorized" value="no" aria-label="No, I need sponsorship">
+  </fieldset>
+
+  <label for="resume">Resume/CV</label>
+  <input id="resume" name="resume" type="file" required>
+
+  <input type="submit" value="Apply">
+</form>
+</body>
+</html>

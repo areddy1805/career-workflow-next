@@ -5,13 +5,12 @@ time; visible-browser default (ADR-003) with headed=False in tests; takeover
 hook (04 §8); feature-gated rollback (DoD).
 
 Runs against the project-local vendored Chromium: Playwright resolves
-``PLAYWRIGHT_BROWSERS_PATH``, set here to ``<repo>/.playwright``
-(scripts/install_playwright.sh).
+``PLAYWRIGHT_BROWSERS_PATH`` from ``tests/copilot/conftest.py`` to
+``<repo>/.playwright`` (scripts/install_playwright.sh).
 """
 
 import json
 import time
-from pathlib import Path
 
 import pytest
 
@@ -26,9 +25,6 @@ from src.copilot.browser.controller import (
     BrowserNotEnabled,
     BrowserSessionError,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BROWSERS_PATH = REPO_ROOT / ".playwright"
 
 SMOKE_HTML = (
     "<!doctype html><html><head><title>Smoke</title></head>"
@@ -51,15 +47,7 @@ def wait_until(page, predicate, timeout_ms: int = 10_000) -> None:
 
 
 @pytest.fixture
-def browser_env(monkeypatch):
-    """Point Playwright at the vendored browsers (project-local, gitignored)."""
-    if not BROWSERS_PATH.exists():
-        pytest.skip("vendored browsers missing; run scripts/install_playwright.sh")
-    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(BROWSERS_PATH))
-    yield str(BROWSERS_PATH)
 
-
-@pytest.fixture
 def html_page(tmp_path):
     page_file = tmp_path / "smoke.html"
     page_file.write_text(SMOKE_HTML, encoding="utf-8")

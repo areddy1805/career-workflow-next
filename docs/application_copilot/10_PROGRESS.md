@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 13 | CP-5-01 DONE | Playwright pinned (c911288); Browser Assistant 1/8 |
+| PH5 | In progress | 25 | CP-5-02 DONE | Playwright pinned (c911288); Browser Assistant 2/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-02 (Form field model) — DONE
+- Files: `src/copilot/browser/form/model.py`, `src/copilot/browser/form/__init__.py`, `tests/copilot/conftest.py` (shared `browser_env`/`browser_controller` fixtures, headed=False + vendored `PLAYWRIGHT_BROWSERS_PATH`), `tests/copilot/fixtures/browser/{greenhouse_form,lever_form,ashby_form,multistep_step1,multistep_step2,captcha_form}.html`, `tests/copilot/test_form_model.py`.
+- `model.py` implements 04 §4: `extract_fields(page, page_index)` reads the DOM + a11y attrs (one `[id]` textContent pass + one `label[for]` pass, then per-control aria-labelledby → aria-label → label[for] → wrapped label → placeholder → name/id) and produces the frozen `TypedField {field_id, kind, label, name, options[], required, page, confidence}` (kind vocabulary `FieldKind`: text|number|date|select|radio|checkbox|textarea|upload|email|phone|url — password maps to text, hidden/submit/button/reset/image inputs skipped). `extract_form_model(page, ats_type=None, page_index)` returns the §7.6 `FormModel {fields, pages, ats_type, auto_fillable}`; `FormModel.add_page` accumulates multi-page forms deduping by `field_id` (04 §4 multi-page; recovery re-scans never duplicate). CAPTCHA markers (recaptcha/hcaptcha/captcha/turnstile iframe srcs or `.g-recaptcha`/`.h-captcha`/id*="captcha") set `auto_fillable=False` (04 §3/§9 — never attempt CAPTCHA). `detect_ats_type(url)` is a best-effort hostname hint (greenhouse.io/lever.co/ashbyhq.com/workday/rippling → `AtsType`, else generic); extraction never depends on it (ADR-005) and callers may override.
+- D-019 recorded: `TypedField.confidence` = label-association quality ladder (1.0 label[for]/wrap, 0.95 aria-labelledby, 0.9 aria-label, 0.8 placeholder, 0.7 name/id, 0.5 none) so CP-5-03's thresholds have a defined input; `options[]` = `FieldOption{value, label}`; radios = one logical field per shared name (legend → fieldset aria-label → first radio label), empty-value select options skipped.
+- Validation: 9 new integration tests (greenhouse fixture → exact typed fields incl. kinds/required/select options/hidden+submit skipped; lever fixture → wrapped labels, checkbox, radio group with legend + option labels; ashby fixture → aria-label/aria-labelledby/placeholder/name fallbacks with exact confidences; detect_ats_type URL unit; ats_type override; multi-page accumulation p0+p1 → pages=2 with page indices; rescan dedupe; CAPTCHA → auto_fillable False; to_dict shapes per §7.6/§4); full regression **1307** passed (+9); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-01 (Browser controller) — DONE
 - Files: `src/copilot/browser/controller.py`, `src/copilot/browser/__init__.py`, `tests/copilot/test_browser_controller.py`.
