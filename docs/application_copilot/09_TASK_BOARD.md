@@ -85,7 +85,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-6-06 | Analytics page | Medium | DONE | 8-01 | M | 8h |
 | CP-6-07 | Learning page | Medium | DONE | 3-06,7-03 | M | 8h |
 | CP-6-08 | Settings | Medium | DONE | 0-01 | S | 4h |
-| CP-6-09 | Keyboard + a11y + polish | High | TODO | 6-01..08 | M | 8h |
+| CP-6-09 | Keyboard + a11y + polish | High | DONE | 6-01..08 | M | 8h |
 
 ## PH7 — Learning
 | ID | Task | Pri | Status | Dep | Cplx | Effort |
@@ -110,5 +110,5 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-9-01 | Regression + e2e suite | Critical | DONE | all | H | 12h |
 | CP-9-02 | Security review | Critical | DONE | 9-01 | M | 6h |
 | CP-9-03 | Performance tuning | High | DONE | 9-01 | M | 6h |
-| CP-9-04 | Docs freeze + release notes | High | TODO (ready) | 9-01..03 | S | 3h |
-| CP-9-05 | Release v5.1.0 alpha | Critical | TODO | 9-04 | S | 2h |
+| CP-9-04 | Docs freeze + release notes | High | DONE | 9-01..03 | S | 3h |
+| CP-9-05 | Release v5.1.0 alpha | Critical | TODO (ready) | 9-04 | S | 2h |

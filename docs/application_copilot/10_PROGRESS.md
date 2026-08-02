@@ -14,11 +14,16 @@
 | PH6 | ✅ Complete (certified) | 100 | CP-6-09 DONE | 9/9; see PH6 Certification below |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
 | PH8 | ✅ Complete (certified) | 100 | CP-8-03 DONE | 3/3; see PH8 Certification below |
-| PH9 | In progress | 60 | CP-9-03 DONE | Hardening 3/5; see session log |
+| PH9 | In progress | 80 | CP-9-04 DONE | Hardening 4/5; see session log |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-9-04 (Docs freeze + release notes) — DONE
+- Files: `docs/application_copilot/14_RELEASE_PLAN.md` (v5.1.0 alpha shipped block), `09_TASK_BOARD.md` (CP-6-09 marked DONE — stale row from the CP-6-09 commit, caught by the cross-reference audit), `10_PROGRESS.md` (this entry).
+- Cross-reference audit: 09 board all tasks DONE except CP-9-05; 10 session log 62 entries; 11 decisions D-001..D-030 all Active; flags `BROWSER_ENABLED`/`OUTCOME_CAPTURE_ENABLED`/`LEARNING_BIAS_ENABLED` all False; frozen docs/ADRs untouched (only 14_RELEASE_PLAN.md gained its release-notes block, which is its purpose).
+- Validation: no code change; full regression unchanged **1522**.
 
 ### 2026-08-02 — CP-9-03 (Performance tuning) — DONE
 - Files: `tests/copilot/test_performance.py`.
