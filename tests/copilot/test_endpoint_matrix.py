@@ -43,7 +43,9 @@ def api(browser_env, tmp_path, monkeypatch):
     cfg = tmp_path / "copilot.yaml"
     cfg.write_text(f"copilot:\n  db_path: \"{tmp_path / 'm' / 'copilot.db'}\"\n")
     monkeypatch.setenv("COPILOT_CONFIG", str(cfg))
-    reset_assistant(controller_kwargs={"enabled": True, "headless": True}, controller=None)
+    reset_assistant(
+        controller_kwargs={"enabled": True, "headless": True}, controller=None
+    )
     conn = open_copilot_db()
 
     # Seed one opportunity + one session + one answer.
@@ -116,7 +118,9 @@ def test_every_endpoint_returns_data(api):
     # Ghost id → 404, never a placeholder echo.
     r = c.get("/api/copilot/opportunities/ghost-123")
     assert r.status_code == 404 and r.json()["ok"] is False
-    assert ":id" not in r.text and "ghost-123" not in r.json()["data"] if r.json().get("data") else True
+    body = r.json()
+    assert ":id" not in r.text
+    assert "ghost-123" not in (body.get("data") or {})
 
     # ── brief ─────────────────────────────────────────────────────────
     data = _ok(c, "get", f"/api/copilot/opportunities/{opp_id}/brief")
