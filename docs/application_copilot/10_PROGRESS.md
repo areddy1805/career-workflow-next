@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 77 | CP-1-13 DONE | 10/13 tasks; next: CP-1-07 / CP-1-08 / CP-1-09 |
+| PH1 | In progress | 85 | CP-1-07 DONE | 11/13 tasks; next: CP-1-08 / CP-1-09 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,11 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-07 (Careers URL adapter) — DONE
+- Files: `src/copilot/ingestion/adapters/careers_url.py`, `tests/copilot/{test_careers_url_adapter.py,fixtures/careers_greenhouse.html}`; registered in `api/routers/copilot.py` `get_ingestion_registry()`.
+- Subclasses GenericUrlAdapter (source_id `careers_url`): excludes linkedin.com/wellfound.com hosts; ATS detection (greenhouse/lever/ashby markers in URL + first 20k of HTML) → `ats_type` + `application_strategy=ats`; `directApply` JSON-LD → `apply_url` = canonical; provenance `parser`.
+- Validation: 3 new tests (host gating, ATS + apply-link detection, no-marker fallback to manual); full regression 1034 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-1-13 (Ingest + list + detail API) — DONE
 - Files: `api/routers/copilot.py`, `api/schemas.py` (IngestRequest), `tests/copilot/test_ingest_api.py`.
