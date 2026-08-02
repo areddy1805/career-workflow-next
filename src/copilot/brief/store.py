@@ -19,6 +19,7 @@ from src.copilot.brief.probability import interview_probability
 from src.copilot.brief.questions import CorpusQuestion, likely_questions
 from src.copilot.brief.salary import assess_salary
 from src.copilot.events.emitter import emit_event
+from src.copilot.learning.bias import adjusted_probability
 from src.copilot.oppstore.model import CopilotOpportunity
 
 SECTIONS_VERSION = "1"
@@ -91,7 +92,11 @@ def build_brief(
     store = cache if cache is not None else _CACHE
     salary = assess_salary(opportunity, target=target, market_median=market_median)
     effort = estimate_effort(opportunity)
-    probability = interview_probability(opportunity, priors=priors)
+    # CP-7-03: bounded learning-bias adjustment on the interview probability
+    # (identity when LEARNING_BIAS_ENABLED is off).
+    probability = adjusted_probability(
+        interview_probability(opportunity, priors=priors)
+    )
     questions = likely_questions(opportunity, corpus=corpus)
     summary = prose_summary(
         opportunity, llm_call=llm_call, enabled=llm_enabled

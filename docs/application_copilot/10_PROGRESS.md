@@ -12,13 +12,33 @@
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
 | PH6 | In progress | 67 | CP-6-04 DONE | UI 6/9; see session log |
-| PH7 | In progress | 33 | CP-7-02 DONE | Learning 2/6; see session log |
+| PH7 | In progress | 100 | CP-7-06 DONE | Learning 6/6 — certification report below |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
 | PH9 | Pending | 0 | — | Blocked on all |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-7-06 (Interview/offer tracking) — DONE
+- Files: `src/copilot/learning/tracking.py`, `tests/copilot/test_learning_tracking.py`.
+- `advance_from_status(conn, *, session_id, status_text)` — importlib seam into the pipeline's `normalize_server_status` (never a static import); LifecycleStage → D-014 outcome (`SUBMITTED/VIEWED/SHORTLISTED → applied`, `INTERVIEW → interview`, `OFFER → offer`, `REJECTED → rejected`, `UNKNOWN → None`); advances the learning record only when the mapped outcome ranks later (monotonic; no record → first write). `manual_track` validates the outcome vocabulary (unknown → CopilotError) + monotonic + appends `tracked_by: manual` to timestamps_json; `track_from_email` is a documented alias (no email adapter exists). D-029: rejected is **sticky** (no OFFER-after-REJECTED correction, deliberate divergence from the pipeline's `should_advance_lifecycle`); writes only the learning row (session-row outcome untouched).
+- Validation: 12 new unit tests (monotonic advances applied→interview→offer, no-regress, rejected terminal, unknown status no-op, manual validation, seam behavior); full regression **1494** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-7-05 (Provider/ATS success) — DONE
+- Files: `src/copilot/learning/provider_success.py`, `tests/copilot/test_learning_provider_success.py`.
+- `provider_success(conn, *, limit)` — per provider_id/ats_type: stage counts, `interview_rate`/`offer_rate` (applied-ratio, None when applied==0), `median_days_to_response` (null-safe from timestamps_json), `best_strategy` = application_strategy of the opportunity with the most positive outcomes (ties → alphabetically first). `routing_preference(conn)` — offer-rate-weighted ordered `[{ats_type, score}]` consumed later by the adapter/strategy preference. Pure read-only derivations (D-029).
+- Validation: 10 new unit tests; full regression **1484** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-7-04 (Answer weighting) — DONE
+- Files: `src/copilot/learning/answer_quality.py`, `tests/copilot/test_learning_answer_quality.py`.
+- `update_quality(conn, *, question_fp, profile_id, delta)` — `clamp((old or 0.5) + delta/(1+use_count), 0..1)`; missing row → None (no row = no feedback); `use_count` untouched (resolver-owned). `quality_feedback_from_outcomes` — default resolver parses each session's `answers_snapshot_json` (CP-4-02) and applies +0.05 (interview/offer) / −0.03 (rejected) only to stored/deterministic answers, never llm/manual/locked (D-029); returns the updated-row count.
+- Validation: 9 new unit tests (clamp/alpha, missing row, snapshot-driven feedback with seeded sessions); full regression **1475** passed; ruff + mypy clean.
+
+### 2026-08-02 — CP-7-03 (Ranking feedback) — DONE
+- Files: `src/copilot/learning/bias.py`, `tests/copilot/test_learning_bias.py`, `src/orchestration/priority_engine.py` (the one pipeline edit), `src/copilot/brief/store.py` + `src/copilot/brief/api.py` (brief-probability consumption).
+- `bias.py`: `LEARNING_BIAS_ENABLED=False` (gates **consumption**, not collection — D-028); `get_bias(conn)` reads the `copilot_learning_weights["learning_bias"]` row; `apply_outcome_feedback(conn, *, conversion_delta, source)` = monotonic bounded EMA `clamp(old + δ/(1+samples), ±1.0)` upserting the row (explore = early samples move more, exploit = refinement, zero randomness); `adjusted_probability(probability)` = identity when off, else bounded ±0.15. `default_bias_provider()` lazy-opens the copilot DB, any failure → 0.0. **Priority-engine wiring**: `PriorityEngine(learning_bias_provider=None)` replaces the `learning_bias = 0.0` stub — None → 0.0 (byte-identical to the old stub; the AC's “existing ranking tests unchanged at bias=0” holds), provider output clamped to ±1.0 (bounded-range AC; constant duplicated across the boundary by design); production injects `bias.default_bias_provider` at the copilot construction site. **Brief consumption**: `adjusted_probability` wired into `brief/store.py::build_brief`; the bias cache is refreshed by `get_bias(conn)` in the brief API (the builder has no conn). Also fixed pre-existing ruff F401/E501 in priority_engine.py.
+- Validation: 19 new unit tests (flag gating, EMA monotonic/clamp proof, ranking regression with a fake provider — byte-identical at 0.0, +0.5 within bounds, out-of-contract provider clamped, raising provider → 0.0); full regression **1475** passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-7-02 (Signal collection) — DONE
 - Files: `src/copilot/learning/signals.py`, `tests/copilot/test_learning_signals.py`.

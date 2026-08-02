@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from src.copilot.brief import store as brief_store
 from src.copilot.db.db import open_copilot_db
+from src.copilot.learning.bias import get_bias
 from src.copilot.oppstore import store as oppstore
 
 router = APIRouter(tags=["copilot"])
@@ -35,6 +36,8 @@ def copilot_opportunity_brief(opportunity_id: str) -> Any:
                     f"opportunity not found: {opportunity_id}", "NotFound"
                 ),
             )
+        get_bias(conn)  # CP-7-03: refresh the bias cache for the brief's
+        # adjusted interview probability (no-op while the flag is off)
         brief = brief_store.get_brief(
             conn, opportunity_id, opportunity=opportunity
         )
