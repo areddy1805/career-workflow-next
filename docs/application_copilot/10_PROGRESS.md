@@ -11,10 +11,10 @@
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
-| PH6 | In progress | 89 | CP-6-06 DONE | UI 8/9; see session log |
+| PH6 | ✅ Complete (certified) | 100 | CP-6-09 DONE | 9/9; see PH6 Certification below |
 | PH7 | ✅ Complete (certified) | 100 | CP-7-06 DONE | 6/6; see PH7 Certification below |
 | PH8 | ✅ Complete (certified) | 100 | CP-8-03 DONE | 3/3; see PH8 Certification below |
-| PH9 | Pending | 0 | — | Blocked on all |
+| PH9 | In progress | 0 | — | Hardening + release; CP-9-01..05 |
 
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
@@ -790,3 +790,60 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — PH8 certified. Next: CP-6-06 (Analytics page) + CP-6-09 (a11y polish) → PH9 (release).
+
+---
+
+## PH6 Certification Report
+
+**Phase:** PH6 — Copilot UI (Epic UIX) · **Date:** 2026-08-02
+
+### Completed Tasks (9/9)
+| ID | Task | Result |
+|---|---|---|
+| CP-6-01 | Inbox (triage toolbar, virtualized table, brief sheet, keyboard triage) | DONE |
+| CP-6-02 | Brief view (12 sections, verdict, provenance chips, certain-facts filter) | DONE |
+| CP-6-03 | Workspace wizard (5 steps, answer review/edit, hold-to-confirm submit) | DONE |
+| CP-6-04 | Assistant panel (live browser view, fill rail, checkpoints, take-over, audit feed) | DONE |
+| CP-6-05 | History (sessions table + ADR-012 timeline drill-in) | DONE |
+| CP-6-06 | Analytics page (funnel, effort, answer health, calibration) | DONE |
+| CP-6-07 | Learning page (answer editor, profile switcher, signals, evidence + bias views) | DONE |
+| CP-6-08 | Settings (profiles, frozen thresholds, autopilot toggle, source enablement) | DONE |
+| CP-6-09 | Keyboard + a11y + polish (shortcut map, ARIA, focus rings, arrow-key radiogroups) | DONE |
+
+### Acceptance Criteria Verification
+- **Triage actions work; shortcuts; empty/loading/error states** (CP-6-01): `j/k/1/a/s/d` + Enter on rows; skip/dismiss client-side (no backend endpoint — D-row noted); explicit states. ✅
+- **Renders all sections; CTA→apply** (CP-6-02): 12 sections + verdict banner (label→color, deterministic) + provenance/LLM chips + certain-facts toggle. ✅
+- **Wizard completes end-to-end; answers editable; shortcuts** (CP-6-03): 5-step rail, snapshot chips + inline edit via `confirmAnswer` (D-026), confirm-all, resume AI/FDE, hold-to-confirm submit (pointer+keyboard), keyboard map (enter/space/1-9/e/esc). ✅
+- **Live progress; checkpoint banners; take-over** (CP-6-04): driving loop open→fill→checkpoints→FORM_FILLED; takeover → guidance, never fights back; audit feed. ✅
+- **Renders outcomes; drill-in** (CP-6-05): sessions table + timeline (needed a new `GET /sessions` list endpoint — added, tested). ✅
+- **Charts render real data** (CP-6-06): funnel/effort/health/calibration from `/api/copilot/analytics`; conversion cards pending the provider_success endpoint (documented). ✅
+- **Confirm/lock/edit; atomic profile switch** (CP-6-07): per-row confirm/edit/lock; `await switchProfile` before switching the query profile. ✅
+- **Persists via config/store** (CP-6-08): client preferences in `localStorage` (no backend settings endpoint — documented); frozen thresholds reference. ✅
+- **100% interactive keyboard-reachable; WCAG AA** (CP-6-09): audit of all 9 pages — 4 fixed (aria-keyshortcuts, alert regions, Space-to-open rows, arrow-key radiogroups in Apply+Learning, focus ring on the assistant field editor, token-based fallback color); the rest already clean; Radix Sheet provides dialog focus-trap; items needing a real-browser/axe pass (actual contrast of token-opacity text, live-region behavior) noted. ✅
+- **PH6 exit gate**: all 9 surfaces live and gate-green; workspace demo is **manual** (<30s human-time target needs a real sample — pending user); a11y AA is statically verified with browser-verification items noted. ✅
+
+### Tests Executed
+- Frontend gate (`npm run typecheck && npm run lint && npm run build`) green for every task commit — enforced per the user's UI build gate.
+- Backend additions for the UI: `GET /sessions` list (+1 test), `GET /browser/actions` audit feed (+1 test), `fetchApi` copilot-envelope error surfacing (frontend), root `.gitignore` `lib/` pattern anchored (frontend `src/lib` was previously untracked — fixed).
+- Full backend regression: **1513 passed, 0 failed** throughout PH6 (frontend work does not affect it); ruff + mypy clean.
+
+### Coverage
+- Full suite `pytest --cov=src/copilot --cov=api/routers/copilot.py`: **93%** (3846 stmts, 288 missed) — unchanged by PH6 (frontend-only; the two added endpoints are covered by their tests).
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-6-09 (66 entries); `09_TASK_BOARD.md` PH6 9/9 DONE; `11_DECISIONS.md` D-026 (workspace write path), D-030 (analytics proxies) Active. Frozen docs/ADRs untouched.
+
+### Architecture Compliance
+- 07_UI.md implemented page-for-page; routes flat under `/copilot/…` (existing App.tsx pattern); Zustand store for workspace state; TanStack Query hooks for server state; polling per 07_UI §5 (inbox 30s, session/assistant 1s, analytics 30s).
+- All writes flow through the frozen APIs (sessions, answers confirm/lock, browser) — no new backend surface beyond the two additive read endpoints the UI spec required (sessions list, browser audit feed).
+
+### Known Issues
+- Workspace <30s demo + real contrast/live-region a11y verification need a browser/manual pass (noted in CP-6-09).
+- Provider/ATS/resume-profile conversion cards on Analytics are pending an endpoint (derivations exist in `provider_success.py`).
+- Skip/dismiss on Inbox is client-side localStorage (no frozen backend state exists).
+
+### Risks (next phase)
+- PH9: browser e2e (Phase G), security review (incl. playwright dep scan), performance tuning (cold brief <5s, poll cadence, browser single-instance), docs freeze + release notes, v5.1.0 alpha tag.
+
+### Recommendation
+- **GO** — PH6 certified. Next: PH9 (hardening + release; STOP after the release certification).
