@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 50 | CP-5-04 DONE | Playwright pinned (c911288); Browser Assistant 4/8 |
+| PH5 | In progress | 63 | CP-5-05 DONE | Playwright pinned (c911288); Browser Assistant 5/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-05 (Recovery) — DONE
+- Files: `src/copilot/browser/recovery.py`, `src/copilot/browser/guidance.py`, `tests/copilot/test_browser_recovery.py`.
+- `recovery.py` implements 04 §9: `detect_drift(page, expected_field_ids, page_index)` = model-vs-DOM field-id diff (removed + added); `rebuild_model` = fresh rescan; `recover(controller, model, *, session_id, opportunity_id, expected_url, page_index, max_attempts=3, backoff_ms=200)` orchestrates — drift → rebuild → rebuilt model returned (AC: within one retry); dead page/browser → abort slot + relaunch → reopen URL → model restored from the fresh page (relaunched); relaunch failure, unrecognizable page, or CAPTCHA (rebuild `auto_fillable=False`) → guidance mode with the remaining plan — a CAPTCHA is never attempted (04 §3/§9); takeover → guidance with “annotates only” reason, no recovery (04 §7). One deterministic outcome per run (D-022: `no_drift|rebuilt|relaunched|guidance`); never raises — failures become guidance.
+- `guidance.py` (04 §8 module map) owns the §7.6 `GuidancePlan` shape: `GuidanceStep{field_id, label, instruction}` + `build_guidance_plan(model, unfilled=None, reason)` → ordered next-field steps; `unfilled` lets the API limit the plan to unresolved fields.
+- D-022 recorded (recovery outcome vocabulary, guidance.py placement, takeover guard).
+- Validation: 12 new tests (no-drift fast path; drift diff incl. removed+added; drift→rebuild one retry; dead browser → relaunch + model restored; relaunch failure → guidance with remaining plan + retry count; simulated CAPTCHA swap → guidance, never attempted; takeover → guidance + session stays taken_over; rebuild_model rescan; RecoveryResult/GuidancePlan/GuidanceStep to_dict shapes; unfilled filter; MAX_RETRIES sane); full regression **1358** passed (+12); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-04 (Checkpoint engine) — DONE
 - Files: `src/copilot/browser/checkpoint.py`, `tests/copilot/test_browser_checkpoint.py`.
