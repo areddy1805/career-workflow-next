@@ -1,7 +1,7 @@
 # Progress
 
 **Last Updated:** 2026-08-02
-**Phase:** PH0–PH4 certified; PH5 in progress (Browser Assistant) — see certification reports below.
+**Phase:** PH0–PH5 certified; PH6 in progress (UI) — see certification reports below.
 
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
@@ -10,7 +10,8 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | ✅ Complete (all 8) | 100 | CP-5-08 DONE | Browser Assistant 8/8 — certification report below |
+| PH5 | ✅ Complete (certified) | 100 | CP-5-08 DONE | 8/8; see PH5 Certification below |
+| PH6 | Pending | 0 | — | Blocked on PH1–PH5 (API ready) |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -535,3 +536,65 @@ Session convention: every session updates this file + `09_TASK_BOARD.md`. Task s
 
 ### Recommendation
 - **GO** — PH4 certified. Next: PH3 remainder (parallel) or PH5 (pending playwright confirmation).
+
+---
+
+## PH5 Certification Report
+
+**Phase:** PH5 — Browser Assistant (Epic BRO) · **Date:** 2026-08-02
+
+### Completed Tasks (8/8)
+| ID | Task | Result |
+|---|---|---|
+| CP-5-01 | Browser controller (Playwright lifecycle, visible browser, takeover hook) | DONE |
+| CP-5-02 | Form field model (DOM/a11y → TypedField, FormModel, multi-page + CAPTCHA) | DONE |
+| CP-5-03 | Field resolver (label→fingerprint→Answer Bank→typed fill + confidence) | DONE |
+| CP-5-04 | Checkpoint engine (frozen §6 gate matrix + §7 three-gate sequence) | DONE |
+| CP-5-05 | Recovery (drift rebuild, relaunch, retry/backoff, guidance fallback) | DONE |
+| CP-5-06 | ATS adapters (Greenhouse/Lever/Ashby field semantics; fallback intact) | DONE |
+| CP-5-07 | Safety + audit (read-only-until-submit, PII rules, action audit) | DONE |
+| CP-5-08 | Assistant API + events (open/form/fill/checkpoint/confirm/submit/guidance/abort; `browser.*` events) | DONE |
+
+### Acceptance Criteria Verification
+- **Launches, navigates, closes; one session at a time; feature-gated** (CP-5-01): navigation smoke on the vendored Chromium; `BrowserBusy` on a second open; `BROWSER_ENABLED` off by default raises `BrowserNotEnabled`; takeover hook fires on unexpected navigation (D-018) and the assistant stops steering after takeover (04 §7); failed opens tear down (no leaked browser). ✅
+- **Fixture HTML pages → correct typed fields** (CP-5-02): greenhouse/lever/ashby sample fixtures extract to exact typed fields — kinds (text/number/date/select/radio/checkbox/textarea/upload/email/phone/url), labels via label[for]/wrapped/aria-labelledby/aria-label/placeholder/name (D-019 confidence ladder), options (select + radio groups), required, pages; multi-page accumulation; CAPTCHA → `auto_fillable=False` (never attempted). ✅
+- **Type matching correct** (CP-5-03): select→option id, radio→value, date→iso, checkbox→checked/“”, number→numeric text, upload→never; sensitive → staged never filled; D-020 label-only fingerprint hits the same stored answers as the brief path. ✅
+- **Gates trigger correctly; never bypass submit** (CP-5-04): full §6 matrix parametrized at the 0.95/0.80/0.79 boundaries; cp1/cp2 dismissible, cp3 never dismissible; `submit_authorized` only after cp3 confirmed; out-of-order confirms rejected (D-021). ✅
+- **Drift→rebuild→guidance within one retry** (CP-5-05): simulated DOM drift rebuilds the model in one attempt; dead browser relaunches + reopens + restores; CAPTCHA/takeover → guidance, never attempted/fought (D-022). ✅
+- **Adapter never required; accuracy improves** (CP-5-06): unknown/unregistered ATS falls back to the generic model (ADR-005); weak name-only labels refined to canonical 1.0 (D-023); rollback = unregister. ✅
+- **Audit rows for every action; sensitive never auto-filled; gesture required for submit** (CP-5-07/5-08): every `open/form/fill/checkpoint/confirm/submit/guidance/abort` writes a `copilot_browser_actions` row with resolution + audit note and emits a `browser.*` CopilotEvent; DOB/PAN/bank fields staged at the checkpoint (verified in the live DOM: value stays empty); submit is fail-closed (`human_gesture` default false) behind the checkpoint ceremony, one submission per session (no retries, §10.4); real DOM writes verified (text fill, select option, radio check). ✅
+- **Contract §7.6/§7.9** (CP-5-08): all eight endpoints mounted at `/api/copilot/browser/*` with the `{ok, data, error}` envelope; 404/400/403/409/503 status mapping; seams overridable via `app.dependency_overrides` (D-025). ✅
+- **PH5 exit gate**: all ACs above verified by 131 new tests; the ≥85% field auto-fill rate on Tier 1/Tier 2 is a **manual-sample** metric pending user feedback (carried caveat, mirroring PH2/PH3) — fixture fill rate is 100% for resolved fields by construction. ✅
+
+### Tests Executed
+- 131 new copilot tests: controller 9, form model 9, resolver 17, checkpoint 23 (gate matrix), recovery 12, adapters 8, safety 35 (incl. security invariants), API 18 (+1 checkpoint matrix fix). Copilot suite now **627 tests**.
+- Full regression: **1420 passed, 0 failed** (1289 → 1298 → 1307 → 1324 → 1346 → 1358 → 1366 → 1401 → 1420 across CP-5-01..08; pipeline untouched). Every PH5 test runs headed=False against the project-local vendored Chromium (`PLAYWRIGHT_BROWSERS_PATH=<repo>/.playwright`, pinned `playwright==1.61.0`, setup commit c911288).
+- ruff clean (`src/copilot`, `tests/copilot`, `api/routers/copilot.py`, `api/schemas.py`); mypy clean (`src/copilot`, `api/routers/copilot.py`).
+
+### Coverage
+- Full suite `pytest --cov=src/copilot --cov=api/routers/copilot.py`: **92%** (3350 stmts, 267 missed) — down from PH4's 96% because the Playwright-touching browser modules are understated by the measurement: coverage.py's line tracer does not fire inside Playwright's greenlet-switched sync API frames, so `extract_fields`' loop bodies report as “missed” even though the fixture assertions (exact field ids/labels/confidences) mechanically require them to execute — verified with a plain `coverage run` script that extracts 10 fields while the loop reports 0% coverage.
+- Accurately-measured pure-logic modules: resolver 93%, checkpoint 98%, safety 98%, guidance 100%, adapters 100%. Playwright-interacting modules (controller 79%, api 82%, recovery 82%, form model 54%) are instrumented-artifact-lowered; their behavior is asserted end-to-end by the fixture/API suites.
+
+### Documentation Status
+- `10_PROGRESS.md` session log current through CP-5-08 (42 entries); `09_TASK_BOARD.md` 8/8 DONE; `11_DECISIONS.md` D-018..D-025 (takeover detection, confidence ladder, label-only fingerprint, checkpoint taxonomy, recovery outcomes, adapter semantics, sensitive phrases + ceremony, implicit-session API + submit semantics) Active. Frozen docs/ADRs untouched (04_BROWSER_ASSISTANT.md, 02 §7.6–§7.9, 13_ADR/ADR-002/003/005, 08 PH5).
+
+### Architecture Compliance
+- 04_BROWSER_ASSISTANT.md §4–§11 implemented in full; §8 module map complete (controller, form/model, resolver, checkpoint, recovery, adapters×3, safety, guidance).
+- ADR-002: submit requires the human gesture — enforced at three layers (checkpoint cp3 not dismissible, `SafetyGuard.assert_can_submit`, API schema fail-closed); autopilot deferred (D-006). ADR-003: visible browser by default, headed=False in CI. ADR-005: generic extraction + resolver never blocked on adapters. ADR-007: pipeline read-only (oppstore reads only; the answer bank's importlib seams reused for the pipeline resolution stack — no static pipeline imports in `src/copilot`).
+- §7.6 API surface, §7.7 `browser.*` CopilotEvents (EventNamespace.BROWSER), §7.8 `copilot_browser_actions` schema used as-is, §7.9 endpoint paths implemented.
+
+### Known Issues
+- **≥85% auto-fill on Tier 1/Tier 2** (PH5 exit gate, 16_SUCCESS_METRICS) is a **manual-sample** metric pending user feedback — not machine-verifiable from fixtures (carried caveat, mirroring PH2/PH3).
+- Browser coverage numbers for Playwright-touching modules are understated by the greenlet tracing artifact (see Coverage) — assertion-based fixture tests are the real proof.
+- `BROWSER_ENABLED = False` by default (feature-gated rollback): the assistant activates when the flag flips; the UI (PH6) drives the flag in dev.
+- Vendored browsers require `PLAYWRIGHT_BROWSERS_PATH=<repo>/.playwright` in any launch environment (scripts/install_playwright.sh).
+- Sensitive/upload/ask fields are staged at checkpoints by design (never auto-filled) — the auto-fill rate counts only fillable fields.
+- Real-ATS fidelity is synthetic (fixture HTML); live greenhouse/lever/ashby verification lands in PH9 Phase G e2e.
+
+### Risks (next phase)
+- PH6 (UI): workspace + assistant surfaces (embedded browser view, checkpoints, hold-to-confirm, takeover, guidance) — needs `browser.*` API + events (ready).
+- Live-ATS drift: dynamically-shifted DOM/CAPTCHA degrade to guidance mode (accepted, 04 §3).
+- Playwright/Chromium upgrade drift: pinned version + vendored binaries keep the toolchain deterministic.
+
+### Recommendation
+- **GO** — PH5 certified. Next: PH6 (frontend workspace + assistant UI; `cd frontend && npm run build && npx oxlint src` per task).
