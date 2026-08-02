@@ -1618,6 +1618,34 @@ class CareerWorkflowPipeline:
 
             self._persist_state()
 
+            # Integration: mirror the live pipeline pool into the Copilot
+            # opportunity store (never fail the run on a sync hiccup).
+            if self.status == PipelineStatus.SUCCESS:
+                try:
+                    from src.orchestration.copilot_sync import (
+                        sync_pipeline_jobs_to_copilot,
+                    )
+
+                    jobs_by_id = {
+                        str(j.get("job_id", j.get("id", ""))): j
+                        for j in (
+                            self.context.classified_jobs
+                            or self.context.acquired_jobs
+                            or []
+                        )
+                    }
+                    synced = sync_pipeline_jobs_to_copilot(
+                        self.context.lifecycle, jobs_by_id
+                    )
+                    self._safe_log(
+                        f"[COPILOT SYNC] upserted {synced} opportunities "
+                        "into the copilot store"
+                    )
+                except Exception as exc:  # noqa: BLE001 - best-effort sync
+                    self._safe_log(
+                        f"[COPILOT SYNC] warning: store sync failed: {exc}"
+                    )
+
             self._write_artifact(
                 "result.json",
                 result.to_dict(),

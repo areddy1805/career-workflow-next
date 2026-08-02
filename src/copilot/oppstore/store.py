@@ -214,6 +214,24 @@ def set_pipeline_job_id(
     return cursor.rowcount > 0
 
 
+def set_status_view(
+    conn: sqlite3.Connection, opportunity_id: str, status_view: str
+) -> bool:
+    """Refresh an opportunity's read view (ADR-012) after a pipeline sync.
+
+    The fingerprint merge intentionally keeps the first-seen value on ties
+    (``_merge`` richness semantics), so a changed lifecycle state is written
+    explicitly — mirrors :func:`set_pipeline_job_id`.
+    """
+    cursor = conn.execute(
+        "UPDATE copilot_opportunities SET status_view = ?, updated_at = ? "
+        "WHERE id = ?",
+        (status_view, _now_iso(), opportunity_id),
+    )
+    conn.commit()
+    return cursor.rowcount > 0
+
+
 def find_by_pipeline_job_id(
     conn: sqlite3.Connection, pipeline_job_id: str
 ) -> CopilotOpportunity | None:
