@@ -6,7 +6,7 @@
 | Phase | Status | % | Last task | Notes |
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
-| PH1 | In progress | 69 | CP-1-06 DONE | 9/13 tasks; next: CP-1-13 / CP-1-08 / CP-1-07 |
+| PH1 | In progress | 77 | CP-1-13 DONE | 10/13 tasks; next: CP-1-07 / CP-1-08 / CP-1-09 |
 | PH2 | Pending | 0 | — | Blocked on PH1 |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-1-13 (Ingest + list + detail API) — DONE
+- Files: `api/routers/copilot.py`, `api/schemas.py` (IngestRequest), `tests/copilot/test_ingest_api.py`.
+- POST `/api/copilot/ingest` (source + data → IngestionPayload → run_ingestion → CopilotOpportunity(**data, provenance=parsed.provenance) → store.upsert dedup); typed errors as `{ok:false, error:{message, type}}` (UnsupportedSourceError etc.); `guidance` key surfaces parsed.meta flags (e.g. LinkedIn needs_manual_verify). GET `/api/copilot/opportunities` (source/status/q filters + limit/offset pagination via store); GET `/opportunities/{id}` detail, 404 via envelope JSONResponse.
+- Tier-1 registry built by `get_ingestion_registry()` (generic_url/linkedin_url/wellfound_url/manual_queue) as a FastAPI dependency — tests override it, so no pipeline files are touched in the test suite.
+- Validation: 7 new integration tests (ingest normalize, typed errors, list/detail, dedup, filters + pagination, 404 envelope); full regression 1031 passed; ruff + mypy clean (src/copilot + api/routers/copilot.py).
+- Pipeline untouched; additive surface.
 
 ### 2026-08-02 — CP-1-05 (LinkedIn URL adapter) — DONE
 - Files: `src/copilot/ingestion/adapters/linkedin_url.py`, `tests/copilot/{test_linkedin_url_adapter.py,fixtures/linkedin_paywall.html}`.

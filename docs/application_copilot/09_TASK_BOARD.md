@@ -30,7 +30,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-1-10 | CopilotOpportunity model | Critical | DONE | 0-01 | M | 4h |
 | CP-1-11 | Opportunity store + dedup + mapping | Critical | DONE | 1-10,0-02 | M | 6h |
 | CP-1-12 | Status read view | High | DONE | 1-11 | M | 4h |
-| CP-1-13 | Ingest/list/detail API | Critical | TODO (ready) | 1-01,1-11 | M | 6h |
+| CP-1-13 | Ingest/list/detail API | Critical | DONE | 1-01,1-11 | M | 6h |
 
 ## PH2 — Brief
 | ID | Task | Pri | Status | Dep | Cplx | Effort |

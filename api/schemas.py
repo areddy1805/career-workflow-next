@@ -1,5 +1,6 @@
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 
 
 class PipelineLaunchRequest(BaseModel):
@@ -29,3 +30,10 @@ class WorkflowNoteRequest(BaseModel):
 
 class WorkflowMoveQueueRequest(BaseModel):
     queue: str
+
+
+class IngestRequest(BaseModel):
+    """CP-1-13: any Tier-1 source payload (kind + source-specific data)."""
+
+    source: str
+    data: Dict[str, Any] = {}
