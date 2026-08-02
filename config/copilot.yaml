@@ -1,0 +1,5 @@
+# config/copilot.yaml — Application Copilot settings (CP-0-01).
+# Loaded by src/copilot/config/loader.py; path overridable via $COPILOT_CONFIG.
+# Secrets never live here — env only.
+copilot:
+  db_path: "data/copilot.db"
