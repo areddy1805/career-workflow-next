@@ -222,3 +222,14 @@ def find_by_pipeline_job_id(
         (pipeline_job_id,),
     ).fetchone()
     return _row_to_opportunity(row) if row else None
+
+
+def get_pipeline_job_id(
+    conn: sqlite3.Connection, opportunity_id: str
+) -> str | None:
+    """The pipeline ledger job id for an opportunity, or None (ADR-012)."""
+    row = conn.execute(
+        "SELECT pipeline_job_id FROM copilot_opportunities WHERE id = ?",
+        (opportunity_id,),
+    ).fetchone()
+    return row["pipeline_job_id"] if row else None

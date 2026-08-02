@@ -10,8 +10,8 @@ with consistent snapshots on the session row: ``brief_snapshot_json`` is
 written at start (from the CP-2-07 brief), ``answers_snapshot_json`` at
 confirm (answers resolved through the CP-3-02 Answer Bank stack, 06 §3).
 The pipeline resume router (02 §6: ``ResumeRouter.route``) is integrated
-read-only through an importlib seam; outcome capture (OUTCOME_RECORDED +
-``WorkflowQueue.transition``) is CP-4-04.
+read-only through an importlib seam; outcome capture (CP-4-04) writes the
+pipeline-visible outcome only via ``WorkflowQueue.transition`` (ADR-007).
 """
 
 import importlib
@@ -30,8 +30,10 @@ from src.copilot.brief import store as brief_store
 from src.copilot.constants import SessionEventType
 from src.copilot.exceptions import CopilotError
 from src.copilot.oppstore import store as oppstore
+from src.copilot.session import outcome as outcome_capture
 from src.copilot.session import store as session_store
 from src.copilot.session.models import Session
+from src.copilot.session.outcome import OUTCOME_CAPTURE_ENABLED
 
 DEFAULT_PROFILE_ID = "generic"
 
@@ -50,6 +52,7 @@ class WorkspaceService:
         cache: dict | None = None,
         resume_router: Callable[[dict], dict] | None = None,
         resume_delta: Callable[..., dict] | None = None,
+        queue_transition: Callable[..., bool] | None = None,
     ) -> None:
         self._conn = conn
         self._profile = profile
@@ -57,6 +60,7 @@ class WorkspaceService:
         self._cache = cache
         self._resume_router = resume_router
         self._resume_delta = resume_delta
+        self._queue_transition = queue_transition
 
     # ------------------------------------------------------------------ ops
 
@@ -179,6 +183,27 @@ class WorkspaceService:
             session_id,
             SessionEventType.HUMAN_SUBMIT,
             payload={"human_gesture": True},
+        )
+
+    def record_outcome(
+        self,
+        session_id: str,
+        outcome: str,
+        *,
+        enabled: bool = OUTCOME_CAPTURE_ENABLED,
+        trace_id: str | None = None,
+    ) -> Session:
+        """Interpret the submission result (CP-4-04): OUTCOME_RECORDED on the
+        session + pipeline-visible outcome via ``WorkflowQueue.transition``
+        (ADR-007) + learning signal. Gated by the feature flag (off by
+        default); pipeline failure never crashes the session."""
+        return outcome_capture.record_outcome(
+            self._conn,
+            session_id,
+            outcome,
+            transition=self._queue_transition,
+            enabled=enabled,
+            trace_id=trace_id,
         )
 
     # --------------------------------------------------------------- reads

@@ -9,7 +9,7 @@
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
-| PH4 | In Progress | 55 | CP-4-03 DONE | CP-4-04 outcome capture next |
+| PH4 | In Progress | 70 | CP-4-04 DONE | CP-4-05 session API next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
@@ -19,6 +19,13 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-4-04 (Outcome capture) — DONE
+- Files: `src/copilot/session/outcome.py`, `src/copilot/session/service.py` (+`queue_transition` seam, `record_outcome`), `src/copilot/oppstore/store.py` (+`get_pipeline_job_id`), `tests/copilot/test_outcome.py`.
+- `outcome.py`: `record_outcome(conn, session_id, outcome, *, transition=None, enabled=OUTCOME_CAPTURE_ENABLED, trace_id)` implements 02 §6 step 5 (outcome → `WorkflowQueue.transition` + ledger update via existing APIs, ADR-007) in three layers: (1) **session row** — `OUTCOME_RECORDED` self-loop on SUBMITTED (D-011) with `outcome`/`outcome_at` via the `updates=` hook, payload carries `{outcome, pipeline:{job_id, status, transitioned, reason}}`; (2) **pipeline** — the only pipeline-visible write is `WorkflowQueue.transition(job_id, status, actor="copilot", note=...)` through an injectable seam (importlib `_lazy_queue_transition` in production, fakes in tests; `WorkflowStatus` enum built via importlib, no static pipeline imports); transition only when `pipeline_job_id` present (mapped via `oppstore.get_pipeline_job_id`); a missing job (False), missing mapping, or raised exception is recorded in the event payload and **never crashes the session**; (3) **learning** — `copilot_learning_outcomes` insert (idempotent, `session_id` UNIQUE, `INSERT OR IGNORE`) + `learn.outcome_recorded` CopilotEvent (§7.7) with provider/ats/resume-profile from the opportunity + session.
+- Outcome vocabulary (D-014): docs freeze no outcome strings; `OUTCOME_TO_STATUS` maps `applied/interview/offer/rejected/archived` → pipeline `WorkflowStatus` values so every write stays inside the workflow machine's transition rules. Unknown outcome → `CopilotError` before any write.
+- Feature flag `OUTCOME_CAPTURE_ENABLED = False` off by default (08 DoD: rollback = leave off): when disabled the session-row outcome is still recorded (pure copilot data, machine already supports it) but the pipeline transition and learning signal are skipped. `WorkspaceService.record_outcome(session_id, outcome, *, enabled, trace_id)` mirrors the other ops and accepts the `queue_transition` seam.
+- Validation: 12 new integration + ledger-consistency tests (vocabulary gate before any write, machine gate before SUBMITTED, happy path transition call args + event payload, all five outcomes map, missing `pipeline_job_id` records-but-skips, transition False/exception never crash the session, disabled flag = session-only, learning row fields + learn event, re-record keeps single learning row, **real `WorkflowQueue` integration** — enqueue → IN_PROGRESS → outcome APPLIED with merged status + MAQ alignment + copilot history entry, real queue missing job → False flagged); full regression 1234 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-4-03 (Workspace service) — DONE
 - Files: `src/copilot/session/{service,store}.py`, `tests/copilot/test_session_service.py`.
