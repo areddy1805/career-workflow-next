@@ -8,7 +8,7 @@
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
+| PH3 | In Progress | 50 | CP-3-03 DONE | CP-3-04 confirmation next |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-3-03 (Answer store CRUD + profiles) — DONE
+- Files: `src/copilot/answerbank/store.py`, `tests/copilot/test_answerbank_store.py`.
+- `store.py`: `StoredAnswer` dataclass mirroring the frozen §7.8 `copilot_answers` row (question_fp, profile_id, canonical_label, category, source, semantic_answer, serialized_answer, confidence, status, reason, use_count, last_used_at, outcome_quality; `to_dict`/`from_row`); `save` (upsert on `(question_fp, profile_id)` — one row per profile namespace, 06 §5), `get`, `list_answers(profile_id, status, query, limit, offset)` (namespace/status/text filters), `supersede` (tombstone → `status = superseded`, the state 06 §3 step 1 skips in resolution). Statuses/`source` use the frozen `AnswerStatus`/`AnswerSource` vocabularies; confirmation transitions themselves land in CP-3-04.
+- Namespace isolation is the composite PK: a resolve/list for one profile can never see another profile's rows (tested: ai/fde/generic same fp → distinct values, filtered lists).
+- Validation: 8 new tests (save/get round-trip incl. all fields, missing → None, upsert-on-conflict single row, 3-profile namespace isolation, list filters status/query/limit/offset, supersede tombstone + missing → False, **superseded answer skipped by the resolver** — falls through to deterministic, and to_dict round-trip); full regression 1257 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-4-05 (Session API) — DONE
 - Files: `src/copilot/session/api.py`, `api/routers/copilot.py` (+include), `api/schemas.py` (+`SessionCreateRequest`/`SessionAdvanceRequest`), `src/copilot/session/service.py` (+`progress`/`abort`/`events` reads, `outcome_enabled` constructor flag, `NotFoundError` on missing opportunity in `start`), `src/copilot/exceptions.py` (+`NotFoundError`), `tests/copilot/test_session_api.py`.
