@@ -10,7 +10,7 @@
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
 | PH3 | ✅ Complete (certified) | 100 | CP-3-06 DONE | 6/6; see PH3 Certification below |
 | PH4 | ✅ Complete (certified) | 100 | CP-4-05 DONE | 5/5; see PH4 Certification below |
-| PH5 | In progress | 25 | CP-5-02 DONE | Playwright pinned (c911288); Browser Assistant 2/8 |
+| PH5 | In progress | 38 | CP-5-03 DONE | Playwright pinned (c911288); Browser Assistant 3/8 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
 | PH7 | Pending | 0 | — | Blocked on PH4 |
 | PH8 | Pending | 0 | — | Blocked on PH1/PH4/PH7 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-5-03 (Field resolver) — DONE
+- Files: `src/copilot/browser/resolver.py`, `tests/copilot/test_browser_resolver.py`.
+- `resolver.py` implements 04 §5: `resolve_field(conn, field, profile_id, *, context, sensitive=False) -> FieldFill {field_id, resolution, filled, confidence, source, reason}` — (1) fingerprint the field's label with the Answer Bank (D-020: **label-only** `Question(label=field.label)`, the same key space the certified brief path uses to resolve/store `copilot_answers`, so form fields hit the same stored answers); (2) `answerbank.resolve` (06 §3 order stored → deterministic → generated); (3) type-match the semantic answer to the field kind — select→option id, radio→value (normalized equality on option label then value), date→iso (`%Y-%m-%d`/US/EU/human formats), checkbox→`"on"` for truthy / `""` for falsy, number→numeric text (`"5 years"` → `"5"`), upload→never, free-text passthrough; (4) `FieldFill` with `filled` = type-matched value available (the §6 gates are CP-5-04's job), `resolution` = the §7.4 `AnswerResolution` dict + browser `typed_value` key (the exact value the fill pass writes). `sensitive=True` stages the suggestion at the checkpoint but never fills (04 §6); uploads always `filled=False` (04 §7 upload checkpoint). `resolve_fields` runs the whole form's fill pass (sensitive set by field_id).
+- D-020 recorded (label-only fingerprint key space + `typed_value` in resolution).
+- Validation: 17 new unit tests (select label/value match, unmatched → not filled, radio value, date iso + invalid, checkbox truthy/falsy, number leading-numeric, free-text passthrough for all kinds, upload never filled, sensitive never filled with suggestion staged, unknown/abstain → not filled, deterministic engine fill, LLM confidence passthrough, batch resolve, sensitive set, to_dict shapes incl. `typed_value`); full regression **1324** passed (+17); ruff + mypy clean.
 
 ### 2026-08-02 — CP-5-02 (Form field model) — DONE
 - Files: `src/copilot/browser/form/model.py`, `src/copilot/browser/form/__init__.py`, `tests/copilot/conftest.py` (shared `browser_env`/`browser_controller` fixtures, headed=False + vendored `PLAYWRIGHT_BROWSERS_PATH`), `tests/copilot/fixtures/browser/{greenhouse_form,lever_form,ashby_form,multistep_step1,multistep_step2,captcha_form}.html`, `tests/copilot/test_form_model.py`.
