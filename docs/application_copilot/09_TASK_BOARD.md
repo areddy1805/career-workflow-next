@@ -39,7 +39,7 @@ Priority: Critical / High / Medium / Low. Status: TODO / IN PROGRESS / DONE / BL
 | CP-2-02 | Salary assessment | High | DONE | 2-01 | S | 3h |
 | CP-2-03 | Effort estimator | Medium | DONE | 2-01 | S | 3h |
 | CP-2-04 | Interview probability v1 | High | DONE | 2-01,7-01 | S | 3h |
-| CP-2-05 | Likely questions | Medium | TODO | 2-01,3-02 | M | 5h |
+| CP-2-05 | Likely questions | Medium | DONE | 2-01,3-02 | M | 5h |
 | CP-2-06 | LLM prose augmentation | Medium | TODO | 2-01 | M | 4h |
 | CP-2-07 | Brief store + cache + API | Critical | TODO | 2-01,1-13 | M | 4h |
 

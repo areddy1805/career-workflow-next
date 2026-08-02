@@ -102,6 +102,14 @@ class SalaryAssessment:
 
 
 @dataclass(frozen=True)
+class LikelyQuestion:
+    """One likely screening question with a pre-resolved answer (05 §2 #8)."""
+
+    question: str
+    answer: str
+
+
+@dataclass(frozen=True)
 class StrategySection:
     """Application strategy + reason (05 §2 #9, ADR-004 mapping)."""
 
@@ -128,6 +136,7 @@ class ApplicationBrief:
     salary: SalaryAssessment | None = None  # CP-2-02
     effort: EffortEstimate | None = None  # CP-2-03
     interview_probability: float | None = None  # CP-2-04
+    questions: list[LikelyQuestion] | None = None  # CP-2-05
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
@@ -201,4 +210,12 @@ class ApplicationBrief:
                 else None
             ),
             "interview_probability": self.interview_probability,
+            "questions": (
+                [
+                    {"question": q.question, "answer": q.answer}
+                    for q in self.questions
+                ]
+                if self.questions
+                else None
+            ),
         }

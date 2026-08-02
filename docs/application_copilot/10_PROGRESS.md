@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 57 | CP-2-04 DONE | 4/7 tasks; next: CP-2-05 questions |
+| PH2 | In progress | 71 | CP-2-05 DONE | 5/7 tasks; next: CP-2-06 LLM prose |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-05 (Likely questions service) — DONE
+- Files: `src/copilot/brief/questions.py`, `tests/copilot/test_questions.py`; `brief/models.py` + `brief/assembler.py` extended additively.
+- `likely_questions(opportunity, *, corpus, limit=5)` → top-N `LikelyQuestion{question, answer}` (05 §2 #8). Ranking: ATS-applicable entries (empty `ats_types` = any ATS) score 1.0, +0.5 per description-keyword word-boundary hit; zero-scoring excluded; stable tie order. `corpus` injectable — Answer Bank (CP-3-02) is the production source; small built-in starter corpus (3 generic + greenhouse/lever/workday) keeps the section deterministic-first until then.
+- `ApplicationBrief` gained `questions: list[LikelyQuestion] | None` (+ to_dict); `assemble_brief(questions=...)` fills section 8 (source deterministic).
+- Validation: 10 new unit tests (ATS selection/exclusion, keyword boost ranking, limit, zero-score exclusion, generic-any-ATS, empty corpus, no-description fallback, brief section/to_dict); full regression 1121 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-04 (Interview probability v1) — DONE
 - Files: `src/copilot/brief/probability.py`, `tests/copilot/test_probability.py`; `brief/models.py` + `brief/assembler.py` extended additively.

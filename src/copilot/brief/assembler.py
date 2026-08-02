@@ -18,6 +18,7 @@ from src.copilot.brief.models import (
     ApplicationBrief,
     FitBreakdown,
     LearningCost,
+    LikelyQuestion,
     MissingSkill,
     ResumeRecommendation,
     RiskFlags,
@@ -154,6 +155,7 @@ def assemble_brief(
     salary: SalaryAssessment | None = None,
     effort: EffortEstimate | None = None,
     interview_probability: float | None = None,
+    questions: list[LikelyQuestion] | None = None,
 ) -> ApplicationBrief:
     """Deterministic aggregation → :class:`ApplicationBrief`.
 
@@ -182,6 +184,8 @@ def assemble_brief(
         sections.append("effort")
     if interview_probability is not None:
         sections.append("interview_probability")
+    if questions is not None:
+        sections.append("questions")
     return ApplicationBrief(
         opportunity_id=opportunity.opportunity_id,
         verdict=verdict,
@@ -203,4 +207,5 @@ def assemble_brief(
         salary=salary,
         effort=effort,
         interview_probability=interview_probability,
+        questions=questions,
     )
