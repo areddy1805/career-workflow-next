@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from api.schemas import IngestRequest
 from src.copilot import __version__
+from src.copilot.analytics.api import router as analytics_router
 from src.copilot.answerbank.api import router as answerbank_router
 from src.copilot.brief.api import router as brief_router
 from src.copilot.browser.api import router as browser_router
@@ -35,6 +36,7 @@ from src.copilot.oppstore.model import CopilotOpportunity
 from src.copilot.session.api import router as session_router
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
+router.include_router(analytics_router)
 router.include_router(brief_router)
 router.include_router(browser_router)
 router.include_router(session_router)
