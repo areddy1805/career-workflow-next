@@ -175,14 +175,24 @@ class AssistantService:
         url: str | None = None,
     ) -> BrowserSession:
         """open: browser session for an opportunity's apply_url (404 unknown)."""
+        logger.info(
+            "[browser] stage=service.open start opportunity=%s", opportunity_id
+        )
         opp = oppstore.get(self._conn, opportunity_id)
         if opp is None:
             raise NotFoundError(f"opportunity not found: {opportunity_id}")
         apply_url = url or opp.apply_url
         if not apply_url:
             raise CopilotError(f"opportunity {opportunity_id} has no apply_url")
+        logger.info(
+            "[browser] stage=controller.open start url=%s", apply_url
+        )
         session = self._controller.open(
             apply_url, session_id=session_id, opportunity_id=opportunity_id
+        )
+        logger.info(
+            "[browser] stage=controller.open done state=%s page_url=%s",
+            session.state, session.page_url,
         )
         ats = opp.ats_type or detect_ats_type(apply_url)
         _runtimes[session_id] = AssistantRuntime(
@@ -196,6 +206,10 @@ class AssistantService:
             guard=SafetyGuard(),
             sensitive=set(),
         )
+        logger.info(
+            "[browser] stage=runtime created session_id=%s ats=%s",
+            session_id, ats,
+        )
         record_action(
             self._conn,
             session_id,
@@ -203,6 +217,7 @@ class AssistantService:
             target=apply_url,
             audit_note=f"opportunity {opportunity_id}, ats={ats}",
         )
+        logger.info("[browser] stage=audit row recorded")
         emit_event(
             self._conn,
             "browser.opened",
@@ -214,6 +229,7 @@ class AssistantService:
                 "ats_type": ats,
             },
         )
+        logger.info("[browser] stage=browser.opened event emitted")
         return session
 
     def form(self, session_id: str | None = None) -> FormModel:
@@ -605,6 +621,17 @@ def copilot_browser_open(
         )
     except CopilotError as exc:
         return _browser_error_response(exc)
+    except Exception as exc:  # noqa: BLE001 - never swallow real failures
+        # D-033: a raw Playwright/launch failure must reach the frontend as
+        # an explicit error, never an infinite wait or a silent 500.
+        logger.exception("browser open failed unexpectedly")
+        return JSONResponse(
+            status_code=500,
+            content=_error(
+                f"browser open failed: {type(exc).__name__}: {exc}",
+                "BrowserOpenFailed",
+            ),
+        )
     return {"ok": True, "data": session.to_dict()}
 
 

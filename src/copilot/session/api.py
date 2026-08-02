@@ -34,10 +34,29 @@ _SELF_LOOP_EVENTS = frozenset(
 
 def get_session_service() -> Generator[WorkspaceService, None, None]:
     """One workspace per request (owns its copilot.db connection); overridable
-    in tests via ``app.dependency_overrides``."""
+    in tests via ``app.dependency_overrides``.
+
+    Integration (D-033): the Answer step resolves brief questions through the
+    exact production engine chain the pipeline uses (pipeline.py
+    ``_build_questionnaire_resolver``): ``InferenceService().engine`` →
+    ``LLMQuestionResolver`` → ``HybridQuestionResolver``. Constructed per
+    request — no module-level engine/global — so a missing engine can never
+    degrade a session; the LLM fallback either resolves or returns
+    manual_review for genuinely unresolved questions.
+    """
     conn = open_copilot_db()
     try:
-        yield WorkspaceService(conn)
+        # Local imports keep src/copilot free of static pipeline imports
+        # (importlib seam convention); construction mirrors the pipeline.
+        from src.client.inference_service import InferenceService
+        from src.llm.question_resolver import LLMQuestionResolver
+        from src.resolution.hybrid_resolver import HybridQuestionResolver
+
+        inference = InferenceService()
+        hybrid = HybridQuestionResolver(
+            llm_resolver=LLMQuestionResolver(engine=inference.engine)
+        )
+        yield WorkspaceService(conn, hybrid_resolver=hybrid)
     finally:
         conn.close()
 
