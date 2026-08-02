@@ -8,7 +8,7 @@
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
 | PH2 | ✅ Complete (certified) | 100 | CP-2-07 DONE | 7/7; see PH2 Certification below |
-| PH3 | In Progress | 15 | CP-3-01 DONE | CP-3-02 next (blocks CP-4-03) |
+| PH3 | In Progress | 30 | CP-3-02 DONE | CP-3-03 next |
 | PH4 | In Progress | 10 | CP-4-02 DONE | CP-4-03 next |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
 | PH6 | Pending | 0 | — | Blocked on PH1–PH5 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-3-02 (Resolution engine wrapper + cache) — DONE
+- Files: `src/copilot/answerbank/{resolver,cache}.py`, `tests/copilot/test_answerbank_resolver.py`.
+- `resolver.py`: `AnswerResolution` (frozen §7.4 shape: question_fp, source, semantic_answer, serialized_answer, confidence, status, reasoning; to_dict/from_dict) + `ResolveContext{conn, profile, hybrid_resolver, cache}`; `resolve()` implements frozen 06 §3 order: (1) stored answer — exact fp + profile namespace + `status != 'superseded'` (passes stored status through verbatim, D-013); (2) deterministic — pipeline `questionnaire_resolver.resolve_answer → apply_answer_constraints → serialize_answer` via importlib (ADR-009), `kind → questionType` + `options → answerOption` mapping, resolved → `auto`; a constraint/serialization failure **short-circuits to confirm** (mirrors pipeline hybrid: rejected deterministic values never reach the LLM); (3) generated LLM — cache-first by (fp, profile_id), then pipeline `HybridQuestionResolver` (importlib seam; dataclass result normalized to dict; injectable fake engines for tests), resolved → `confirm` (≥0.95 confidence → `auto`, 06 §6), abstain/error → `confirm`. `_load_profile` reads `config.candidate_profile.CANDIDATE_PROFILE` (pipeline-owned, read-only).
+- `cache.py`: generated-answer cache keyed `(fp, profile_id)` (module `_CACHE` + injectable, mirrors brief pattern) — repeat resolves never re-invoke the LLM (06 §9).
+- Validation: 11 new tests (round-trip; order — stored wins, profile namespacing, superseded skipped; real deterministic integration with `CANDIDATE_PROFILE` incl. select serialization via kind; LLM cached by fp+profile, profile-scoped, engine invoked once; ≥0.95 → auto; manual_review → confirm; deterministic-failure short-circuit); full regression 1209 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-3-01 (Question fingerprinting + canonical labels) — DONE
 - Files: `src/copilot/answerbank/{fingerprint,canonical}.py`, `tests/copilot/test_answerbank_fingerprint.py`.
