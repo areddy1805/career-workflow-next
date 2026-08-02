@@ -83,11 +83,12 @@ def assess_salary(
         return _classified(status, reason, opportunity, target, market_median)
 
     point = job_min if job_min is not None else job_max
-    if point is not None and point < target_min:
+    assert point is not None  # at least one bound exists (early return above)
+    if point < target_min:
         status, reason = SalaryStatus.BELOW, (
             f"job {_fmt(point)} below target {_fmt(target_min)}-{_fmt(target_max)}"
         )
-    elif point is not None and point > target_max:
+    elif point > target_max:
         status, reason = SalaryStatus.ABOVE, (
             f"job {_fmt(point)} above target {_fmt(target_min)}-{_fmt(target_max)}"
         )

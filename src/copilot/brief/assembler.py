@@ -26,7 +26,7 @@ from src.copilot.brief.models import (
     StrategySection,
     Verdict,
 )
-from src.copilot.oppstore.model import CopilotOpportunity, ResumeRec
+from src.copilot.oppstore.model import CopilotOpportunity, EffortEstimate, ResumeRec
 
 _DEFAULT_QUALITY_THRESHOLD = 68.0  # 05 §4 default
 
@@ -152,6 +152,7 @@ def assemble_brief(
     quality_threshold: float = _DEFAULT_QUALITY_THRESHOLD,
     salary_below_band: bool = False,
     salary: SalaryAssessment | None = None,
+    effort: EffortEstimate | None = None,
 ) -> ApplicationBrief:
     """Deterministic aggregation → :class:`ApplicationBrief`.
 
@@ -176,6 +177,8 @@ def assemble_brief(
     ]
     if salary is not None:
         sections.append("salary")
+    if effort is not None:
+        sections.append("effort")
     return ApplicationBrief(
         opportunity_id=opportunity.opportunity_id,
         verdict=verdict,
@@ -195,4 +198,5 @@ def assemble_brief(
         provenance_summary=dict(opportunity.provenance),
         confidence=_confidence(opportunity, flags.low_confidence_provenance),
         salary=salary,
+        effort=effort,
     )

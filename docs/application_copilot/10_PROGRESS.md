@@ -7,7 +7,7 @@
 |---|---|---|---|---|
 | PH0 | ✅ Complete (certified) | 100 | CP-0-05 DONE | See PH0 Certification below |
 | PH1 | ✅ Complete (certified) | 100 | CP-1-09 DONE | 13/13; see PH1 Certification below |
-| PH2 | In progress | 29 | CP-2-02 DONE | 2/7 tasks; next: CP-2-03 effort |
+| PH2 | In progress | 43 | CP-2-03 DONE | 3/7 tasks; next: CP-2-04 probability |
 | PH3 | Ready (parallel) | 0 | — | First task: CP-3-01 |
 | PH4 | Pending | 0 | — | Blocked on PH2/PH3 |
 | PH5 | Pending | 0 | — | Blocked on PH3 |
@@ -19,6 +19,12 @@
 Session convention: every session updates this file + `09_TASK_BOARD.md`. Task statuses: TODO/IN PROGRESS/DONE/BLOCKED/CANCELLED.
 
 ## Session Log
+
+### 2026-08-02 — CP-2-03 (Effort estimator) — DONE
+- Files: `src/copilot/brief/effort.py`, `tests/copilot/test_effort.py`; `brief/models.py` + `brief/assembler.py` extended additively.
+- `estimate_effort(opportunity, *, fields, pages, auto_fillable_frac)` → `EffortEstimate` (03 §2 shape) per frozen 05 §6: ATS field-count heuristics (greenhouse 12, lever 10, ashby 9, workday 25 / rippling 20 — high + guidance mode; generic 15 until v2 description-length inference); `fields`/`pages` override for measured forms; `estimated_minutes = fields*0.4 + pages*1.2` floored, capped at 30, labeled "assisted estimate" by the caller; `auto_fillable_frac` carried for context (frozen formula does not discount auto-fill).
+- `ApplicationBrief` gained `effort: EffortEstimate | None` (+ to_dict with `estimated_minutes`); `assemble_brief(effort=...)` fills section 7 (source deterministic). Effort does not gate the verdict.
+- Validation: 11 new unit tests (per-ATS minutes, generic default, explicit overrides, pages, cap, frac passthrough, brief section + to_dict); full regression 1100 passed; ruff + mypy clean.
 
 ### 2026-08-02 — CP-2-02 (Salary assessment service) — DONE
 - Files: `src/copilot/brief/salary.py`, `tests/copilot/test_salary.py`; `brief/models.py` + `brief/assembler.py` extended additively.

@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from src.copilot.oppstore.model import EffortEstimate
+
 
 class Verdict(StrEnum):
     """Top-line decision (05 §4)."""
@@ -124,6 +126,7 @@ class ApplicationBrief:
     provenance_summary: dict[str, list[str]]  # opportunity field provenance (§2 #11)
     confidence: float
     salary: SalaryAssessment | None = None  # CP-2-02
+    effort: EffortEstimate | None = None  # CP-2-03
 
     def to_dict(self) -> dict[str, Any]:
         """JSON-safe serialization (dataclasses/StrEnum → primitives)."""
@@ -183,6 +186,17 @@ class ApplicationBrief:
                     "market_median": self.salary.market_median,
                 }
                 if self.salary
+                else None
+            ),
+            "effort": (
+                {
+                    "fields": self.effort.fields,
+                    "pages": self.effort.pages,
+                    "ats_type": self.effort.ats_type,
+                    "auto_fillable_frac": self.effort.auto_fillable_frac,
+                    "estimated_minutes": self.effort.minutes,
+                }
+                if self.effort
                 else None
             ),
         }
