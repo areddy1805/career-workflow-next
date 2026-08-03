@@ -1,5 +1,24 @@
 CANDIDATE_PROFILE = {
     # ==================================================================
+    # Candidate identity (D-034: canonical truth — the answer bank never
+    # overrides these; every ATS maps into them via the fingerprint
+    # ontology). Keep ``*_url``/``resume_path`` as full values.
+    # ==================================================================
+    "first_name": "Ashwini",
+    "last_name": "Reddy",
+    "full_name": "Ashwini Reddy",
+    "email": "ashwini.reddy@example.com",
+    "phone": "+91 90000 00000",
+    "city": "Pune",
+    "country": "India",
+    "address": "Pune, Maharashtra, India",
+    "linkedin_url": "https://www.linkedin.com/in/ashwinireddy",
+    "github_url": "https://github.com/ashwinireddy",
+    "portfolio_url": None,
+    "resume_path": "docs/resume/Applied_AI.pdf",
+    "work_authorization": "Indian Citizen",
+    "visa_status": None,
+    # ==================================================================
     # Compensation
     # ==================================================================
     "current_ctc_lpa": "16",
