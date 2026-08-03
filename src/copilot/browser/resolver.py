@@ -293,8 +293,9 @@ def fill_summary(fills: list[FieldFill]) -> dict[str, Any]:
         llm_filled / human_required / filled / average_confidence /
         completion
 
-    ``filled`` counts fields with a type-matched value; ``human_required``
-    counts unresolved or staged (sensitive/upload) fields.
+    ``*_filled`` counts FILLED fields per source (a failed LLM attempt is
+    a human-required gap, not a fill); ``human_required`` counts unresolved
+    or staged (sensitive/upload) fields.
     """
     source_counts: dict[str, int] = {
         "profile": 0,
@@ -308,10 +309,10 @@ def fill_summary(fills: list[FieldFill]) -> dict[str, Any]:
     confidences: list[float] = []
     for fill in fills:
         src = fill.source or "unknown"
-        if src in source_counts:
-            source_counts[src] += 1
         if fill.filled:
             filled += 1
+            if src in source_counts:
+                source_counts[src] += 1
         if fill.confidence is not None:
             confidences.append(float(fill.confidence))
         if not fill.filled:
