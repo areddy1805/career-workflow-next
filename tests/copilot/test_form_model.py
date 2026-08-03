@@ -204,7 +204,12 @@ def test_captcha_blocks_auto_fill(browser_controller):
 def test_to_dict_shape(browser_controller):
     page = _open(browser_controller, "greenhouse_form.html")
     data = extract_form_model(page).to_dict()
-    assert set(data) == {"fields", "pages", "ats_type", "auto_fillable"}
+    assert set(data) == {
+        "fields", "pages", "ats_type", "auto_fillable", "telemetry",
+    }
+    assert set(data["telemetry"]) == {
+        "total_scanned", "ignored_ui", "application_fields", "fingerprinted",
+    }
     field = data["fields"][0]
     assert set(field) == {
         "field_id",
@@ -215,6 +220,8 @@ def test_to_dict_shape(browser_controller):
         "required",
         "page",
         "confidence",
+        "fingerprint",
+        "fingerprint_confidence",
     }
     select = next(f for f in data["fields"] if f["options"])
     assert set(select["options"][0]) == {"value", "label"}

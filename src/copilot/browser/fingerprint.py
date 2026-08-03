@@ -317,7 +317,10 @@ UI_SEARCH_TERMS = (
     "find",
     "lookup",
 )
-UI_SWITCH_TERMS = ("toggle", "switch", "darkmode", "dark-mode", "theme")
+UI_SWITCH_TERMS = (
+    "toggle", "switch", "darkmode", "dark-mode", "dark mode",
+    "light mode", "theme",
+)
 UI_IGNORE_TERMS = UI_SEARCH_TERMS + UI_SWITCH_TERMS
 
 

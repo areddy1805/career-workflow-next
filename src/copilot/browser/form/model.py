@@ -123,6 +123,9 @@ class TypedField:
     required: bool
     page: int
     confidence: float
+    # D-034: semantic concept + its match confidence (0.0 when UNKNOWN).
+    fingerprint: str = "UNKNOWN"
+    fingerprint_confidence: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -134,17 +137,25 @@ class TypedField:
             "required": self.required,
             "page": self.page,
             "confidence": self.confidence,
+            "fingerprint": self.fingerprint,
+            "fingerprint_confidence": self.fingerprint_confidence,
         }
 
 
 @dataclass
 class FormModel:
-    """Accumulating form model across pages (02 §7.6 shape)."""
+    """Accumulating form model across pages (02 §7.6 shape).
+
+    ``telemetry`` (D-034) exposes the operational breakdown the checkpoint
+    and UI consume: total controls scanned, UI controls ignored, application
+    fields kept, and the fingerprint coverage.
+    """
 
     fields: list[TypedField] = field(default_factory=list)
     pages: int = 0
     ats_type: str = AtsType.GENERIC.value
     auto_fillable: bool = False
+    telemetry: dict[str, int] = field(default_factory=dict)
 
     def add_page(self, new_fields: list[TypedField]) -> None:
         """Merge one page's fields, deduping by ``field_id`` (re-scans keep
@@ -162,6 +173,7 @@ class FormModel:
             "pages": self.pages,
             "ats_type": self.ats_type,
             "auto_fillable": self.auto_fillable,
+            "telemetry": dict(self.telemetry),
         }
 
 
@@ -173,18 +185,57 @@ def extract_form_model(
     ``ats_type`` overrides URL detection (adapters/API may know better);
     ``page_index`` is the 0-based page number for multi-page forms.
     """
-    fields = extract_fields(page, page_index=page_index)
+    from src.copilot.browser.fingerprint import (
+        FieldConcept,
+    )
+
+    scanned = 0
+    ignored_ui = 0
+    fields, scanned, ignored_ui = _extract_with_stats(
+        page, page_index=page_index
+    )
+    fingerprintable = sum(
+        1 for f in fields if f.fingerprint != FieldConcept.UNKNOWN.value
+    )
     ats = ats_type or detect_ats_type(page.url)
-    return FormModel(
+    model = FormModel(
         fields=fields,
         pages=page_index + 1,
         ats_type=ats,
         auto_fillable=bool(fields) and not _has_captcha(page),
+        telemetry={
+            "total_scanned": scanned,
+            "ignored_ui": ignored_ui,
+            "application_fields": len(fields),
+            "fingerprinted": fingerprintable,
+        },
+    )
+    return model
+
+
+def extract_fields(
+    page: Page, page_index: int = 0
+) -> list[TypedField]:
+    """Extract every application field from the page's DOM (04 §4 heuristics).
+
+    D-034: page-UI controls (search boxes, dark-mode toggles, filter inputs)
+    are rejected BEFORE resolution via the fingerprint ontology's
+    ``is_ui_control``; every kept field carries its semantic
+    ``fingerprint`` concept.
+    """
+    fields, _scanned, _ignored = _extract_with_stats(page, page_index)
+    return fields
+
+
+def _extract_with_stats(
+    page: Page, page_index: int = 0
+) -> tuple[list[TypedField], int, int]:
+    """Shared extraction core returning ``(fields, scanned, ignored_ui)``."""
+    from src.copilot.browser.fingerprint import (
+        fingerprint_field,
+        is_ui_control,
     )
 
-
-def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
-    """Extract every typed field from the page's DOM (04 §4 heuristics)."""
     id_text = _id_text_map(page)
     labels_by_for = _labels_by_for(page)
     controls = page.locator("input, select, textarea").all()
@@ -192,11 +243,27 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
     radio_groups: dict[str, dict[str, Any]] = {}
     fields: list[TypedField] = []
     seen: set[str] = set()
+    scanned = 0
+    ignored_ui = 0
 
     for pos, ctrl in enumerate(controls):
         tag = ctrl.evaluate("el => el.tagName.toLowerCase()")
         input_type = ctrl.get_attribute("type") or "text"
+        scanned += 1
         if tag == "input" and input_type in _IGNORED_INPUT_TYPES:
+            continue
+
+        # D-034: reject page UI before any kind/label work (search, toggle,
+        # filter, theme — never application fields).
+        name_attr = ctrl.get_attribute("name") or ""
+        aria_label = ctrl.get_attribute("aria-label") or None
+        # Label resolved ONCE (DOM-query heavy); reused for the UI filter
+        # and the field record below.
+        label, confidence = _resolve_label(
+            ctrl, input_type=input_type, id_text=id_text, labels_by_for=labels_by_for
+        )
+        if is_ui_control(label=label, name=name_attr, aria_label=aria_label):
+            ignored_ui += 1
             continue
 
         if tag == "select":
@@ -206,7 +273,7 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
             kind = FieldKind.TEXTAREA
             options = ()
         elif input_type == "radio":
-            name = ctrl.get_attribute("name") or ""
+            name = name_attr
             group = radio_groups.setdefault(
                 name or f"radio_{pos}", {"name": name, "radios": []}
             )
@@ -216,10 +283,15 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
             kind = _INPUT_TYPE_TO_KIND.get(input_type, FieldKind.TEXT)
             options = ()
 
-        label, confidence = _resolve_label(
-            ctrl, input_type=input_type, id_text=id_text, labels_by_for=labels_by_for
+        name = name_attr
+        name = name_attr
+        # D-034: semantic fingerprint from every available signal.
+        concept, fp_conf = fingerprint_field(
+            label=label,
+            name=name,
+            autocomplete=ctrl.get_attribute("autocomplete"),
+            aria_label=aria_label,
         )
-        name = ctrl.get_attribute("name") or ""
         field_id = _field_id(page_index, kind, ctrl, pos)
         if field_id in seen:
             continue
@@ -234,6 +306,8 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
                 required=_is_required(ctrl),
                 page=page_index,
                 confidence=confidence,
+                fingerprint=concept.value,
+                fingerprint_confidence=fp_conf,
             )
         )
 
@@ -243,6 +317,9 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
         radios: list = group["radios"]
         field_id = f"p{page_index}:{FieldKind.RADIO}:{name or 'anon'}"
         label, confidence = _resolve_radio_group_label(radios, id_text, labels_by_for)
+        concept, fp_conf = fingerprint_field(
+            label=label, name=name,
+        )
         options = tuple(_radio_option(r, id_text, labels_by_for) for r in radios)
         fields.append(
             TypedField(
@@ -254,9 +331,11 @@ def extract_fields(page: Page, page_index: int = 0) -> list[TypedField]:
                 required=any(_is_required(r) for r in radios),
                 page=page_index,
                 confidence=confidence,
+                fingerprint=concept.value,
+                fingerprint_confidence=fp_conf,
             )
         )
-    return fields
+    return fields, scanned, ignored_ui
 
 
 # -- helpers --------------------------------------------------------------

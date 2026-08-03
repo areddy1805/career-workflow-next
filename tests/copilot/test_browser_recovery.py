@@ -196,7 +196,9 @@ def test_recovery_result_to_dict(browser_controller):
     data = result.to_dict()
     assert set(data) == {"action", "attempts", "model", "plan", "reason"}
     assert data["action"] == "no_drift"
-    assert set(data["model"]) == {"fields", "pages", "ats_type", "auto_fillable"}
+    assert set(data["model"]) == {
+        "fields", "pages", "ats_type", "auto_fillable", "telemetry",
+    }
 
 
 def test_guidance_plan_build_and_shapes(browser_controller):

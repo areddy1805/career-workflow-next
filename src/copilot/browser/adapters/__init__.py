@@ -48,4 +48,5 @@ def adapt_model(model: FormModel, ats_type: str) -> FormModel:
         pages=model.pages,
         ats_type=ats_type,
         auto_fillable=model.auto_fillable,
+        telemetry=dict(model.telemetry),  # D-034: keep the breakdown
     )
