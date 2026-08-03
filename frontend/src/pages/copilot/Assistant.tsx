@@ -686,6 +686,11 @@ export default function Assistant() {
         update({ phase: 'idle', error: msg });
         return;
       }
+      if (msg.includes('is not the open browser session')) {
+        // Stale browser from another session — recover by reopening ours.
+        update({ phase: 'idle', error: msg });
+        return;
+      }
       update({ error: msg, busy: null });
     },
     [sessionId, update],
@@ -713,7 +718,18 @@ export default function Assistant() {
           form = (await api.browserForm(sessionId)).data;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('no open browser session')) throw err;
+          // The controller holds ONE browser at a time (CP-5-01). A stale
+          // session owns it (the user moved on to this opportunity): abort
+          // it — navigating here IS the human gesture — then open fresh.
+          if (msg.includes('is not the open browser session')) {
+            try {
+              await api.browserAbort('switching to a new opportunity');
+            } catch {
+              /* best effort; open will surface a real conflict if any */
+            }
+          } else if (!msg.includes('no open browser session')) {
+            throw err;
+          }
           await api.browserOpen({ opportunity_id: opportunityId, session_id: sessionId });
           form = (await api.browserForm(sessionId)).data;
         }
