@@ -1,9 +1,9 @@
 import json
+import time
 from typing import Any
 
 from src.inference.engine import InferenceEngine
 from src.inference.request import InferenceRequest
-import time
 from src.llm.schemas import LLMQuestionDecision
 from src.resolution.evidence_retriever import (
     retrieve_evidence,
@@ -423,7 +423,7 @@ Return the JSON decision.
             prompt=user_prompt,
             system_prompt=SYSTEM_PROMPT,
             temperature=0.0,
-            max_tokens=500
+            max_tokens=1000  # D-034: 500 truncated the JSON decision mid-string
         )
 
         response = self.engine.complete(request)
@@ -454,27 +454,17 @@ Return the JSON decision.
         self,
         raw_response: str,
     ) -> LLMQuestionDecision:
-        cleaned = raw_response.strip()
-
-        if cleaned.startswith("```"):
-            cleaned = cleaned.removeprefix("```json")
-
-            cleaned = cleaned.removeprefix("```")
-
-            cleaned = cleaned.removesuffix("```")
-
-            cleaned = cleaned.strip()
-
-        try:
-            payload = json.loads(cleaned)
-
-        except json.JSONDecodeError as exc:
+        payload = self._extract_json(raw_response)
+        if payload is None:
             return LLMQuestionDecision(
                 category="unknown",
                 action="manual_review",
                 semantic_answer=None,
                 confidence=0.0,
-                reasoning=(f"Invalid JSON returned by LLM: {exc}"),
+                reasoning=(
+                    "LLM returned no parseable answer — "
+                    "needs human review"
+                ),
             )
 
         try:
@@ -488,6 +478,52 @@ Return the JSON decision.
                 confidence=0.0,
                 reasoning=(f"Invalid LLM decision schema: {exc}"),
             )
+
+    @staticmethod
+    def _extract_json(raw_response: str) -> dict | None:
+        """Extract the first balanced JSON object from a model response.
+
+        D-034: models wrap JSON in ``` fences, prepend prose, or truncate
+        at the token limit. This walks the text for the first ``{`` and
+        parses the longest balanced prefix — so a truncated object that
+        happens to be balanced still resolves, and prose-wrapped JSON
+        parses without exact-strip fragility.
+        """
+        import json as _json
+
+        text = raw_response.strip()
+        start = text.find("{")
+        if start < 0:
+            return None
+        depth = 0
+        in_string = False
+        escape = False
+        end = len(text)
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        candidate = text[start:end]
+        try:
+            payload = _json.loads(candidate)
+        except _json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
 
     @staticmethod
     def _build_candidate_context(
