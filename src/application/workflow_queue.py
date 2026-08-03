@@ -39,6 +39,37 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _shortest_path(
+    sm: WorkflowStateMachine, start: WorkflowStatus, goal: WorkflowStatus
+) -> list[WorkflowStatus] | None:
+    """Shortest legal path from *start* to *goal* (BFS over the machine).
+
+    Returns the intermediate steps to apply in order (excluding *start*,
+    including *goal*), or None when no legal route exists.  D-033: the
+    Copilot outcome seam advances the queue with a single jump (e.g.
+    PENDING -> APPLIED) that the machine only allows stepwise; callers get
+    the legal walk automatically.
+    """
+    if start == goal:
+        return []
+    from collections import deque
+
+    queue: deque[tuple[WorkflowStatus, list[WorkflowStatus]]] = deque(
+        [(start, [])]
+    )
+    seen: set[WorkflowStatus] = {start}
+    while queue:
+        current, path = queue.popleft()
+        for nxt in sorted(sm.allowed_from(current), key=lambda s: s.value):
+            if nxt in seen:
+                continue
+            if nxt == goal:
+                return path + [nxt]
+            seen.add(nxt)
+            queue.append((nxt, path + [nxt]))
+    return None
+
+
 # ---------------------------------------------------------------------------
 # WorkflowQueue
 # ---------------------------------------------------------------------------
@@ -274,7 +305,10 @@ class WorkflowQueue:
         Transition a queue item to a new WorkflowStatus.
 
         Validates the transition, updates the MAQ base status (where applicable),
-        and records the history.
+        and records the history.  When the direct jump is illegal (e.g. the
+        Copilot outcome seam advances PENDING -> APPLIED), the shortest legal
+        path through the state machine is walked automatically (D-033); the
+        intermediate states are recorded so the audit trail stays truthful.
 
         Returns False if the job_id is not found in the MAQ.
         """
@@ -286,8 +320,38 @@ class WorkflowQueue:
 
         current_maq_status = str(row.get("status", "PENDING")).upper()
         from_wf = MAQ_STATUS_MAP.get(current_maq_status, WorkflowStatus.PENDING)
+        if from_wf == to_status:
+            return True  # idempotent: already there
 
-        record = self._sm.transition(from_wf, to_status, actor=actor, note=note)
+        if not self._sm.validate(from_wf, to_status):
+            path = _shortest_path(self._sm, from_wf, to_status)
+            if path is None:
+                # No legal route — raise the original strict error.
+                self._sm.transition(from_wf, to_status, actor=actor, note=note)
+            current = from_wf
+            for step in path:
+                self._apply_transition(
+                    job_id, current, step, actor=actor, note=note
+                )
+                current = step
+            return True
+
+        self._apply_transition(
+            job_id, from_wf, to_status, actor=actor, note=note
+        )
+        return True
+
+    def _apply_transition(
+        self,
+        job_id: str,
+        from_status: WorkflowStatus,
+        to_status: WorkflowStatus,
+        *,
+        actor: str = "system",
+        note: str = "",
+    ) -> None:
+        """One validated transition step: audit record + MAQ + SQLite."""
+        record = self._sm.transition(from_status, to_status, actor=actor, note=note)
 
         # Update MAQ for statuses it understands
         maq_reverse: dict[WorkflowStatus, str] = {

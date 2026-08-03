@@ -230,7 +230,39 @@ class TestWorkflowQueue:
     def test_transition_invalid_raises(self, wq: WorkflowQueue) -> None:
         wq.enqueue(_job("j4"))
         with pytest.raises(InvalidWorkflowTransition):
-            wq.transition("j4", WorkflowStatus.OFFER)  # PENDING → OFFER is illegal
+            wq.transition("j4", WorkflowStatus.NEW)  # unreachable backwards
+        # Terminal states are dead ends: ARCHIVED -> APPLIED is illegal even
+        # with the D-033 auto-walk (no legal path exists).
+        wq.transition("j4", WorkflowStatus.ARCHIVED)
+        with pytest.raises(InvalidWorkflowTransition):
+            wq.transition("j4", WorkflowStatus.APPLIED)
+
+    def test_transition_auto_walks_legal_path(self, wq: WorkflowQueue) -> None:
+        """D-033: a single jump (e.g. the Copilot outcome seam PENDING ->
+        APPLIED) is walked through the legal intermediate states, and the
+        audit history records every step truthfully."""
+        wq.enqueue(_job("j4b"))
+        ok = wq.transition(
+            "j4b", WorkflowStatus.APPLIED, actor="copilot", note="outcome=applied"
+        )
+        assert ok is True
+        item = wq.get("j4b")
+        assert item is not None
+        statuses = [
+            h["to_status"]
+            for h in (item.get("history") or [])
+            if h.get("from_status")  # skip the "enqueued" sentinel row
+        ]
+        # Every hop must be a legal edge; the final state is APPLIED.
+        sm = WorkflowStateMachine()
+        cursor = WorkflowStatus.PENDING
+        for to_status in statuses:
+            assert sm.validate(cursor, WorkflowStatus(to_status))
+            cursor = WorkflowStatus(to_status)
+        assert cursor == WorkflowStatus.APPLIED
+        assert [h["actor"] for h in item.get("history") or [] if h.get("from_status")] == [
+            "copilot"
+        ] * len(statuses)
 
     def test_transition_missing_job_returns_false(self, wq: WorkflowQueue) -> None:
         ok = wq.transition("nonexistent", WorkflowStatus.IN_PROGRESS)
