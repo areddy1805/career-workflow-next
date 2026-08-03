@@ -329,8 +329,12 @@ def test_resolve_fields_sensitive_set(fresh_db):
 
 
 def test_field_fill_to_dict_shape(fresh_db):
-    store_answer(fresh_db, "Email", "a@b.com")
-    data = resolve_field(fresh_db, field(FieldKind.EMAIL, "Email"), "ai").to_dict()
+    store_answer(fresh_db, "How did you hear about this job?", "LinkedIn")
+    data = resolve_field(
+        fresh_db,
+        field(FieldKind.SELECT, "How did you hear about this job?"),
+        "ai",
+    ).to_dict()
     assert set(data) == {
         "field_id",
         "resolution",
@@ -338,6 +342,7 @@ def test_field_fill_to_dict_shape(fresh_db):
         "confidence",
         "source",
         "reason",
+        "fingerprint",
     }
     assert set(data["resolution"]) == {
         "question_fp",

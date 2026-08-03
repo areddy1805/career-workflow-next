@@ -51,7 +51,12 @@ _FALSY = {"false", "no", "off", "0", "unchecked"}
 
 @dataclass(frozen=True)
 class FieldFill:
-    """One field's fill material (frozen shape 04 §5.4)."""
+    """One field's fill material (frozen shape 04 §5.4).
+
+    ``source`` / ``confidence`` / ``fingerprint`` (D-034) make the fill
+    explainable: profile 1.00, deterministic 0.98, answer_bank 0.91,
+    llm 0.63.
+    """
 
     field_id: str
     resolution: dict[str, Any]  # AnswerResolution.to_dict() (§7.4 shape)
@@ -59,6 +64,7 @@ class FieldFill:
     confidence: float | None
     source: str
     reason: str
+    fingerprint: str = "UNKNOWN"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -68,6 +74,7 @@ class FieldFill:
             "confidence": self.confidence,
             "source": self.source,
             "reason": self.reason,
+            "fingerprint": self.fingerprint,
         }
 
 
@@ -79,14 +86,51 @@ def resolve_field(
     context: ResolveContext | None = None,
     sensitive: bool = False,
 ) -> FieldFill:
-    """Resolve one field to a typed fill (04 §5).
+    """Resolve one field to a typed fill (04 §5, D-034 pipeline).
 
-    ``sensitive`` (CP-5-07 wires it) stages the suggested value at the
-    checkpoint but never fills (04 §6: sensitive fields always ask).
+    Resolution order (user direction 2026-08-03):
+
+        fingerprint -> deterministic (profile, confidence 1.0/0.98)
+            -> stored answer bank (contextual ONLY — never canonical)
+            -> semantic resolver (LLM)  -- ONLY UNKNOWN / TEXTAREA
+
+    Canonical concepts (identity/employment/links/documents) NEVER reach
+    the answer bank or the LLM; a missing profile value is a human/checkpoint
+    gap, not an inference task. ``sensitive`` (CP-5-07) stages the value at
+    the checkpoint but never fills (04 §6).
     """
+    from src.copilot.answerbank.resolver import _load_profile
+    from src.copilot.browser.deterministic import resolve_fingerprint
+    from src.copilot.browser.fingerprint import FieldConcept
+
+    concept = field.fingerprint or FieldConcept.UNKNOWN.value
+    profile = (context.profile if context is not None else None)
+    if profile is None:
+        profile = _load_profile()  # CANDIDATE_PROFILE fallback (ADR-007)
+
+    # ---- layer 1: deterministic (canonical + preference concepts) ----
+    if concept != FieldConcept.UNKNOWN.value:
+        fill = resolve_fingerprint(concept, profile)
+        if fill is not None:
+            return _deterministic_fill(field, fill, sensitive=sensitive)
+        if FieldConcept(concept).canonical:
+            # Canonical + missing profile value: never invent, never infer.
+            return _unresolved_fill(
+                field,
+                source="deterministic",
+                fingerprint=concept,
+                reason=f"no profile value for {concept} — human required",
+                sensitive=sensitive,
+            )
+        # contextual (preference) without a profile value -> answer bank
+
+    # ---- layer 2: stored answer bank (contextual memory) ----
     resolution = resolve_answer(
         conn, Question(label=field.label), profile_id, context
     )
+    # ---- layer 3: semantic (LLM) is inside resolve_answer for
+    # UNKNOWN/TEXTAREA; canonical fields never get here. ----
+
     typed = None if field.kind == FieldKind.UPLOAD else _type_match(
         field, resolution.semantic_answer
     )
@@ -103,6 +147,7 @@ def resolve_field(
                 "sensitive field — never auto-fill (04 §6); "
                 "suggested value staged for the checkpoint"
             ),
+            fingerprint=concept,
         )
     if field.kind == FieldKind.UPLOAD:
         return FieldFill(
@@ -114,6 +159,7 @@ def resolve_field(
             reason=(
                 "upload requires human confirmation at the checkpoint (04 §7)"
             ),
+            fingerprint=concept,
         )
 
     reason = resolution.reasoning or f"resolved via {resolution.source}"
@@ -126,6 +172,94 @@ def resolve_field(
         confidence=resolution.confidence,
         source=resolution.source,
         reason=reason,
+        fingerprint=concept,
+    )
+
+
+def _deterministic_fill(
+    field: TypedField,
+    fill: Any,
+    *,
+    sensitive: bool = False,
+) -> FieldFill:
+    """Deterministic result -> typed fill (profile/rule confidence)."""
+    typed = None if field.kind == FieldKind.UPLOAD else _type_match(
+        field, fill.value
+    )
+    resolution_data = {
+        "question_fp": "",
+        "source": fill.source,
+        "semantic_answer": fill.value,
+        "serialized_answer": fill.value,
+        "confidence": fill.confidence,
+        "status": "auto",
+        "reasoning": f"deterministic: {fill.fingerprint} from profile",
+        "typed_value": typed,
+    }
+    if sensitive:
+        return FieldFill(
+            field_id=field.field_id,
+            resolution=resolution_data,
+            filled=False,
+            confidence=fill.confidence,
+            source=fill.source,
+            reason=(
+                "sensitive field — never auto-fill (04 §6); "
+                "suggested value staged for the checkpoint"
+            ),
+            fingerprint=fill.fingerprint,
+        )
+    if field.kind == FieldKind.UPLOAD:
+        return FieldFill(
+            field_id=field.field_id,
+            resolution=resolution_data,
+            filled=False,
+            confidence=fill.confidence,
+            source=fill.source,
+            reason="upload requires human confirmation at the checkpoint (04 §7)",
+            fingerprint=fill.fingerprint,
+        )
+    reason = f"deterministic ({fill.source}, {fill.fingerprint})"
+    if typed is None:
+        reason = f"{reason}; no type match for kind {field.kind.value}"
+    return FieldFill(
+        field_id=field.field_id,
+        resolution=resolution_data,
+        filled=typed is not None,
+        confidence=fill.confidence,
+        source=fill.source,
+        reason=reason,
+        fingerprint=fill.fingerprint,
+    )
+
+
+def _unresolved_fill(
+    field: TypedField,
+    *,
+    source: str,
+    fingerprint: str,
+    reason: str,
+    sensitive: bool = False,
+) -> FieldFill:
+    """Canonical field with no profile value: staged, never inferred."""
+    resolution_data = {
+        "question_fp": "",
+        "source": source,
+        "semantic_answer": None,
+        "serialized_answer": None,
+        "confidence": 0.0,
+        "status": "manual_review",
+        "reasoning": reason,
+        "typed_value": None,
+    }
+    return FieldFill(
+        field_id=field.field_id,
+        resolution=resolution_data,
+        filled=False,
+        confidence=0.0,
+        source=source,
+        reason=reason,
+        fingerprint=fingerprint,
     )
 
 

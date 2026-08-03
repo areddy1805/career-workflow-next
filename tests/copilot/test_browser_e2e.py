@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
+from config.candidate_profile import CANDIDATE_PROFILE
 from src.copilot.browser.api import (
     AssistantService,
     get_assistant_service,
@@ -69,7 +70,8 @@ def e2e(browser_env, tmp_path, monkeypatch):
             yield AssistantService(
                 sc,
                 controller=_get_shared(),
-                profile={},
+                # D-034: canonical fields resolve from the real profile.
+                profile=dict(CANDIDATE_PROFILE),
                 hybrid_resolver=hybrid["engine"],
                 cache={},
             )
@@ -127,7 +129,9 @@ def test_full_journey_open_to_submit(e2e):
         fill = r.json()["data"]
         assert fill["filled"] is True, (field_id, fill["reason"])
         assert fill["resolution"]["typed_value"] is not None
-        assert fill["source"] in ("stored", "deterministic", "llm", "manual")
+        assert fill["source"] in (
+            "profile", "deterministic", "stored", "llm", "manual",
+        )
         filled += 1
     assert filled == 9  # 10 fields − 1 upload (staged, never auto-filled)
 

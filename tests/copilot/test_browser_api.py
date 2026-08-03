@@ -128,6 +128,9 @@ def client(browser_env, tmp_path, monkeypatch):
     )
     conn = open_copilot_db()  # main-thread conn: seeding + assertions
     hybrid = {"engine": abstain_hybrid}
+    # D-034: deterministic-first — canonical fields resolve from the real
+    # profile, not the answer bank. Tests exercise the production shape.
+    from config.candidate_profile import CANDIDATE_PROFILE
 
     def _service_gen():
         # constructed inside the request thread (TestClient worker thread)
@@ -136,7 +139,7 @@ def client(browser_env, tmp_path, monkeypatch):
             yield AssistantService(
                 sc,
                 controller=_get_shared_controller(),
-                profile={},
+                profile=dict(CANDIDATE_PROFILE),
                 hybrid_resolver=hybrid["engine"],
                 cache={},
             )
@@ -235,23 +238,36 @@ def test_form_returns_model_and_audits(client):
 
 
 def test_fill_stored_answer_fills_and_audits(client):
+    """Stored answers fill contextual fields (D-034: the answer bank is
+    contextual memory — canonical identity fields resolve from the profile
+    and never consult it)."""
     c, conn, _ = client
-    store_answer(conn, "Email", "a@b.com")
+    store_answer(conn, "How did you hear about this job?", "Referral")
     opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
     open_browser(c, opp_id)
     c.get("/api/copilot/browser/form")
 
-    r = c.post("/api/copilot/browser/fill/p0:email:email")
+    # canonical email: profile wins, stored answer ignored
+    email = c.post("/api/copilot/browser/fill/p0:email:email")
+    assert email.status_code == 200, email.text
+    assert email.json()["data"]["source"] == "profile"
+    assert email.json()["data"]["filled"] is True
+
+    # contextual select: stored answer resolves and fills
+    r = c.post("/api/copilot/browser/fill/p0:select:source")
     assert r.status_code == 200, r.text
     fill = r.json()["data"]
     assert fill["filled"] is True
-    assert fill["resolution"]["typed_value"] == "a@b.com"
+    assert fill["resolution"]["typed_value"] == "referral"
     assert fill["source"] == "manual"
 
     rows = audit_rows(conn, "s1", action="fill")
-    assert len(rows) == 1 and rows[0]["field_id"] == "p0:email:email"
-    assert json.loads(rows[0]["resolution_json"])["typed_value"] == "a@b.com"
-    assert "filled (silent)" in rows[0]["audit_note"]
+    assert len(rows) == 2
+    target = next(
+        r for r in rows if r["field_id"] == "p0:select:source"
+    )
+    assert json.loads(target["resolution_json"])["typed_value"] == "referral"
+    assert "filled (silent)" in target["audit_note"]
     assert events(conn, "browser.field_filled")
 
 
@@ -264,9 +280,14 @@ def test_fill_unknown_field_400(client):
 
 
 def test_checkpoint_gate_sequence(client):
-    """§7: cp1 (flag) → confirm → cp2 (upload) → confirm → cp3 (submit)."""
+    """§7: cp1 (flag) → confirm → cp2 (upload) → confirm → cp3 (submit).
+
+    D-034: canonical identity fields fill silently from the profile; the
+    flag gate comes from a contextual answer at flag confidence."""
     c, conn, _ = client
-    store_answer(conn, "Phone", "555-0100", confidence=0.85)  # flag threshold
+    store_answer(
+        conn, "How did you hear about this job?", "Referral", confidence=0.85
+    )  # flag threshold
     opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
     open_browser(c, opp_id)
     c.get("/api/copilot/browser/form")
@@ -274,7 +295,7 @@ def test_checkpoint_gate_sequence(client):
     gate = c.get("/api/copilot/browser/checkpoint").json()["data"]
     assert gate["checkpoint_id"] == "cp1"
     assert gate["type"] == "review_flagged"
-    assert any(i["field_id"] == "p0:phone:phone" for i in gate["pending"])
+    assert any(i["field_id"] == "p0:select:source" for i in gate["pending"])
 
     r = c.post(
         "/api/copilot/browser/confirm",
@@ -372,9 +393,10 @@ def test_guidance_plan_via_api(client):
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["reason"]
-    # Nothing resolves under the abstain engine except the deterministic
-    # "years" field → 9 of 10 fields are guided.
-    assert len(data["steps"]) == 9
+    # D-034: 6 canonical fields resolve from the profile (first/last name,
+    # email, phone, linkedin, years) -> only 4 remain guided (resume
+    # upload, source select, start date, cover letter).
+    assert len(data["steps"]) == 4
     assert audit_rows(conn, "s1", action="guidance")
     assert events(conn, "browser.guidance")
 
@@ -413,8 +435,15 @@ def direct_service(browser_env, tmp_path, monkeypatch):
     monkeypatch.setenv("COPILOT_CONFIG", str(cfg))
     conn = open_copilot_db()
     ctl = BrowserController(enabled=True, headless=True)
+    # D-034: canonical fields resolve from the real profile.
+    from config.candidate_profile import CANDIDATE_PROFILE
+
     service = AssistantService(
-        conn, controller=ctl, profile={}, hybrid_resolver=abstain_hybrid, cache={}
+        conn,
+        controller=ctl,
+        profile=dict(CANDIDATE_PROFILE),
+        hybrid_resolver=abstain_hybrid,
+        cache={},
     )
     yield service, conn, ctl
     ctl.close()
@@ -422,7 +451,10 @@ def direct_service(browser_env, tmp_path, monkeypatch):
 
 
 def test_fill_writes_real_dom(direct_service):
-    """The typed value actually lands in the inputs (text + select)."""
+    """The typed value actually lands in the inputs (text + select).
+
+    D-034: email is canonical -> resolved from the injected profile, never
+    the answer bank (the seeded stored answer is overridden by design)."""
     service, conn, ctl = direct_service
     opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
     store_answer(conn, "Email", "a@b.com")
@@ -430,11 +462,18 @@ def test_fill_writes_real_dom(direct_service):
     service.open(opp_id, "s1")
     service.form()
 
-    service.fill_field("p0:email:email")
+    fill = service.fill_field("p0:email:email")
+    assert fill.source == "profile"
+    assert fill.filled is True
     service.fill_field("p0:select:source")
 
     page = ctl.page
-    assert page.evaluate("document.querySelector('#email').value") == "a@b.com"
+    from config.candidate_profile import CANDIDATE_PROFILE
+
+    assert (
+        page.evaluate("document.querySelector('#email').value")
+        == CANDIDATE_PROFILE["email"]
+    )
     assert page.evaluate("document.querySelector('#source').value") == "linkedin"
 
 
@@ -477,7 +516,7 @@ def test_takeover_blocks_fill_but_allows_guidance(direct_service):
     fills."""
     service, conn, ctl = direct_service
     opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
-    store_answer(conn, "Email", "a@b.com")
+    store_answer(conn, "How did you hear about this job?", "LinkedIn")
     service.open(opp_id, "s1")
     service.form()
     ctl.take_over(reason="human grabbed the wheel")
@@ -487,8 +526,10 @@ def test_takeover_blocks_fill_but_allows_guidance(direct_service):
     with pytest.raises(BrowserSessionError, match="taken over"):
         service.fill_field("p0:email:email")
     plan = service.guidance()
-    # email (stored) + years (deterministic) are resolved → 8 guided fields.
-    assert len(plan.steps) == 8
+    # D-034: 6 canonical fields resolve from the profile, and the stored
+    # contextual answer resolves the source select -> 3 remain guided
+    # (resume upload, start date, cover letter). Email is never guided.
+    assert len(plan.steps) == 3
     assert all(s.field_id != "p0:email:email" for s in plan.steps)
 
 
