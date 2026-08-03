@@ -27,8 +27,12 @@ from src.copilot.answerbank.resolver import (
     resolve as resolve_answer,
 )
 from src.copilot.brief import store as brief_store
-from src.copilot.constants import SessionEventType
-from src.copilot.exceptions import CopilotError, NotFoundError
+from src.copilot.constants import OpportunityStatusView, SessionEventType
+from src.copilot.exceptions import (
+    ClosedOpportunityError,
+    CopilotError,
+    NotFoundError,
+)
 from src.copilot.oppstore import store as oppstore
 from src.copilot.session import events as session_events
 from src.copilot.session import outcome as outcome_capture
@@ -78,6 +82,15 @@ class WorkspaceService:
         opportunity = oppstore.get(self._conn, opportunity_id)
         if opportunity is None:
             raise NotFoundError(f"opportunity not found: {opportunity_id}")
+        # Integration (D-033): a CLOSED opportunity (pre-application rejected,
+        # unsupported, deferred, expired) is not openable — no apply_url, no
+        # session. The Inbox may still list it; starting a workspace must fail
+        # loudly instead of walking the user into a dead-end browser.
+        if opportunity.status_view == OpportunityStatusView.CLOSED.value:
+            raise ClosedOpportunityError(
+                f"opportunity {opportunity_id} is closed "
+                f"({opportunity.status_view}); it cannot be applied to"
+            )
         brief = brief_store.get_brief(
             self._conn, opportunity_id, opportunity=opportunity
         )

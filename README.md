@@ -830,6 +830,17 @@ Start the backend API server:
 uvicorn api.main:app --reload
 ```
 
+New coopilot server
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" \
+python -m uvicorn api.main:app --port 8090
+```
+or
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" \
+python -m uvicorn api.main:app --port 8091
+```
+
 In a new terminal window, start the React frontend:
 ```bash
 cd frontend

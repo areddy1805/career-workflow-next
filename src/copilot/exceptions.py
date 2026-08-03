@@ -13,5 +13,10 @@ class NotFoundError(CopilotError):
     """A requested entity does not exist (404 at the API boundary)."""
 
 
+class ClosedOpportunityError(CopilotError):
+    """The opportunity is closed (rejected / unsupported / deferred) and
+    cannot be applied to — session creation is rejected (400)."""
+
+
 class CopilotConfigurationError(CopilotError):
     """Raised when the Copilot configuration file is invalid or unreadable."""

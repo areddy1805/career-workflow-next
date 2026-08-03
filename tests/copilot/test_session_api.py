@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from src.copilot.constants import OpportunitySource, SessionState
+from src.copilot.constants import OpportunitySource, OpportunityStatusView, SessionState
 from src.copilot.db.db import open_copilot_db
 from src.copilot.oppstore import store as oppstore
 from src.copilot.oppstore.model import CopilotOpportunity
@@ -148,6 +148,23 @@ def test_create_session_missing_opportunity_404(client):
     body = r.json()
     assert body["ok"] is False
     assert body["error"]["type"] == "NotFound"
+
+
+def test_create_session_closed_opportunity_rejected(client):
+    """D-033: CLOSED opportunities (pre-app rejected / unsupported / deferred)
+    have no apply_url and are not openable — session creation must fail with a
+    clear message instead of walking the user into a dead-end browser."""
+    _, conn, _, _ = client
+    opportunity_id = seed_opportunity(
+        conn, status_view=OpportunityStatusView.CLOSED.value
+    )
+    r = client[0].post(
+        "/api/copilot/sessions", json={"opportunity_id": opportunity_id}
+    )
+    assert r.status_code == 400
+    body = r.json()
+    assert body["ok"] is False
+    assert "closed" in body["error"]["message"]
 
 
 def test_list_sessions_newest_first(client):

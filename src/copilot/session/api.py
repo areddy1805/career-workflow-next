@@ -20,7 +20,11 @@ from fastapi.responses import JSONResponse
 from api.schemas import SessionAdvanceRequest, SessionCreateRequest
 from src.copilot.constants import SessionEventType
 from src.copilot.db.db import open_copilot_db
-from src.copilot.exceptions import CopilotError, NotFoundError
+from src.copilot.exceptions import (
+    ClosedOpportunityError,
+    CopilotError,
+    NotFoundError,
+)
 from src.copilot.session.service import WorkspaceService
 from src.copilot.session.state_machine import InvalidTransitionError
 
@@ -96,6 +100,10 @@ def copilot_session_create(
     except NotFoundError as exc:
         return JSONResponse(status_code=404, content=_error(str(exc), "NotFound"))
     except CopilotError as exc:
+        # D-033: a closed opportunity is a domain rejection (400), not a
+        # server failure — only brief-build failures are 500s.
+        if isinstance(exc, ClosedOpportunityError):
+            return _copilot_error_response(exc)
         return JSONResponse(
             status_code=500, content=_error(str(exc), "BriefBuildError")
         )

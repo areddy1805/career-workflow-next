@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/sheet';
 import {
   Inbox as InboxIcon, Search, Loader2, CheckCircle, SkipForward, XCircle,
-  ExternalLink, AlertTriangle, Brain, RefreshCw, Briefcase, ArrowUpDown, Settings2,
+  ExternalLink, AlertTriangle, Brain, RefreshCw, Briefcase, ArrowUpDown, Settings2, Lock,
 } from 'lucide-react';
 
 // ─── Client-side Skip/Dismiss (backend has no endpoint yet) ─────────────────
@@ -145,10 +145,16 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
                 size="sm"
                 className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
                 onClick={onApply}
-                disabled={applying}
+                disabled={applying || (opportunity.status_view || '').toUpperCase() === 'CLOSED'}
               >
-                {applying ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                Apply
+                {(opportunity.status_view || '').toUpperCase() === 'CLOSED' ? (
+                  <Lock className="w-3 h-3" />
+                ) : applying ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-3 h-3" />
+                )}
+                {(opportunity.status_view || '').toUpperCase() === 'CLOSED' ? 'Closed' : 'Apply'}
               </Button>
               {opportunity.apply_url && (
                 <Button
@@ -268,6 +274,12 @@ export default function Inbox() {
 
   const handleApply = useCallback(async (opp: CopilotOpportunity) => {
     if (applyingId) return;
+    // D-033: CLOSED opportunities (pre-app rejected / unsupported / deferred)
+    // are not openable — the backend rejects session creation; don't route.
+    if ((opp.status_view || '').toUpperCase() === 'CLOSED') {
+      setActionError('This opportunity is closed and cannot be applied to.');
+      return;
+    }
     setApplyingId(opp.opportunity_id);
     setActionError(null);
     try {
