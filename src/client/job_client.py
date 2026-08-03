@@ -253,6 +253,11 @@ class NaukriJobClient:
         )
         job_id = str(raw.get("jobId") or raw.get("id") or "")
         apply_url = raw.get("jdURL") or f"https://www.naukri.com/job-listings-{job_id}"
+        # Integration (D-033): Naukri jdURL is a relative path; canonicalize
+        # at acquisition so every consumer (copilot sync, manual queue, API
+        # contract) receives an absolute, navigable URL.
+        if apply_url.startswith("/"):
+            apply_url = f"https://www.naukri.com{apply_url}"
         return Job(
             job_id=job_id,
             title=raw.get("title") or raw.get("jobTitle") or "N/A",

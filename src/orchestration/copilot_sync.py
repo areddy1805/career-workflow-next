@@ -104,6 +104,12 @@ def sync_pipeline_jobs_to_copilot(
             if not jid:
                 continue
             extra = jobs_by_id.get(jid, {})
+            apply_url = extra.get("apply_url") or extra.get("apply_link") or None
+            # Integration (D-033): acquisition providers may hand over a
+            # relative path (Naukri jdURL); canonicalize so the copilot
+            # browser can navigate it (mirrors api/routes._ensure_api_contract).
+            if apply_url and apply_url.startswith("/"):
+                apply_url = f"https://www.naukri.com{apply_url}"
             opportunity = CopilotOpportunity(
                 source=_provider_to_source(record.provider_id),
                 title=record.title or extra.get("title") or jid,
@@ -111,7 +117,7 @@ def sync_pipeline_jobs_to_copilot(
                 opportunity_id=jid,
                 provider_id=record.provider_id or "",
                 provider_job_id=jid,
-                apply_url=extra.get("apply_url") or extra.get("apply_link") or None,
+                apply_url=apply_url,
                 status_view=_state_to_view(record.current_state),
             )
             oppstore.upsert(conn, opportunity)
