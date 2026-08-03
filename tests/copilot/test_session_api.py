@@ -297,9 +297,10 @@ def test_advance_outcome_enabled_writes_through_queue(client):
     flags["outcome_enabled"] = True
     r = advance(client, session_id, "OUTCOME_RECORDED", {"outcome": "applied"})
     assert r.status_code == 200
+    # The queue is keyed by the lifecycle job id = opportunity_id (D-033).
     assert queue.calls == [
         {
-            "job_id": "job-42",
+            "job_id": opportunity_id,
             "to_status": "APPLIED",
             "actor": "copilot",
             "note": "copilot outcome=applied",

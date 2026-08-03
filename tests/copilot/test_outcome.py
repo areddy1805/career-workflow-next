@@ -107,7 +107,7 @@ def seed_submitted_session(
     service.select_resume(session.session_id)
     service.fill_form(session.session_id)
     service.submit(session.session_id)
-    return session.session_id
+    return session.session_id, opportunity.opportunity_id
 
 
 def learning_rows(fresh_db):
@@ -126,7 +126,7 @@ def learn_events(fresh_db):
 
 
 def test_unknown_outcome_raises_before_any_write(fresh_db):
-    session_id = seed_submitted_session(fresh_db)
+    session_id, _opp_id = seed_submitted_session(fresh_db)
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
     with pytest.raises(CopilotError, match="unknown outcome"):
@@ -160,7 +160,9 @@ def test_outcome_before_submit_is_invalid(fresh_db):
 
 
 def test_happy_path_records_outcome_and_transitions_pipeline(fresh_db):
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
+    session_id, opportunity_id = seed_submitted_session(
+        fresh_db, pipeline_job_id="job-42"
+    )
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
 
@@ -177,12 +179,15 @@ def test_happy_path_records_outcome_and_transitions_pipeline(fresh_db):
     event = list_session_events(fresh_db, session_id)[-1]
     assert event.event_type == "OUTCOME_RECORDED"
     assert event.payload["outcome"] == "interview"
-    assert event.payload["pipeline"]["job_id"] == "job-42"
+    # The queue is keyed by the lifecycle job id (= the copilot
+    # opportunity_id), not the pipeline execution UUID (D-033).
+    assert event.payload["pipeline"]["job_id"] == opportunity_id
+    assert event.payload["pipeline"]["pipeline_job_id"] == "job-42"
     assert event.payload["pipeline"]["transitioned"] is True
 
     assert queue.calls == [
         {
-            "job_id": "job-42",
+            "job_id": opportunity_id,
             "to_status": "INTERVIEW",
             "actor": "copilot",
             "note": "copilot outcome=interview",
@@ -199,7 +204,7 @@ def test_all_outcome_vocabulary_maps_to_pipeline_status(fresh_db):
         ("archived", "ARCHIVED"),
     ]:
         # distinct identity per iteration: fingerprint dedup merges same title
-        session_id = seed_submitted_session(
+        session_id, _opp_id = seed_submitted_session(
             fresh_db,
             pipeline_job_id=f"j-{outcome}",
             title=f"Engineer {outcome}",
@@ -215,18 +220,26 @@ def test_all_outcome_vocabulary_maps_to_pipeline_status(fresh_db):
 
 
 def test_missing_pipeline_job_records_but_skips_transition(fresh_db):
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id=None)
+    """Without a pipeline_job_id the queue is still attempted (the MAQ is
+    keyed by the lifecycle job id = opportunity_id, D-033); a missing UUID
+    only means the payload records it. The FakeQueue resolves the row."""
+    session_id, opp_id = seed_submitted_session(fresh_db, pipeline_job_id=None)
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
 
     advanced = service.record_outcome(session_id, "rejected", enabled=True)
     assert advanced.outcome == "rejected"
-    assert queue.calls == []  # no job id -> never call the queue
+    assert queue.calls == [
+        {
+            "job_id": opp_id,
+            "to_status": "REJECTED",
+            "actor": "copilot",
+            "note": "copilot outcome=rejected",
+        }
+    ]
     event = list_session_events(fresh_db, session_id)[-1]
-    assert event.payload["pipeline"]["transitioned"] is False
-    assert event.payload["pipeline"]["reason"] == (
-        "opportunity has no pipeline_job_id"
-    )
+    assert event.payload["pipeline"]["transitioned"] is True
+    assert event.payload["pipeline"]["pipeline_job_id"] is None
     # learning row still written (copilot-owned), with null job_id
     rows = learning_rows(fresh_db)
     assert len(rows) == 1
@@ -235,7 +248,7 @@ def test_missing_pipeline_job_records_but_skips_transition(fresh_db):
 
 
 def test_transition_false_does_not_crash_session(fresh_db):
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
+    session_id, _opp_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     queue = FakeQueue(result=False)  # job absent from the MAQ
     service = make_service(fresh_db, queue_transition=queue.transition)
 
@@ -247,7 +260,7 @@ def test_transition_false_does_not_crash_session(fresh_db):
 
 
 def test_transition_exception_does_not_crash_session(fresh_db):
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
+    session_id, _opp_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     queue = FakeQueue(exc=RuntimeError("queue db locked"))
     service = make_service(fresh_db, queue_transition=queue.transition)
 
@@ -261,7 +274,7 @@ def test_transition_exception_does_not_crash_session(fresh_db):
 def test_explicitly_disabled_flag_records_session_only(fresh_db):
     """Explicit ``enabled=False`` (rollback path, D-031): session outcome
     persists, pipeline + learning skipped. Production default is now ON."""
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
+    session_id, _opp_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
 
@@ -278,7 +291,7 @@ def test_explicitly_disabled_flag_records_session_only(fresh_db):
 
 
 def test_learning_row_and_learn_event(fresh_db):
-    session_id = seed_submitted_session(
+    session_id, _opp_id = seed_submitted_session(
         fresh_db,
         pipeline_job_id="job-42",
         ats_type="greenhouse",
@@ -313,7 +326,7 @@ def test_learning_row_and_learn_event(fresh_db):
 
 
 def test_re_record_updates_session_keeps_single_learning_row(fresh_db):
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
+    session_id, _opp_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     queue = FakeQueue()
     service = make_service(fresh_db, queue_transition=queue.transition)
 
@@ -341,19 +354,24 @@ def test_real_workflow_queue_integration(fresh_db, tmp_path):
     queue = WorkflowQueue(
         maq_path=tmp_path / "maq.json", db_path=tmp_path / "workflow_queue.db"
     )
+    # Production: the MAQ is keyed by the lifecycle job id, which for synced
+    # opportunities is the copilot opportunity_id (D-033) — NOT the pipeline
+    # execution UUID stored as pipeline_job_id.
+    session_id, opp_id = seed_submitted_session(
+        fresh_db, pipeline_job_id="job-42"
+    )
     queue.enqueue(
-        {"job_id": "job-42", "title": "Staff Engineer", "company": "Acme"},
+        {"job_id": opp_id, "title": "Staff Engineer", "company": "Acme"},
         source="test",
     )
     # MAQ starts at PENDING (NEW→PENDING is already applied by enqueue)
-    queue.transition("job-42", WorkflowStatus.IN_PROGRESS)
+    queue.transition(opp_id, WorkflowStatus.IN_PROGRESS)
 
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="job-42")
     service = make_service(fresh_db, queue_transition=queue.transition)
     advanced = service.record_outcome(session_id, "applied", enabled=True)
     assert advanced.outcome == "applied"
 
-    item = queue.get("job-42")
+    item = queue.get(opp_id)
     assert item is not None
     assert item["workflow_status"] == "APPLIED"
     assert item["status"] == "APPLIED"  # MAQ base status aligned
@@ -376,7 +394,7 @@ def test_real_queue_missing_job_returns_false(fresh_db, tmp_path):
     queue = WorkflowQueue(
         maq_path=tmp_path / "maq.json", db_path=tmp_path / "workflow_queue.db"
     )
-    session_id = seed_submitted_session(fresh_db, pipeline_job_id="ghost")
+    session_id, _opp_id = seed_submitted_session(fresh_db, pipeline_job_id="ghost")
     service = make_service(fresh_db, queue_transition=queue.transition)
     advanced = service.record_outcome(session_id, "rejected", enabled=True)
     assert advanced.outcome == "rejected"

@@ -81,24 +81,34 @@ def record_outcome(
         raise CopilotError(f"session not found: {session_id}")
 
     job_id = _pipeline_job_id(conn, session)
+    # The queue (MAQ) is keyed by the pipeline lifecycle job id — which for
+    # synced opportunities is the copilot opportunity_id, NOT the pipeline
+    # execution UUID (D-033: UUIDs never appear as MAQ keys).
+    queue_job_id = session.opportunity_id
     pipeline: dict[str, Any] = {
-        "job_id": job_id,
+        "job_id": queue_job_id,
+        "pipeline_job_id": job_id,
         "status": status_value,
         "transitioned": False,
         "reason": None,
     }
-    if enabled and job_id:
+    if enabled and queue_job_id:
         fn = transition if transition is not None else _lazy_queue_transition()
         status = _workflow_status(status_value)
         try:
-            ok = fn(job_id, status, actor="copilot", note=f"copilot outcome={outcome}")
+            ok = fn(
+                queue_job_id,
+                status,
+                actor="copilot",
+                note=f"copilot outcome={outcome}",
+            )
             pipeline["transitioned"] = bool(ok)
             if not ok:
                 pipeline["reason"] = "job not found in workflow queue"
         except Exception as exc:  # noqa: BLE001 - pipeline failure must not crash the session
             pipeline["reason"] = f"{type(exc).__name__}: {exc}"
     elif enabled:
-        pipeline["reason"] = "opportunity has no pipeline_job_id"
+        pipeline["reason"] = "opportunity has no queue job id"
 
     outcome_at = now_iso()
     advanced = session_store.advance_session(
