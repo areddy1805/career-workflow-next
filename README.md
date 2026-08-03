@@ -832,8 +832,7 @@ uvicorn api.main:app --reload
 
 New coopilot server
 ```bash
-PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" \
-python -m uvicorn api.main:app --port 8090
+PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" .venv/bin/uvicorn api.main:app --port 8090
 ```
 or
 ```bash

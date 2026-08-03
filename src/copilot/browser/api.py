@@ -575,10 +575,34 @@ def _click_submit(page) -> None:
 
 def get_assistant_service() -> Generator[AssistantService, None, None]:
     """One service per request (owns its copilot.db connection); the browser
-    controller and runtimes are shared singletons. Overridable in tests."""
+    controller and runtimes are shared singletons. Overridable in tests.
+
+    Integration (D-033): the fill pass resolves form fields through the exact
+    production engine chain the pipeline uses (pipeline.py
+    ``_build_questionnaire_resolver``): ``InferenceService().engine`` →
+    ``LLMQuestionResolver`` → ``HybridQuestionResolver``. Without it the
+    answerbank lazily builds an engine-less resolver and every field falls
+    back to ``confirm`` ("InferenceEngine not provided"), stalling the
+    autonomous drive loop. Constructed per request — no module-level global.
+    """
     conn = open_copilot_db()
     try:
-        yield AssistantService(conn, controller=_get_controller())
+        # Local imports keep src/copilot free of static pipeline imports
+        # (importlib seam convention); construction mirrors the pipeline.
+        from src.client.inference_service import InferenceService
+        from src.llm.question_resolver import LLMQuestionResolver
+        from src.resolution.hybrid_resolver import HybridQuestionResolver
+
+        inference = InferenceService()
+        hybrid = HybridQuestionResolver(
+            llm_resolver=LLMQuestionResolver(engine=inference.engine)
+        )
+        yield AssistantService(
+            conn,
+            controller=_get_controller(),
+            hybrid_resolver=hybrid,
+            cache={},
+        )
     finally:
         conn.close()
 
