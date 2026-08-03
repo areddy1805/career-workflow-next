@@ -285,6 +285,53 @@ def resolve_fields(
     ]
 
 
+def fill_summary(fills: list[FieldFill]) -> dict[str, Any]:
+    """Operational telemetry (D-034, user direction §8): the per-source
+    breakdown that immediately shows where engineering effort belongs.
+
+        profile_filled / deterministic_filled / answer_bank_filled /
+        llm_filled / human_required / filled / average_confidence /
+        completion
+
+    ``filled`` counts fields with a type-matched value; ``human_required``
+    counts unresolved or staged (sensitive/upload) fields.
+    """
+    source_counts: dict[str, int] = {
+        "profile": 0,
+        "deterministic": 0,
+        "stored": 0,
+        "llm": 0,
+        "manual": 0,
+    }
+    human = 0
+    filled = 0
+    confidences: list[float] = []
+    for fill in fills:
+        src = fill.source or "unknown"
+        if src in source_counts:
+            source_counts[src] += 1
+        if fill.filled:
+            filled += 1
+        if fill.confidence is not None:
+            confidences.append(float(fill.confidence))
+        if not fill.filled:
+            human += 1
+    total = len(fills)
+    return {
+        "application_fields": total,
+        "profile_filled": source_counts["profile"],
+        "deterministic_filled": source_counts["deterministic"],
+        "answer_bank_filled": source_counts["stored"],
+        "llm_filled": source_counts["llm"],
+        "human_required": human,
+        "filled": filled,
+        "average_confidence": round(
+            sum(confidences) / len(confidences), 4
+        ) if confidences else 0.0,
+        "completion": round(100.0 * filled / total, 1) if total else 0.0,
+    }
+
+
 # -- type matching (04 §5.3) ----------------------------------------------
 
 

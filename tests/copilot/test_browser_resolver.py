@@ -354,3 +354,66 @@ def test_field_fill_to_dict_shape(fresh_db):
         "reasoning",
         "typed_value",
     }
+
+
+def test_fill_summary_breakdown(fresh_db):
+    """D-034 §8: the operational report splits fills by source and reports
+    confidence + completion."""
+    from src.copilot.browser.resolver import fill_summary
+
+    fills = [
+        _profile_fill("p0", 1.0),
+        _profile_fill("p1", 1.0),
+        _manual_fill("p2"),
+        _unresolved_fill("p3"),
+    ]
+    summary = fill_summary(fills)
+    assert summary["application_fields"] == 4
+    assert summary["profile_filled"] == 2
+    assert summary["human_required"] == 2  # manual + unresolved
+    assert summary["filled"] == 2
+    # average over ALL fills incl. staged: (1.0 + 1.0 + 0.91 + 0.0) / 4
+    assert summary["average_confidence"] == round((1.0 + 1.0 + 0.91 + 0.0) / 4, 4)
+    assert summary["completion"] == 50.0
+
+
+def _profile_fill(fid: str, conf: float):
+    from src.copilot.browser.resolver import FieldFill
+
+    return FieldFill(
+        field_id=fid,
+        resolution={},
+        filled=True,
+        confidence=conf,
+        source="profile",
+        reason="deterministic",
+        fingerprint="CandidateIdentity.Email",
+    )
+
+
+def _manual_fill(fid: str):
+    from src.copilot.browser.resolver import FieldFill
+
+    return FieldFill(
+        field_id=fid,
+        resolution={},
+        filled=False,
+        confidence=0.91,
+        source="stored",
+        reason="staged",
+        fingerprint="UNKNOWN",
+    )
+
+
+def _unresolved_fill(fid: str):
+    from src.copilot.browser.resolver import FieldFill
+
+    return FieldFill(
+        field_id=fid,
+        resolution={},
+        filled=False,
+        confidence=0.0,
+        source="deterministic",
+        reason="no profile value",
+        fingerprint="Employment.VisaStatus",
+    )

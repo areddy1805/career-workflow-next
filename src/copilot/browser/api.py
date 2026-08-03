@@ -250,6 +250,11 @@ class AssistantService:
             sensitive=runtime.sensitive,
         )
         runtime.fills = {f.field_id: f for f in fills}
+        # D-034: attach the operational fill breakdown to the model telemetry
+        # so the UI/checkpoint can show exactly where effort is needed.
+        from src.copilot.browser.resolver import fill_summary
+
+        model.telemetry["fill_summary"] = fill_summary(fills)
         record_action(
             self._conn,
             runtime.session_id,
