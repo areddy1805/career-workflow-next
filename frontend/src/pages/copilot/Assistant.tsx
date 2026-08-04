@@ -67,10 +67,15 @@ type FillStatus =
   | 'asked'
   | 'unknown'
   | 'sensitive'
-  | 'upload';
+  | 'upload'
+  | 'unwritable';
 
 function fillStatus(fill: FieldFill | undefined, field: TypedField): FillStatus {
   if (!fill) return 'pending';
+  // D-035: bounded write failed — assistant continued; surface the reason.
+  if (fill.write_status === 'unwritable' || fill.reason.includes('FIELD_UNWRITABLE')) {
+    return 'unwritable';
+  }
   // Sensitive fields always stage (reason text is the only frontend signal).
   if (fill.reason.includes('sensitive')) return 'sensitive';
   if (field.kind === 'upload') return 'upload';
@@ -92,6 +97,10 @@ const STATUS_META: Record<FillStatus, { label: string; className: string }> = {
   asked: {
     label: 'asked',
     className: 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  },
+  unwritable: {
+    label: 'FIELD_UNWRITABLE',
+    className: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
   },
   unknown: {
     label: 'unknown',

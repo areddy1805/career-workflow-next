@@ -283,6 +283,7 @@ export interface FieldFill {
   confidence: number | null;
   source: string;
   reason: string;
+  write_status?: 'pending' | 'written' | 'unwritable' | 'staged';
 }
 
 export interface PendingItem {
