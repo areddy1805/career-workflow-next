@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head><title>Unwritable Field App</title></head>
+<body>
+<!-- D-035 fixture: a real application with one DISABLED identity field.
+     Phone resolves from the profile (conf 1.0 → silent) but the disabled
+     input cannot be written → bounded write fails → FIELD_UNWRITABLE,
+     and the remaining fills continue. -->
+<h1>Unwritable Field Role</h1>
+<form>
+  <label for="first_name">First Name</label>
+  <input id="first_name" name="first_name" type="text" required>
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required>
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" type="tel" disabled>
+  <input type="submit" value="Submit Application">
+</form>
+</body>
+</html>

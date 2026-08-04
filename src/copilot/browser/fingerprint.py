@@ -310,12 +310,29 @@ _AUTOCOMPLETE: dict[str, FieldConcept] = {
 }
 
 # UI-control signals that must NEVER become TypedFields (extraction filter).
+# D-035: search-page vocabulary extended beyond the old "search/query/filter"
+# set — Naukri-style nav widgets phrase themselves as "keyword", "designation",
+# "companies", "enter location", "select experience". These are page-UI, not
+# application fields, and must be rejected before the fill planner.
 UI_SEARCH_TERMS = (
     "search",
     "query",
     "filter",
     "find",
     "lookup",
+    # job-board nav vocabulary (D-035): search boxes / filter dropdowns.
+    # Conservative: only phrasings that never appear as application fields.
+    # "experience level" / "remote jobs" are deliberately absent — they can
+    # be legit application questions (Preferences.Remote etc.); the page
+    # detector, not the field filter, decides those pages.
+    "keyword",
+    "designation",
+    "enter location",
+    "location search",
+    "search location",
+    "select experience",
+    "date posted",
+    "sort by",
 )
 UI_SWITCH_TERMS = (
     "toggle", "switch", "darkmode", "dark-mode", "dark mode",
