@@ -155,7 +155,7 @@ class FormModel:
     pages: int = 0
     ats_type: str = AtsType.GENERIC.value
     auto_fillable: bool = False
-    telemetry: dict[str, int] = field(default_factory=dict)
+    telemetry: dict[str, Any] = field(default_factory=dict)
 
     def add_page(self, new_fields: list[TypedField]) -> None:
         """Merge one page's fields, deduping by ``field_id`` (re-scans keep

@@ -554,3 +554,172 @@ def test_audit_feed_endpoint(client):
     assert actions == ["form", "open"]  # newest first
     assert feed[0]["session_id"] == "s1"
     assert set(feed[0]) >= {"id", "occurred_at", "action", "audit_note"}
+
+
+# ------------------------------------------------- D-035 page gate + bounded writes
+
+
+def test_search_page_gate_rejects_form(client):
+    """AC: a Naukri-style search page → form() 409 NotApplicationPage, zero
+    resolution, zero audit fills (the assistant stops before the pipeline)."""
+    c, conn, _ = client
+    search_url = (FIXTURES / "naukri_search.html").as_uri()
+    opp_id = seed_opportunity(conn, apply_url=search_url)
+    open_browser(c, opp_id)
+    r = c.get("/api/copilot/browser/form")
+    assert r.status_code == 409, r.text
+    body = r.json()
+    assert body["ok"] is False
+    assert body["error"]["type"] == "NotApplicationPage"
+    assert "SEARCH_PAGE" in body["error"]["message"]
+    # no fill rows: the pipeline never started
+    assert not audit_rows(conn, "s1", action="fill")
+    # the rejection itself is audited
+    assert audit_rows(conn, "s1", action="detect")
+    assert events(conn, "browser.page_classified")
+
+
+def test_search_page_gate_blocks_fill(client):
+    """Even a direct fill attempt on a rejected page is refused (D-035)."""
+    c, conn, _ = client
+    search_url = (FIXTURES / "naukri_search.html").as_uri()
+    opp_id = seed_opportunity(conn, apply_url=search_url)
+    open_browser(c, opp_id)
+    c.get("/api/copilot/browser/form")  # 409 — classification recorded
+    r = c.post("/api/copilot/browser/fill/p0:text:pos0")
+    assert r.status_code == 409
+    assert r.json()["error"]["type"] == "NotApplicationPage"
+
+
+def test_application_page_audits_classification(client):
+    """APPLICATION pages emit browser.page_classified alongside form_model."""
+    c, conn, _ = client
+    opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
+    open_browser(c, opp_id)
+    r = c.get("/api/copilot/browser/form")
+    assert r.status_code == 200, r.text
+    assert events(conn, "browser.page_classified")
+    assert events(conn, "browser.form_model")
+
+
+def test_smartrecruiters_application_fills(client):
+    """AC: SmartRecruiters application → APPLICATION → deterministic fill
+    proceeds (profile-driven identity fields fill)."""
+    c, conn, _ = client
+    sr_url = (FIXTURES / "smartrecruiters_form.html").as_uri()
+    opp_id = seed_opportunity(conn, apply_url=sr_url)
+    open_browser(c, opp_id)
+    r = c.get("/api/copilot/browser/form")
+    assert r.status_code == 200, r.text
+    fields = {f["field_id"]: f for f in r.json()["data"]["fields"]}
+    assert len(fields) == 10
+
+    email = c.post("/api/copilot/browser/fill/p0:email:email")
+    assert email.status_code == 200, email.text
+    assert email.json()["data"]["source"] == "profile"
+    assert email.json()["data"]["filled"] is True
+    assert email.json()["data"]["write_status"] == "written"
+
+
+def test_fill_consumes_plan_without_llm(direct_service, monkeypatch):
+    """D-035: fills consume the plan resolved by form() — the drive loop
+    never re-resolves (no sequential LLM during filling)."""
+    service, conn, ctl = direct_service
+    opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
+    service.open(opp_id, "s1")
+    service.form()  # plan resolved here (abstain engine)
+
+    import src.copilot.browser.api as browser_api
+
+    calls = []
+    real_resolve = browser_api.resolve_field
+
+    def tracking_resolve(*args, **kwargs):
+        calls.append(args[1].field_id if len(args) > 1 else "?")
+        return real_resolve(*args, **kwargs)
+
+    monkeypatch.setattr(browser_api, "resolve_field", tracking_resolve)
+
+    # The plan already holds the profile fill — resolve must NOT run again.
+    fill = service.fill_field("p0:email:email")
+    assert fill.source == "profile"
+    assert fill.filled is True
+    assert calls == [], f"resolve_field invoked during fill: {calls}"
+
+    # A field NOT in the plan (injected after form) resolves on demand —
+    # the only path where a fill may resolve at all.
+    page = ctl.page
+    page.evaluate(
+        "const i = document.createElement('input'); i.id='extra'; i.type='text'; "
+        "document.querySelector('form').appendChild(i)"
+    )
+    from src.copilot.browser.adapters import adapt_model
+    from src.copilot.browser.form.model import extract_form_model
+
+    model = adapt_model(extract_form_model(page), "generic")
+    runtime = service._require_runtime("s1")
+    runtime.model = model  # simulate a recovery rebuild WITHOUT re-planning
+    fill = service.fill_field("p0:text:extra")
+    assert fill.field_id == "p0:text:extra"
+    assert len(calls) >= 1, "recovery-added field must resolve on demand"
+
+
+def test_fill_plan_fields_present_on_application(client):
+    """The completed plan (D-034 fill_summary) is attached to the model."""
+    c, conn, _ = client
+    opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
+    open_browser(c, opp_id)
+    r = c.get("/api/copilot/browser/form")
+    data = r.json()["data"]
+    assert "fill_summary" in data["telemetry"]
+    assert data["telemetry"]["fill_summary"]["completion"] > 0
+
+
+def test_unwritable_field_does_not_stall(client, monkeypatch):
+    """AC: a field whose DOM write fails becomes FIELD_UNWRITABLE and the
+    session continues (no 30s Playwright wait, no stall)."""
+    import src.copilot.browser.api as browser_api
+
+    real_write = browser_api._write_field
+
+    def flaky_write(page, field, fill):
+        if field.field_id == "p0:email:email":
+            raise TimeoutError("Locator.fill: Timeout 5000ms exceeded")
+        return real_write(page, field, fill)
+
+    monkeypatch.setattr(browser_api, "_write_field", flaky_write)
+    c, conn, _ = client
+    opp_id = seed_opportunity(conn, apply_url=GREENHOUSE_URL)
+    open_browser(c, opp_id)
+    c.get("/api/copilot/browser/form")
+
+    email = c.post("/api/copilot/browser/fill/p0:email:email")
+    assert email.status_code == 200, email.text
+    fill = email.json()["data"]
+    assert fill["filled"] is False
+    assert fill["write_status"] == "unwritable"
+    assert "FIELD_UNWRITABLE" in fill["reason"]
+
+    # the NEXT field still fills — one unwritable field never blocks
+    phone = c.post("/api/copilot/browser/fill/p0:phone:phone")
+    assert phone.status_code == 200, phone.text
+    assert phone.json()["data"]["filled"] is True
+    assert phone.json()["data"]["write_status"] == "written"
+
+    # audit shows both the unwritable and the written fill
+    rows = audit_rows(conn, "s1", action="fill")
+    notes = [r["audit_note"] for r in rows]
+    assert any("FIELD_UNWRITABLE" in n for n in notes)
+    assert any(n.startswith("filled") for n in notes)
+
+
+def test_guidance_after_rejection(client):
+    """A rejected page still offers guidance (annotation, not filling)."""
+    c, conn, _ = client
+    search_url = (FIXTURES / "naukri_search.html").as_uri()
+    opp_id = seed_opportunity(conn, apply_url=search_url)
+    open_browser(c, opp_id)
+    c.get("/api/copilot/browser/form")
+    r = c.post("/api/copilot/browser/guidance")
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["reason"]

@@ -238,11 +238,24 @@ def _hybrid_engine(ctx: ResolveContext) -> HybridEngine:
             engine = _lazy(
                 "src.resolution.hybrid_resolver", "HybridQuestionResolver"
             )
-        result = (
-            engine.resolve(question, profile)
-            if hasattr(engine, "resolve")
-            else engine(question, profile)
-        )
+        from src.copilot.browser.trace import trace
+
+        label = str(question.get("questionName") or question.get("question") or "?")
+        trace("LLM_RESOLVE_START", f"q={label[:50]!r}")
+        try:
+            result = (
+                engine.resolve(question, profile)
+                if hasattr(engine, "resolve")
+                else engine(question, profile)
+            )
+            status = (
+                getattr(result, "status", None)
+                or (result.get("status") if isinstance(result, dict) else "?")
+            )
+            trace("LLM_RESOLVE_DONE", f"q={label[:30]!r} status={status}")
+        except Exception as exc:
+            trace("LLM_RESOLVE_ERROR", f"q={label[:30]!r} {type(exc).__name__}: {exc}")
+            raise
         if isinstance(result, dict):
             return result
         return {

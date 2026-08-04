@@ -32,6 +32,7 @@ from typing import Any, Callable
 
 from playwright.sync_api import Frame, Page, sync_playwright
 
+from src.copilot.browser.trace import trace
 from src.copilot.exceptions import CopilotError
 
 logger = logging.getLogger("copilot.browser.controller")
@@ -141,6 +142,7 @@ class BrowserController:
                 f"({self._session.state}); close or abort it first"
             )
         logger.info("[browser] stage=open start url=%s", url)
+        trace("OPEN", f"url={url} session={session_id}")
         if self._browser is None:
             self._launch()
         page = self._page
@@ -148,10 +150,13 @@ class BrowserController:
         self._nav_expected = True
         try:
             logger.info("[browser] stage=goto start (timeout_ms=%s)", self._timeout_ms)
+            trace("NAVIGATION_START", url)
             page.goto(url, timeout=self._timeout_ms, wait_until="load")
             logger.info("[browser] stage=goto done url=%s", page.url)
+            trace("NAVIGATION_COMPLETE", page.url)
         except Exception as e:
             self._teardown_browser()  # a failed open never leaks a browser
+            trace("NAVIGATION_FAILED", f"{type(e).__name__}: {e}")
             raise BrowserError(f"navigation to {url!r} failed: {e}") from e
         finally:
             self._nav_expected = False
@@ -169,6 +174,7 @@ class BrowserController:
             url,
             opportunity_id,
         )
+        trace("SESSION_OPENED", f"session={session_id} state={session.state}")
         return session
 
     def navigate(self, url: str) -> BrowserSession:
@@ -287,18 +293,23 @@ class BrowserController:
         try:
             self._playwright = sync_playwright().start()
             logger.info("[browser] stage=driver started")
+            trace("PLAYWRIGHT_DRIVER_STARTED", "")
             self._browser = self._playwright.chromium.launch(
                 headless=self._headless,
                 timeout=45_000,  # never hang silently on a stuck launch
             )
             logger.info("[browser] stage=browser launched")
+            trace("CHROMIUM_LAUNCHED", f"headless={self._headless}")
             self._page = self._browser.new_page()
             logger.info("[browser] stage=page created")
+            trace("PAGE_CREATED", "")
             self._page.on("framenavigated", self._on_navigation)
         except Exception as e:
             self._teardown_browser()  # never leak a half-open browser
+            trace("LAUNCH_FAILED", f"{type(e).__name__}: {e}")
             raise BrowserError(f"failed to launch browser: {e}") from e
         logger.info("[browser] stage=launch complete")
+        trace("LAUNCH_COMPLETE", "")
 
     def _teardown_browser(self) -> None:
         page, self._page = self._page, None

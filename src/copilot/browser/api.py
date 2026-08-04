@@ -20,7 +20,7 @@ tests reset via :func:`reset_assistant`).
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Generator
 
 from fastapi import APIRouter, Depends
@@ -50,6 +50,11 @@ from src.copilot.browser.controller import (
     BrowserSession,
     BrowserSessionError,
 )
+from src.copilot.browser.detector import (
+    NotApplicationPageError,
+    PageKind,
+    classify_page,
+)
 from src.copilot.browser.form.model import (
     FieldKind,
     FormModel,
@@ -68,6 +73,7 @@ from src.copilot.browser.safety import (
     record_action,
     sensitive_fields,
 )
+from src.copilot.browser.trace import trace
 from src.copilot.db.db import open_copilot_db
 from src.copilot.events.emitter import emit_event
 from src.copilot.exceptions import CopilotError, NotFoundError
@@ -101,6 +107,8 @@ class AssistantRuntime:
     engine: CheckpointEngine
     guard: SafetyGuard
     sensitive: set[str]
+    # D-035: the page-level classification from the last form() run.
+    classification: Any = None  # PageClassification (avoid import cycle at runtime)
 
 
 @dataclass(frozen=True)
@@ -178,6 +186,7 @@ class AssistantService:
         logger.info(
             "[browser] stage=service.open start opportunity=%s", opportunity_id
         )
+        trace("OPEN_REQUEST", f"opp={opportunity_id} session={session_id}")
         opp = oppstore.get(self._conn, opportunity_id)
         if opp is None:
             raise NotFoundError(f"opportunity not found: {opportunity_id}")
@@ -194,6 +203,7 @@ class AssistantService:
             "[browser] stage=controller.open done state=%s page_url=%s",
             session.state, session.page_url,
         )
+        trace("OPEN_COMPLETE", f"state={session.state} url={session.page_url}")
         ats = opp.ats_type or detect_ats_type(apply_url)
         _runtimes[session_id] = AssistantRuntime(
             session_id=session_id,
@@ -233,15 +243,69 @@ class AssistantService:
         return session
 
     def form(self, session_id: str | None = None) -> FormModel:
-        """form: extract + adapt + sensitive-detect + resolve every field
-        (the §7 fill-pass material)."""
+        """form: extract + adapt + PAGE-CLASSIFY (D-035) + resolve every
+        field into a completed fill plan.
+
+        Page gate: only :data:`PageKind.APPLICATION` proceeds to resolution.
+        A search page / job description / login / unknown page stops the
+        assistant with an explainable reason BEFORE any field resolution,
+        before any LLM call, before any Playwright write. The resolved
+        ``runtime.fills`` is the *complete fill plan* the drive loop
+        consumes — no sequential LLM during filling.
+        """
         runtime, session = self._require_driving(session_id)
         page = self._controller.page
         assert page is not None
+        trace("FORM_EXTRACTION_STARTED", f"session={runtime.session_id}")
         model = extract_form_model(page, ats_type=runtime.ats_type)
+        trace(
+            "FORM_EXTRACTION_COMPLETE",
+            f"fields={len(model.fields)} pages={model.pages} ats={runtime.ats_type}",
+        )
         model = adapt_model(model, runtime.ats_type)
         runtime.model = model
+
+        # ---- D-035 page gate: immediately after extraction+fingerprinting ----
+        classification = classify_page(
+            page, model, ats_type=runtime.ats_type
+        )
+        runtime.classification = classification
+        trace(
+            "PAGE_CLASSIFIED",
+            f"kind={classification.kind.value} "
+            f"reasons={'; '.join(classification.reasons)}",
+        )
+        if classification.kind is not PageKind.APPLICATION:
+            model.auto_fillable = False
+            reason = "; ".join(classification.reasons)
+            record_action(
+                self._conn,
+                runtime.session_id,
+                action="detect",
+                target=page.url,
+                audit_note=(
+                    f"page={classification.kind.value}: {reason} — "
+                    "assistant stopped, no fields resolved"
+                ),
+            )
+            emit_event(
+                self._conn,
+                "browser.page_classified",
+                runtime.session_id,
+                "browser_session",
+                payload=classification.to_dict(),
+            )
+            raise NotApplicationPageError(
+                f"page is {classification.kind.value}: {reason} — "
+                "assistant stopped; no fields were resolved or filled"
+            )
+
         runtime.sensitive = sensitive_fields(model.fields)
+        trace(
+            "FILL_PLAN_CREATED",
+            f"fields={len(model.fields)} auto_fillable={model.auto_fillable} "
+            f"sensitive={len(runtime.sensitive)}",
+        )
         fills = resolve_fields(
             self._conn,
             model.fields,
@@ -249,6 +313,7 @@ class AssistantService:
             context=self._context(runtime),
             sensitive=runtime.sensitive,
         )
+        trace("FIELDS_RESOLVED", f"fills={len(fills)}")
         runtime.fills = {f.field_id: f for f in fills}
         # D-034: attach the operational fill breakdown to the model telemetry
         # so the UI/checkpoint can show exactly where effort is needed.
@@ -263,8 +328,15 @@ class AssistantService:
             audit_note=(
                 f"{len(model.fields)} fields, {model.pages} pages, "
                 f"{len(runtime.sensitive)} sensitive, "
-                f"auto_fillable={model.auto_fillable}"
+                f"auto_fillable={model.auto_fillable}, page={classification.kind.value}"
             ),
+        )
+        emit_event(
+            self._conn,
+            "browser.page_classified",
+            runtime.session_id,
+            "browser_session",
+            payload=classification.to_dict(),
         )
         emit_event(
             self._conn,
@@ -276,35 +348,87 @@ class AssistantService:
         return model
 
     def fill_field(self, field_id: str, session_id: str | None = None) -> FieldFill:
-        """fill/{field}: resolve + type-match + write (silent/flag only)."""
+        """fill/{field}: consume the precomputed fill plan + bounded write.
+
+        D-035: (1) only runs on an APPLICATION page; (2) consumes the fill
+        plan resolved by :meth:`form` — no re-resolution, no LLM, no
+        sequential inference during filling (recovery-added fields resolve
+        on demand); (3) every DOM write is bounded — an unwritable field
+        becomes ``FIELD_UNWRITABLE`` and the assistant continues.
+        """
         runtime, _ = self._require_driving(session_id)
+        self._require_application(runtime)
+        trace("FILL_FIELD_REQUEST", f"field={field_id}")
         field = next(
             (f for f in runtime.model.fields if f.field_id == field_id), None
         )
         if field is None:
+            trace("FILL_FIELD_UNKNOWN", field_id)
             raise CopilotError(
                 f"unknown field {field_id!r} — rebuild the form model first"
             )
-        is_sensitive = field.field_id in runtime.sensitive
-        fill = resolve_field(
-            self._conn,
-            field,
-            runtime.profile_id,
-            context=self._context(runtime),
-            sensitive=is_sensitive,
+        # Consume the completed fill plan (D-035): the drive loop must never
+        # trigger sequential LLM requests while filling. On-demand resolve
+        # only for fields the plan does not know (recovery-added fields).
+        fill = runtime.fills.get(field_id)
+        if fill is None:
+            trace("FILL_FIELD_RESOLVING", f"field={field_id} kind={field.kind.value}")
+            fill = resolve_field(
+                self._conn,
+                field,
+                runtime.profile_id,
+                context=self._context(runtime),
+                sensitive=field.field_id in runtime.sensitive,
+            )
+            runtime.fills[field_id] = fill
+        trace(
+            "FILL_FIELD_PLAN_CONSUMED",
+            f"field={field_id} source={fill.source} filled={fill.filled} "
+            f"conf={fill.confidence} write_status={fill.write_status}",
         )
-        runtime.fills[field_id] = fill
-        action = fill_action(fill, field.kind, sensitive=is_sensitive)
+        action = fill_action(
+            fill, field.kind, sensitive=field.field_id in runtime.sensitive
+        )
         if action in ("silent", "flag"):
-            _write_field(self._controller.page, field, fill)
+            try:
+                _write_field(self._controller.page, field, fill)
+            except Exception as exc:  # noqa: BLE001 - bounded write failure
+                # D-035: one unwritable field never blocks the session.
+                fill = replace(
+                    fill,
+                    filled=False,
+                    write_status="unwritable",
+                    reason=(
+                        f"FIELD_UNWRITABLE: {type(exc).__name__}: {exc} — "
+                        "assistant continues (D-035)"
+                    ),
+                )
+                runtime.fills[field_id] = fill
+                note = "not written (FIELD_UNWRITABLE) — assistant continues"
+                trace("FILL_FIELD_UNWRITABLE", f"field={field_id}")
+                self._audit_fill(runtime, field, fill, note)
+                return fill
+            fill = replace(fill, write_status="written")
+            runtime.fills[field_id] = fill
             note = f"filled ({action})"
+            trace("FILL_FIELD_WRITTEN", f"field={field_id} action={action}")
         else:
+            fill = replace(fill, write_status="staged")
+            runtime.fills[field_id] = fill
             note = f"not written ({action}) — staged for the checkpoint"
+            trace("FILL_FIELD_STAGED", f"field={field_id} action={action}")
+        self._audit_fill(runtime, field, fill, note)
+        return fill
+
+    def _audit_fill(
+        self, runtime: AssistantRuntime, field: TypedField, fill: FieldFill, note: str
+    ) -> None:
+        """Audit + event for one fill (shared by written/unwritable paths)."""
         record_action(
             self._conn,
             runtime.session_id,
             action="fill",
-            field_id=field_id,
+            field_id=field.field_id,
             resolution=fill.resolution,
             audit_note=note,
         )
@@ -314,21 +438,31 @@ class AssistantService:
             runtime.session_id,
             "browser_session",
             payload={
-                "field_id": field_id,
+                "field_id": field.field_id,
                 "filled": fill.filled,
                 "confidence": fill.confidence,
-                "action": action,
+                "action": fill.write_status,
             },
         )
-        return fill
 
     def checkpoint(self, session_id: str | None = None) -> Checkpoint | None:
         """checkpoint: the next open §7 gate (or None when all are closed)."""
         runtime, _ = self._require_driving(session_id)
+        self._require_application(runtime)
+        trace("CHECKPOINT_EVALUATE", "")
         gate = runtime.engine.evaluate(
             list(runtime.fills.values()),
             kinds_of(runtime.model.fields),
             sensitive=runtime.sensitive,
+        )
+        trace(
+            "CHECKPOINT",
+            (
+                f"gate={gate.checkpoint_id} ({gate.type.value}, "
+                f"{len(gate.pending)} pending)"
+                if gate
+                else "no gates open"
+            ),
         )
         record_action(
             self._conn,
@@ -360,6 +494,7 @@ class AssistantService:
     ) -> BrowserSession:
         """confirm: acknowledge the current gate (submit gate never dismissible)."""
         runtime, session = self._require_driving(session_id)
+        self._require_application(runtime)
         runtime.engine.confirm(checkpoint_id, action)
         record_action(
             self._conn,
@@ -383,6 +518,7 @@ class AssistantService:
         """submit: the ONLY mutation past the gates — requires the checkpoint
         ceremony + the human gesture (ADR-002); one submission per session."""
         runtime, _ = self._require_driving(session_id)
+        self._require_application(runtime)
         runtime.guard.arm_submission(engine_authorized=runtime.engine.submit_authorized)
         runtime.guard.assert_can_submit(human_gesture=human_gesture)
         page = self._controller.page
@@ -452,6 +588,7 @@ class AssistantService:
             raise BrowserSessionError("no open browser session to abort")
         sid = session.session_id
         _runtimes.pop(sid, None)
+        trace("ABORT", f"session={sid} reason={reason}")
         aborted = self._controller.abort(reason)
         record_action(
             self._conn, sid, action="abort", target=reason, audit_note="kill-switch"
@@ -513,12 +650,39 @@ class AssistantService:
             )
         return runtime, session
 
+    def _require_application(self, runtime: AssistantRuntime) -> None:
+        """D-035: filling is only legal on a positively-classified
+        APPLICATION page. A page classified as anything else (or classified
+        by a previous form() run as non-application) stops the assistant
+        with an explainable reason. An *unclassified* runtime (form() never
+        ran) falls through — the empty model yields the existing
+        "unknown field" error instead of inventing a page kind."""
+        classification = runtime.classification
+        if (
+            classification is not None
+            and classification.kind is not PageKind.APPLICATION
+        ):
+            kind = classification.kind.value
+            raise NotApplicationPageError(
+                f"page is {kind} — not an application form; the fill "
+                "pipeline is gated to APPLICATION pages only (D-035)"
+            )
+
 
 # ------------------------------------------------------------- DOM writes
 
+# D-035: bounded actionability for every Playwright write. Playwright's
+# default is 30s — one unwritable control would otherwise stall the whole
+# session (the observed production hang). 5s is generous for a real form
+# and short enough that a stuck control degrades to FIELD_UNWRITABLE fast.
+WRITE_TIMEOUT_MS = 5_000
+
 
 def _locate(page, field: TypedField):
-    """Re-locate a control from its deterministic field_id anchor."""
+    """Re-locate a control from its deterministic field_id anchor.
+
+    Bounded (D-035): ``count()`` is a non-waiting probe; every actionable
+    call in :func:`_write_field` carries an explicit timeout."""
     anchor = field.field_id.rsplit(":", 1)[-1]
     try:
         by_id = page.locator(f"#{anchor}")
@@ -539,36 +703,39 @@ def _locate(page, field: TypedField):
 
 def _write_field(page, field: TypedField, fill: FieldFill) -> None:
     """Write the typed value into the DOM (read-only until submit: this is
-    the fill pass, not submission)."""
+    the fill pass, not submission). Every action is bounded — a stuck
+    control raises instead of hanging the session (D-035)."""
     typed = fill.resolution.get("typed_value")
     if typed is None:
         return
     if field.kind == FieldKind.SELECT:
-        _locate(page, field).select_option(typed)
+        _locate(page, field).select_option(typed, timeout=WRITE_TIMEOUT_MS)
     elif field.kind == FieldKind.RADIO:
-        page.locator(f'input[name="{field.name}"][value="{typed}"]').first.check()
+        page.locator(
+            f'input[name="{field.name}"][value="{typed}"]'
+        ).first.check(timeout=WRITE_TIMEOUT_MS)
     elif field.kind == FieldKind.CHECKBOX:
         if typed == "on":
-            _locate(page, field).check()
+            _locate(page, field).check(timeout=WRITE_TIMEOUT_MS)
         else:
-            _locate(page, field).uncheck()
+            _locate(page, field).uncheck(timeout=WRITE_TIMEOUT_MS)
     else:
-        _locate(page, field).fill(typed)
+        _locate(page, field).fill(typed, timeout=WRITE_TIMEOUT_MS)
 
 
 def _click_submit(page) -> None:
     """The single automated click of the session — only reached past the
-    checkpoint ceremony + gesture (04 §7/§10.1)."""
+    checkpoint ceremony + gesture (04 §7/§10.1). Bounded (D-035)."""
     primary = page.locator("input[type=submit], button[type=submit]").first
     if primary.count() > 0:
-        primary.click()
+        primary.click(timeout=WRITE_TIMEOUT_MS)
         return
     fallback = page.locator(
         "button:has-text('Submit'), button:has-text('Apply'), "
         "input[type=button][value*='Submit'], input[type=button][value*='Apply']"
     ).first
     if fallback.count() > 0:
-        fallback.click()
+        fallback.click(timeout=WRITE_TIMEOUT_MS)
         return
     raise BrowserError(
         "no submit control found — degrade to guidance mode (04 §9)"
@@ -632,6 +799,11 @@ def _browser_error_response(exc: CopilotError) -> JSONResponse:
     if isinstance(exc, (BrowserBusy, BrowserSessionError, CheckpointError)):
         return JSONResponse(
             status_code=409, content=_error(str(exc), type(exc).__name__)
+        )
+    if isinstance(exc, NotApplicationPageError):
+        # D-035: the page gate — assistant stopped, reason in the message.
+        return JSONResponse(
+            status_code=409, content=_error(str(exc), "NotApplicationPage")
         )
     return JSONResponse(status_code=400, content=_error(str(exc), type(exc).__name__))
 

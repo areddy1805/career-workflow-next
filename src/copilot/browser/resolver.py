@@ -55,7 +55,9 @@ class FieldFill:
 
     ``source`` / ``confidence`` / ``fingerprint`` (D-034) make the fill
     explainable: profile 1.00, deterministic 0.98, answer_bank 0.91,
-    llm 0.63.
+    llm 0.63. ``write_status`` (D-035) records the DOM write outcome:
+    ``pending`` (not yet attempted) / ``written`` / ``unwritable``
+    (bounded actionability failed — the assistant continues).
     """
 
     field_id: str
@@ -65,6 +67,7 @@ class FieldFill:
     source: str
     reason: str
     fingerprint: str = "UNKNOWN"
+    write_status: str = "pending"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -75,6 +78,7 @@ class FieldFill:
             "source": self.source,
             "reason": self.reason,
             "fingerprint": self.fingerprint,
+            "write_status": self.write_status,
         }
 
 

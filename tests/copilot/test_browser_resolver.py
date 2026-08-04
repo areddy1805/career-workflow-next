@@ -343,6 +343,7 @@ def test_field_fill_to_dict_shape(fresh_db):
         "source",
         "reason",
         "fingerprint",
+        "write_status",
     }
     assert set(data["resolution"]) == {
         "question_fp",
