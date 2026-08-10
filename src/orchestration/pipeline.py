@@ -651,6 +651,12 @@ class CareerWorkflowPipeline:
             "pages_stopped_low_yield": fetch_result.pages_stopped_low_yield,
             "stop_reasons": fetch_result.stop_reasons,
             "jobspy_health": getattr(fetch_result, "jobspy_health", {}),
+            "secondary_provider_health": getattr(
+                fetch_result, "secondary_provider_health", {}
+            ),
+            "acquisition_boundary": getattr(
+                fetch_result, "acquisition_boundary", {}
+            ),
         }
 
         self._write_artifact(

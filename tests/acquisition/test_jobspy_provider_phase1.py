@@ -111,7 +111,8 @@ class TestJobSpyProviderInstantiation:
         cfg = JobSpyConfig(sites=["google", "indeed"])
         provider = JobSpyProvider(cfg)
         summary = provider.health_summary()
-        assert set(summary.keys()) == {"google", "indeed"}
+        assert {"google", "indeed"} <= set(summary.keys())
+        assert "acquisition_boundary" in summary
 
     def test_all_configured_sites_have_cooldown_instances(self, tmp_path):
         cfg = JobSpyConfig(

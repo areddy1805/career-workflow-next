@@ -186,7 +186,9 @@ class TestHealthTracking:
     def test_health_summary_keys_match_configured_sites(self, tmp_path):
         provider = _provider(tmp_path, sites=["google", "indeed"])
         summary = provider.health_summary()
-        assert set(summary.keys()) == {"google", "indeed"}
+        assert {"google", "indeed"} <= set(summary.keys())
+        assert "acquisition_boundary" in summary
+        assert summary["acquisition_boundary"]["provider"] == "jobspy"
 
     def test_search_success_records_latency(self, tmp_path):
         provider = _provider(tmp_path, sites=["google"])

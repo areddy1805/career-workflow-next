@@ -60,6 +60,7 @@ from src.acquisition.base_provider import (
     ProviderCapabilities,
     ProviderRunMetrics,
 )
+from src.acquisition.boundaries import ProviderBoundary
 from src.application.capability import ApplicationCapabilities, ApplicationMode
 from src.exceptions.exceptions import (
     HiringCafeBuildIdError,
@@ -762,6 +763,13 @@ class HiringCafeProvider:
             config.search_state_defaults,
         )
         self._health = _ProviderHealth()
+        # Acquisition safety boundary — code-enforced hard caps.  Config may
+        # only lower these; the provider can never self-limit via config
+        # drift (18,139-job regression guard).
+        self._boundary = ProviderBoundary.hiringcafe(
+            max_pages=config.max_pages,
+            max_results_per_track=config.max_results_per_track,
+        )
 
     # ------------------------------------------------------------------
     # AcquisitionProvider contract
@@ -814,6 +822,20 @@ class HiringCafeProvider:
 
             keyword = track.get("keyword", "?")
             location = track.get("location", "?")
+
+            # Provider-level total cap: stop before issuing a fetch that
+            # would exceed the code-enforced ceiling.  Pagination can never
+            # bypass this — the boundary is checked here and inside
+            # _fetch_track on every page.
+            if self._boundary.remaining_total() <= 0:
+                self._boundary.cap_reason = "max_results_total"
+                logger.warning(
+                    "HiringCafe provider result cap reached (%d) — "
+                    "stopping further tracks at %r",
+                    self._boundary.max_results_total,
+                    keyword,
+                )
+                break
 
             print(
                 f"  [{idx}/{num_tracks}] {keyword[:30].ljust(30)}  |  "
@@ -883,6 +905,9 @@ class HiringCafeProvider:
         print(f"  {'Pages Fetched':<30}  {metrics.pages_fetched:>6}")
         print(f"  {'Jobs Retrieved':<30}  {metrics.jobs_fetched:>6}")
         print(f"  {'Normalization Failures':<30}  {metrics.normalization_failures:>6}")
+        print(f"  {'Provider Cap (hard)':<30}  {self._boundary.max_results_total:>6}")
+        print(f"  {'Dropped (provider cap)':<30}  {self._boundary.results_dropped_provider_cap:>6}")
+        print(f"  {'Cap Reason':<30}  {str(self._boundary.cap_reason or '-'):>6}")
         print(f"  {'Runtime':<30}  {t_total / 1000:.1f}s")
         print(f"  {'─' * 54}")
 
@@ -905,6 +930,7 @@ class HiringCafeProvider:
             "version": self.provider_version,
             "enabled": self.is_enabled(),
             "build_id": self._build_id,
+            "acquisition_boundary": self._boundary.to_dict(),
             **self._health.to_dict(),
         }
 
@@ -1001,17 +1027,29 @@ class HiringCafeProvider:
     def _fetch_track(
         self, search_state: dict, metrics: ProviderRunMetrics
     ) -> list[Job]:
-        """Paginate through all pages for one search state, normalize hits."""
+        """Paginate through all pages for one search state, normalize hits.
+
+        Enforcement: the per-track result cap is the CODE ceiling
+        (``boundary.max_results_per_track``), never the config value alone.
+        Pagination stops as soon as the cap is reached, so a provider
+        response larger than the cap (or retries re-yielding the same
+        oversize page) can never exceed it.
+        """
         jobs: list[Job] = []
+        per_track_cap = self._boundary.max_results_per_track or 0
+        provider_total = self._boundary.max_results_total
+        raw_hits_seen = 0
 
         for page_data in self._paginator.pages(search_state):
             metrics.pages_fetched += 1
             self._health.total_pages += 1
+            self._boundary.pages += 1
 
             page_props: dict = page_data.get("pageProps") or {}
             hits: list[dict] = page_props.get("ssrHits") or []
 
             for raw_hit in hits:
+                raw_hits_seen += 1
                 try:
                     job = self._normalizer.normalize(raw_hit)
                     
@@ -1035,11 +1073,28 @@ class HiringCafeProvider:
                         metrics.normalization_failures += 1
                         self._health.normalization_failures += 1
 
-                    cap = self.config.max_results_per_track
-                    if cap is not None and len(jobs) >= cap:
+                    # Per-track cap (code-enforced): stop mid-page as soon as
+                    # the cap is reached — an oversized page can never exceed
+                    # the cap, and retries of this page cannot either.
+                    if per_track_cap and len(jobs) >= per_track_cap:
+                        self._boundary.cap_reason = "max_results_per_track"
                         logger.info(
                             "HiringCafe per-track result cap (%d) reached for %r",
-                            cap,
+                            per_track_cap,
+                            search_state.get("searchQuery"),
+                        )
+                        break
+                    # Provider-total cap: stop fetching a track once the
+                    # remaining global provider budget is exhausted.
+                    if (
+                        provider_total is not None
+                        and self._boundary.results_accepted + len(jobs)
+                        >= provider_total
+                    ):
+                        self._boundary.cap_reason = "max_results_total"
+                        logger.info(
+                            "HiringCafe provider total cap (%d) reached for %r",
+                            provider_total,
                             search_state.get("searchQuery"),
                         )
                         break
@@ -1052,9 +1107,11 @@ class HiringCafeProvider:
                     self._health.normalization_failures += 1
 
             # Stop paginating once the per-track result cap is reached.
+            if per_track_cap and len(jobs) >= per_track_cap:
+                break
             if (
-                self.config.max_results_per_track is not None
-                and len(jobs) >= self.config.max_results_per_track
+                provider_total is not None
+                and self._boundary.results_accepted + len(jobs) >= provider_total
             ):
                 break
 
@@ -1062,6 +1119,14 @@ class HiringCafeProvider:
                 logger.info("HiringCafe verification mode active, stopping after 1 page.")
                 break
 
+        # Telemetry: received = raw hits seen across pages; accepted = the
+        # jobs that actually entered the track.  The difference is the
+        # per-track cap discard (counted, never silent).
+        self._boundary.results_received += raw_hits_seen
+        self._boundary.results_accepted += len(jobs)
+        self._boundary.results_dropped_provider_cap += max(
+            0, raw_hits_seen - len(jobs)
+        )
         return jobs
 
     def __del__(self) -> None:

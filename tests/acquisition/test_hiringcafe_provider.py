@@ -638,6 +638,75 @@ class TestHiringCafeProvider:
         assert len(jobs) == 25
         assert len({j.job_id for j in jobs}) == 25
 
+    def test_fetch_jobs_hard_ceiling_beats_config(self) -> None:
+        """Config asking for 500 results/track must be clamped to the code
+        ceiling (200) — config can never raise above the hard cap."""
+        from src.acquisition.boundaries import (
+            HARD_HIRINGCAFE_MAX_RESULTS_PER_TRACK,
+        )
+
+        cfg = HiringCafeConfig(
+            enabled=True,
+            max_pages=10,
+            max_results_per_track=500,  # config drift: too high
+            cooldown_seconds=0.0,
+        )
+        p = self._make_provider(cfg)
+        assert p._boundary.max_results_per_track == HARD_HIRINGCAFE_MAX_RESULTS_PER_TRACK
+        assert p._boundary.max_pages == 5
+
+        # 2 pages x 300 hits each = 600 raw; must stop at the code ceiling.
+        p._client.fetch_page = MagicMock(
+            side_effect=[
+                _page_response(
+                    [_raw_hit(id=f"h{i}") for i in range(300)], is_last=False
+                ),
+                _page_response(
+                    [_raw_hit(id=f"h2_{i}") for i in range(300)], is_last=False
+                ),
+            ]
+        )
+        p._paginator = p._paginator.__class__(p._fetch_page_with_retry, cfg)
+
+        jobs = p.fetch_jobs([{"keyword": "AI Engineer", "location": "Remote"}])
+        assert len(jobs) == HARD_HIRINGCAFE_MAX_RESULTS_PER_TRACK
+        # Boundary telemetry reflects the truncation.
+        boundary = p._boundary
+        assert boundary.cap_reason == "max_results_per_track"
+
+    def test_fetch_jobs_provider_total_cap_stops_later_tracks(self) -> None:
+        """Provider total cap must stop subsequent tracks before fetching."""
+        cfg = HiringCafeConfig(
+            enabled=True,
+            max_pages=1,
+            max_results_per_track=50,
+            cooldown_seconds=0.0,
+        )
+        p = self._make_provider(cfg)
+        # Force a tiny provider total cap (below config) to test the bound.
+        from src.acquisition.boundaries import ProviderBoundary
+
+        p._boundary = ProviderBoundary.hiringcafe(
+            max_pages=1,
+            max_results_per_track=50,
+            max_results_total=60,
+        )
+
+        def _page(hits):
+            return _page_response(hits, is_last=False)
+
+        p._client.fetch_page = MagicMock(
+            return_value=_page([_raw_hit(id=f"t{i}") for i in range(50)])
+        )
+        p._paginator = p._paginator.__class__(p._fetch_page_with_retry, cfg)
+
+        tracks = [{"keyword": f"kw{i}", "location": "Remote"} for i in range(5)]
+        jobs = p.fetch_jobs(tracks)
+        # Track 1 admits 50; track 2 admits 10 more then hits the provider
+        # total cap (60); tracks 3-5 never fetched.
+        assert len(jobs) == 60
+        assert p._boundary.cap_reason == "max_results_total"
+
     def test_fetch_jobs_track_failure_continues(
         self, default_config: HiringCafeConfig
     ) -> None:
