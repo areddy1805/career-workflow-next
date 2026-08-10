@@ -113,6 +113,19 @@ CANDIDATE_PROFILE = {
     "former_infosys_employee": "No",
     "edtech_experience": "No",
     # ==================================================================
+    # Education & employment facts (Phase F4: optional, explicit-None)
+    #
+    # These stay None unless the candidate supplies the facts.  When None,
+    # the matching questionnaire questions keep going to manual review —
+    # the automation never invents education history, gaps, or employer
+    # type.
+    # ==================================================================
+    "education_history": None,
+    "has_education_gap": None,
+    "education_gap_reason": None,
+    "organization_type": None,
+    "accept_direct_payroll": None,
+    # ==================================================================
     # Sensitive fields
     # ==================================================================
     # Keep these None unless you explicitly want the automation

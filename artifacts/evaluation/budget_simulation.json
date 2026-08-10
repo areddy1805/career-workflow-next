@@ -1,0 +1,195 @@
+{
+  "source_pool": "/Users/ashwinireddy/Documents/Dev/job-tools/career-workflow-next/artifacts/evaluation/eval_pool.json",
+  "pool_size": 1637,
+  "gate_survivors": 1462,
+  "gate_rejections": {
+    "OBJECTIVELY_INCOMPATIBLE": 19,
+    "EXPERIENCE_*": 33,
+    "DESC_RED_FLAG": 2,
+    "FULL_DESC_RED_FLAG": 0,
+    "NON_SOFTWARE_ROLE": 121
+  },
+  "budgets": [
+    {
+      "budget": 50,
+      "selected": 50,
+      "budget_used": 50,
+      "family": {
+        "AI_ENGINEERING": 49,
+        "AI_FDE": 1
+      },
+      "ai_depth": {
+        "d4": 44,
+        "d3": 6
+      },
+      "fde_band": {
+        "LOW": 9,
+        "NONE": 36,
+        "MEDIUM": 4,
+        "HIGH": 1
+      },
+      "ai_fde_selected": 50,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 15,
+      "excellent_fde_captured": 2,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 218,
+      "jobs_lost_to_budget": 699,
+      "routed": 517
+    },
+    {
+      "budget": 75,
+      "selected": 75,
+      "budget_used": 75,
+      "family": {
+        "AI_ENGINEERING": 73,
+        "AI_FDE": 2
+      },
+      "ai_depth": {
+        "d4": 61,
+        "d3": 14
+      },
+      "fde_band": {
+        "LOW": 13,
+        "NONE": 52,
+        "MEDIUM": 8,
+        "HIGH": 1,
+        "EXCELLENT": 1
+      },
+      "ai_fde_selected": 75,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 16,
+      "excellent_fde_captured": 5,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 191,
+      "jobs_lost_to_budget": 672,
+      "routed": 517
+    },
+    {
+      "budget": 100,
+      "selected": 100,
+      "budget_used": 100,
+      "family": {
+        "AI_ENGINEERING": 97,
+        "AI_FDE": 3
+      },
+      "ai_depth": {
+        "d4": 79,
+        "d3": 21
+      },
+      "fde_band": {
+        "LOW": 16,
+        "NONE": 73,
+        "MEDIUM": 8,
+        "HIGH": 2,
+        "EXCELLENT": 1
+      },
+      "ai_fde_selected": 100,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 16,
+      "excellent_fde_captured": 5,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 103,
+      "jobs_lost_to_budget": 541,
+      "routed": 517
+    },
+    {
+      "budget": 125,
+      "selected": 125,
+      "budget_used": 125,
+      "family": {
+        "AI_ENGINEERING": 120,
+        "AI_FDE": 5
+      },
+      "ai_depth": {
+        "d4": 97,
+        "d3": 28
+      },
+      "fde_band": {
+        "LOW": 22,
+        "NONE": 89,
+        "MEDIUM": 9,
+        "HIGH": 3,
+        "EXCELLENT": 2
+      },
+      "ai_fde_selected": 125,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 16,
+      "excellent_fde_captured": 6,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 78,
+      "jobs_lost_to_budget": 512,
+      "routed": 517
+    },
+    {
+      "budget": 150,
+      "selected": 150,
+      "budget_used": 150,
+      "family": {
+        "AI_ENGINEERING": 145,
+        "AI_FDE": 5
+      },
+      "ai_depth": {
+        "d4": 102,
+        "d3": 48
+      },
+      "fde_band": {
+        "LOW": 28,
+        "NONE": 108,
+        "MEDIUM": 9,
+        "HIGH": 3,
+        "EXCELLENT": 2
+      },
+      "ai_fde_selected": 150,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 16,
+      "excellent_fde_captured": 6,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 51,
+      "jobs_lost_to_budget": 465,
+      "routed": 517
+    },
+    {
+      "budget": 200,
+      "selected": 200,
+      "budget_used": 200,
+      "family": {
+        "AI_ENGINEERING": 193,
+        "AI_FDE": 5,
+        "FDE": 2
+      },
+      "ai_depth": {
+        "d4": 110,
+        "d3": 88,
+        "d2": 2
+      },
+      "fde_band": {
+        "LOW": 41,
+        "NONE": 140,
+        "MEDIUM": 12,
+        "HIGH": 3,
+        "EXCELLENT": 4
+      },
+      "ai_fde_selected": 200,
+      "ai_fde_precision": 1.0,
+      "excellent_ai_captured": 18,
+      "excellent_fde_captured": 11,
+      "generic_contamination_top50": 0,
+      "fp_ai_top50": 0,
+      "company_concentration_max": 2,
+      "deferred_ai_fde": 0,
+      "jobs_lost_to_budget": 401,
+      "routed": 517
+    }
+  ]
+}
