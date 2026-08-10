@@ -159,9 +159,10 @@ acquisition:
 
       # Optional default filter values applied when the SearchPlanner track
       # does not specify remote/seniority and the provider supports them.
-      # Leave empty to fetch all results without filtering.
+      # Leave empty to fetch all results without filtering. Previously forced
+      # Remote-only, dropping Office/Hybrid roles the user wants.
       search_state_defaults:
-        workplaceTypes: ["Remote"]
+        workplaceTypes: []
         seniorityLevels: []     # e.g. ["SENIOR", "STAFF", "PRINCIPAL"]
 
 job_policy:

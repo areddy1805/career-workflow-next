@@ -626,6 +626,10 @@ def fetch_all_jobs(
     stop_reasons: dict[str, int] = {}
     min_new_yield = int(os.getenv("SEARCH_MIN_NEW_JOBS_PER_PAGE", "2"))
     low_yield_patience = int(os.getenv("SEARCH_LOW_YIELD_PATIENCE", "1"))
+    # Phase E: global cap on Naukri HTTP requests. Expanded query set
+    # (multi-location × titles) must stay bounded — challenge cooldown and
+    # low-yield exits still apply, this is the backstop.
+    max_requests = int(os.getenv("SEARCH_MAX_REQUESTS", "400"))
 
     total_searches = len(SEARCH_TRACKS) * len(EXPERIENCE_LEVELS) * PAGES
 
@@ -639,15 +643,22 @@ def fetch_all_jobs(
     for query in SEARCH_TRACKS:
         if challenge_encountered:
             break
+        if stop_reasons.get("max_requests"):
+            break
 
         for exp in EXPERIENCE_LEVELS:
             if challenge_encountered:
+                break
+            if stop_reasons.get("max_requests"):
                 break
 
             previous_page_signature: tuple[str, ...] | None = None
             consecutive_low_yield = 0
 
             for page in range(1, PAGES + 1):
+                if search_requests_attempted >= max_requests:
+                    stop_reasons["max_requests"] = stop_reasons.get("max_requests", 0) + 1
+                    break
                 search_index += 1
                 query_start = time.perf_counter()
                 try:
@@ -729,6 +740,12 @@ def fetch_all_jobs(
                             job,
                             "matched_technology",
                             query.get("matched_technology", ""),
+                        )
+
+                        setattr(
+                            job,
+                            "search_profile",
+                            query.get("search_profile", "unknown"),
                         )
 
                         setattr(

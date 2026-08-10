@@ -106,6 +106,12 @@ class JobSpySearchPlanner:
             providers = profile_data.get("providers", ["google", "indeed", "linkedin"])
             priority = profile_data.get("priority", 50)
 
+            # Budgets in config were dead config — enforce them here so a
+            # config change cannot silently explode query volume.
+            max_queries = int(profile_data.get("max_queries", 250))
+            max_titles = int(profile_data.get("max_titles", 15))
+            max_frameworks = int(profile_data.get("max_frameworks", 8))
+
             # Map priority to tracking tier
             if priority >= 100:
                 track = "TIER_S"
@@ -117,10 +123,11 @@ class JobSpySearchPlanner:
                 track = "TIER_C"
 
             layers = profile_data.get("layers", {})
-            roles = layers.get("roles", [])
-            frameworks = layers.get("frameworks", [])
+            roles = layers.get("roles", [])[:max_titles]
+            frameworks = layers.get("frameworks", [])[:max_frameworks]
             platforms = layers.get("platforms", [])
             negative_keywords = profile_data.get("negative_keywords", [])
+            profile_count = 0
 
             for provider in providers:
                 strategy = self.strategies.get(provider, GoogleStrategy())
@@ -136,6 +143,9 @@ class JobSpySearchPlanner:
                     for term in terms:
                         fmt_keyword = strategy.format_query(term, negative_keywords)
                         for loc in locations:
+                            if profile_count >= max_queries:
+                                break
+                            profile_count += 1
                             all_queries.append(
                                 JobSpyQuery(
                                     keyword=fmt_keyword,
@@ -146,5 +156,11 @@ class JobSpySearchPlanner:
                                     layer=layer_name,
                                 )
                             )
+                        if profile_count >= max_queries:
+                            break
+                    if profile_count >= max_queries:
+                        break
+                if profile_count >= max_queries:
+                    break
 
         return all_queries

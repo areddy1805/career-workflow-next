@@ -787,6 +787,18 @@ class HiringCafeProvider:
         )
 
         all_jobs: list[Job] = []
+        # Phase E: HiringCafe ignores the location field (searches all
+        # regions), so dedupe tracks by keyword — otherwise the expanded
+        # multi-location query set would triple identical fetches.
+        seen_keywords: set[str] = set()
+        deduped = []
+        for track in search_tracks:
+            kw = track.get("keyword", "") or ""
+            if kw in seen_keywords:
+                continue
+            seen_keywords.add(kw)
+            deduped.append(track)
+        search_tracks = deduped
         num_tracks = len(search_tracks)
 
         for idx, track in enumerate(search_tracks, start=1):
@@ -807,6 +819,12 @@ class HiringCafeProvider:
             try:
                 search_state = self._search_state_builder.build(track)
                 track_jobs = self._fetch_track(search_state, metrics)
+                for _job in track_jobs:
+                    setattr(
+                        _job,
+                        "search_profile",
+                        str(track.get("search_profile") or "unknown"),
+                    )
                 all_jobs.extend(track_jobs)
                 self._health.successful_tracks += 1
                 duration = time.perf_counter() - track_start
@@ -1001,6 +1019,11 @@ class HiringCafeProvider:
                         
                     if job is not None:
                         setattr(job, "acquisition_source", "live")
+                        setattr(
+                            job,
+                            "search_query",
+                            str(search_state.get("searchQuery") or ""),
+                        )
                         jobs.append(job)
                     else:
                         metrics.normalization_failures += 1
