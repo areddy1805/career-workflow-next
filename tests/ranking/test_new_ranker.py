@@ -25,6 +25,21 @@ def test_ai_depth_tiers():
     assert nr.detect_ai_depth("Java Full Stack Developer", [], "Java Spring, React, LLM integration, RAG, LangChain, vector db")[0] <= 2
     assert nr.detect_ai_depth("QA Automation Tester", [], "GenAI, LLM, RAG, agents, Claude, LangChain")[0] == 1
     assert nr.detect_ai_depth("Java Developer", [], "Spring Boot, Hibernate, MySQL")[0] == 0
+    # Fresh-pool regression: test-engineer titles must never reach AI depth 3-4
+    # even when the JD is AI-keyword-heavy (Phase F6 finding).
+    assert nr.detect_ai_depth("Senior Test Engineer", [], "Selenium, automation, LLM testing, GenAI agents, RAG")[0] <= 1
+    assert nr.detect_ai_depth("Software Test Engineer - 2 To 5 Yrs", [], "QA, automation, GenAI, LLM, RAG")[0] <= 1
+
+
+def test_hardware_title_never_fde():
+    # Phase F6 finding: ASIC/chip "implementation" roles are hardware, not
+    # customer-deployment engineering.
+    band, _, _ = nr.detect_fde(
+        "AI/ML Driven ASIC Design and Implementation",
+        "Chip design, RTL, Verilog, synthesis",
+    )
+    assert band == "NONE"
+    assert nr.detect_fde("Forward Deployed Engineer", "Deploy solutions to customer, production adoption")[0] == "EXCELLENT"
 
 
 def test_fde_band_evidence():

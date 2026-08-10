@@ -140,6 +140,7 @@ GENERIC_STACK = {
 # matter how many AI keywords the JD contains (fires on title alone).
 NON_AI_ENG_TITLE = {"qa", "test automation", "automation test", "testing", "tester", "rpa",
                      "automation engineer", "quality assurance", "sdet",
+                     "test engineer", "software test", "qa engineer",
                      "iics", "etl developer", "erpnext", "odoo", "sap",
                      "support engineer", "technical support", "packaged",
                      "saas application", "field service", "customer support"}
@@ -290,6 +291,11 @@ def detect_fde(title: str, description: str) -> tuple[str, List[str], List[str]]
     if any(k in anti_text for k in FDE_ANTI) or (
         "customer engineer" in title_l and ("schemat" in desc_l or "field service" in desc_l)
     ):
+        return "NONE", [], []
+
+    # Hardware/chip-design roles with "implementation" in the title are
+    # ASIC/board implementation, not customer-deployment engineering.
+    if any(hw in title_l for hw in ("asic", "vlsi", "chip", "fpga", "soc", "rtl", "verilog", "hardware")):
         return "NONE", [], []
 
     evidence = desc_strong + title_strong
