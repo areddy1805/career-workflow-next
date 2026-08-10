@@ -265,6 +265,30 @@ class TestSchedulerAccountingRegression:
         assert "not submitted" in summary.errors[0]
         assert lifecycle.current_state("phantom1") == JobState.APPLICATION_FAILED
 
+    def test_auto_dry_run_skip_not_submitted_not_failure(self, tmp_path):
+        """A SKIPPED outcome (dry-run) must be neither a submission nor an
+        error — the V2 apply path used to POST apply_job in dry-run and
+        only skip the questionnaire resolver."""
+        from src.application.outcome import ApplicationOutcome, ApplicationStatus
+
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("dry1", title="Engineer", company="Acme")
+        scheduler, repo, _ = self._scheduler(
+            tmp_path,
+            lambda opp: ApplicationOutcome(
+                status=ApplicationStatus.SKIPPED,
+                job_id=opp.job_id,
+                response={},
+                reasoning="Dry run mode is enabled",
+            ),
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["dry1"]))
+        assert summary.auto_applied == 0
+        assert summary.auto_already_applied == 0
+        assert summary.dry_run_skipped == 1
+        assert summary.errors == []
+
     def test_auto_already_applied_not_counted_as_submitted(self, tmp_path):
         """A job already applied on the server is not a new submission."""
         lifecycle = JobLifecycleStore(":memory:")

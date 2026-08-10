@@ -1430,6 +1430,37 @@ class CareerWorkflowPipeline:
                     f"expected AUTO — {resolution.reasoning}"
                 )
 
+            # Dry-run: never touch the provider.  Ranking/selection/planning
+            # all ran; only the actual submission is suppressed.  This is a
+            # hard safety boundary — the V2 path must not POST apply_job in
+            # dry-run the way it previously did (it only skipped the
+            # questionnaire resolver, which still submitted initial applies
+            # before crashing on qr=None).
+            if self.context.dry_run:
+                from src.application.outcome import (
+                    ApplicationOutcome,
+                    ApplicationStatus,
+                )
+
+                if self.exec_context:
+                    self.exec_context.skip(
+                        opp,
+                        reason="Dry run mode is enabled",
+                        code="DRY_RUN",
+                    )
+                if self.context.ledger:
+                    self.context.ledger.record(
+                        opp,
+                        "dry_run_suppressed",
+                        meta=meta,
+                    )
+                return ApplicationOutcome(
+                    status=ApplicationStatus.SKIPPED,
+                    job_id=opp.job_id,
+                    response={},
+                    reasoning="Dry run mode is enabled",
+                )
+
             # Build questionnaire resolver for live mode
             qr = None
             if not self.context.dry_run:
@@ -1551,7 +1582,7 @@ class CareerWorkflowPipeline:
             "skipped_local": 0,
             "unsupported": 0,
             "policy_rejected": 0,
-            "dry_run_skipped": 0,
+            "dry_run_skipped": summary.dry_run_skipped,
             "run_limit_reached": 0,
             "generic_queue": 0,
             "auto_applied": summary.auto_applied,
