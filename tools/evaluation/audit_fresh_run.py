@@ -132,6 +132,43 @@ def main(run_id: str):
         )
     print()
 
+    print("=== RANKS 21-50 ===")
+    for i, r in enumerate(rows[20:50], 21):
+        print(
+            f"{i:>3} {r['score']:6.2f} {r['family']:<18} d{r['depth']} "
+            f"{r['fde_band']:<9} {r['title'][:40]:<40} @ {r['company'][:20]}"
+        )
+    print()
+
+    print("=== RANKS 51-100 (AI/FDE only) ===")
+    shown = 0
+    for i, r in enumerate(rows[50:100], 51):
+        if r["family"] in ("AI_ENGINEERING", "AI_FDE", "FDE"):
+            print(
+                f"{i:>3} {r['score']:6.2f} {r['family']:<18} d{r['depth']} "
+                f"{r['fde_band']:<9} {r['title'][:40]:<40} @ {r['company'][:20]}"
+            )
+            shown += 1
+            if shown >= 15:
+                break
+    print()
+
+    print("=== HIGHEST-RANKED BY CATEGORY ===")
+    for label, fam in (
+        ("deferred AI/FDE", ("AI_ENGINEERING", "AI_FDE", "FDE")),
+        ("GENERIC", ("GENERIC_ENGINEERING",)),
+        ("false-positive-ai-ish (AI_ADJACENT w/ noise)", ("AI_ADJACENT",)),
+        ("FDE", ("FDE",)),
+    ):
+        for i, r in enumerate(rows):
+            if r["family"] in fam:
+                print(
+                    f"{label:<40} rank {i+1:>4} {r['score']:6.2f} "
+                    f"d{r['depth']} {r['fde_band']:<9} {r['title'][:38]:<38} @ {r['company'][:18]}"
+                )
+                break
+    print()
+
     # F7 checks
     print("=== F7 QUALITY GATES ===")
     # 1: excellent-AI not trapped below generic

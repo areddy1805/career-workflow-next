@@ -15,6 +15,7 @@ then orders the pool by this score exactly as before (unchanged sort).
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 # ---------------------------------------------------------------------------
@@ -189,8 +190,10 @@ def _text(*parts: Any) -> str:
 
 def _count(text: str, table: set[str]) -> List[str]:
     found = []
+    tl = text.lower()
     for kw in table:
-        if kw in text:
+        # Word-boundary match: "rag" must not match inside "storage".
+        if re.search(r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])", tl):
             found.append(kw)
     return found
 
@@ -295,7 +298,9 @@ def detect_fde(title: str, description: str) -> tuple[str, List[str], List[str]]
 
     # Hardware/chip-design roles with "implementation" in the title are
     # ASIC/board implementation, not customer-deployment engineering.
-    if any(hw in title_l for hw in ("asic", "vlsi", "chip", "fpga", "soc", "rtl", "verilog", "hardware")):
+    # Also fire on the description: "Associate Engineer" @ Western Digital
+    # is NAND/FPGA hardware despite a generic title (Phase F6 finding).
+    if any(hw in text for hw in ("asic", "vlsi", "chip", "fpga", "soc", "rtl", "verilog", "hardware", "nand flash")):
         return "NONE", [], []
 
     evidence = desc_strong + title_strong
