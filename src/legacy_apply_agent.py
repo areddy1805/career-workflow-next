@@ -1667,9 +1667,21 @@ def run_application_batch(
         # ----------------------------------------------------------
         # Resume Routing Engine
         # ----------------------------------------------------------
-        resume_routing = resume_router.route(
-            job.to_dict() if hasattr(job, "to_dict") else vars(job)
-        )
+        # Phase F3: prefer the deterministic ranker's role_family (stored in
+        # meta during selection) so AI_FDE roles get the AI resume and pure
+        # FDE roles get the customer-deployment resume.  Fall back to the
+        # legacy keyword router when the analysis is absent.
+        rank_analysis = meta.get("deterministic_rank") or {}
+        family = rank_analysis.get("role_family")
+        if family:
+            resume_routing = resume_router.route_from_family(
+                family=family,
+                ai_depth=rank_analysis.get("ai_depth", 0),
+            )
+        else:
+            resume_routing = resume_router.route(
+                job.to_dict() if hasattr(job, "to_dict") else vars(job)
+            )
         meta["resume_type"] = resume_routing["resume_type"]
         meta["resume_reason"] = resume_routing["resume_reason"]
         meta["resume_score_ai"] = resume_routing["resume_score_ai"]

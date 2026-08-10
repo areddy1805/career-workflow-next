@@ -1473,6 +1473,24 @@ class CareerWorkflowPipeline:
                     self._qr = qr
 
             resume_path = meta.get("resume_path", "")
+            # Phase F3: route the resume from the deterministic ranker's
+            # role_family/ai_depth — not the legacy keyword-only ResumeRouter.
+            # AI_FDE is an AI role first (it deploys AI to customers); FDE is
+            # the customer-deployment profile. Falls back to the configured
+            # resume path if the analysis is missing.
+            rank_analysis = meta.get("deterministic_rank") or {}
+            family = rank_analysis.get("role_family")
+            from src.application.resume_router import ResumeRouter
+
+            if family and not resume_path:
+                _router = ResumeRouter()
+                _routed = _router.route_from_family(
+                    family=family,
+                    ai_depth=rank_analysis.get("ai_depth", 0),
+                )
+                resume_path = _routed["resume_path"]
+                meta["resume_type"] = _routed["resume_type"]
+                meta["resume_reason"] = _routed["resume_reason"]
             return process_job_application(
                 jc=jc,
                 job=job,
