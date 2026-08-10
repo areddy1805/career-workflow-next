@@ -104,6 +104,10 @@ class HiringCafeConfig:
     cooldown_seconds: float = 1.0
     # None = unlimited, paginate until ssrIsLastPage is true.
     max_pages: int | None = None
+    # Maximum normalized jobs to keep per search track (None = unlimited).
+    # HiringCafe SSR returns ~80 jobs/page, so max_pages alone does not
+    # bound volume; this caps actual per-track yield.
+    max_results_per_track: int | None = None
     # Optional YAML-configured defaults for filter fields.
     # Example: {"workplaceTypes": ["REMOTE"], "seniorityLevels": ["SENIOR"]}
     search_state_defaults: dict = field(default_factory=dict)
@@ -119,6 +123,8 @@ class HiringCafeConfig:
             raise HiringCafeConfigError("backoff_factor must be >= 0")
         if self.cooldown_seconds < 0:
             raise HiringCafeConfigError("cooldown_seconds must be >= 0")
+        if self.max_results_per_track is not None and self.max_results_per_track < 1:
+            raise HiringCafeConfigError("max_results_per_track must be >= 1")
 
     @classmethod
     def from_dict(cls, raw: dict) -> "HiringCafeConfig":
@@ -1028,6 +1034,15 @@ class HiringCafeProvider:
                     else:
                         metrics.normalization_failures += 1
                         self._health.normalization_failures += 1
+
+                    cap = self.config.max_results_per_track
+                    if cap is not None and len(jobs) >= cap:
+                        logger.info(
+                            "HiringCafe per-track result cap (%d) reached for %r",
+                            cap,
+                            search_state.get("searchQuery"),
+                        )
+                        break
                 except Exception as exc:
                     logger.warning(
                         "HiringCafe normalization error: %s\nHit schema keys: %s", 
@@ -1035,7 +1050,14 @@ class HiringCafeProvider:
                     )
                     metrics.normalization_failures += 1
                     self._health.normalization_failures += 1
-                    
+
+            # Stop paginating once the per-track result cap is reached.
+            if (
+                self.config.max_results_per_track is not None
+                and len(jobs) >= self.config.max_results_per_track
+            ):
+                break
+
             if self.config.verification_mode:
                 logger.info("HiringCafe verification mode active, stopping after 1 page.")
                 break

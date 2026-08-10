@@ -156,6 +156,17 @@ class TestHiringCafeConfig:
         with pytest.raises(HiringCafeConfigError, match="cooldown_seconds"):
             HiringCafeConfig(cooldown_seconds=-0.1)
 
+    def test_invalid_max_results_raises(self) -> None:
+        with pytest.raises(HiringCafeConfigError, match="max_results_per_track"):
+            HiringCafeConfig(max_results_per_track=0)
+
+    def test_from_dict_accepts_max_results_per_track(self) -> None:
+        cfg = HiringCafeConfig.from_dict(
+            {"max_results_per_track": 50, "max_pages": 2}
+        )
+        assert cfg.max_results_per_track == 50
+        assert cfg.max_pages == 2
+
 
 # ---------------------------------------------------------------------------
 # _BuildIdResolver
@@ -598,6 +609,34 @@ class TestHiringCafeProvider:
         assert len(jobs) == 1
         assert jobs[0].job_id == "hiringcafe_h1"
         assert getattr(jobs[0], "acquisition_source", None) == "live"
+
+    def test_fetch_jobs_max_results_per_track_cap(self) -> None:
+        # 3 pages x 20 hits each, cap 25 -> must stop early and never
+        # collect more than the cap (18k-job overflow regression).
+        cfg = HiringCafeConfig(
+            enabled=True,
+            max_pages=5,
+            max_results_per_track=25,
+            cooldown_seconds=0.0,
+        )
+        p = self._make_provider(cfg)
+
+        def _page(hits):
+            return _page_response(hits, is_last=False)
+
+        p._client.fetch_page = MagicMock(
+            side_effect=[
+                _page([_raw_hit(id=f"p0_{i}") for i in range(20)]),
+                _page([_raw_hit(id=f"p1_{i}") for i in range(20)]),
+                _page([_raw_hit(id=f"p2_{i}") for i in range(20)]),
+            ]
+        )
+        p._paginator = p._paginator.__class__(p._fetch_page_with_retry, cfg)
+
+        jobs = p.fetch_jobs([{"keyword": "AI Engineer", "location": "Remote"}])
+        # 20 (page 0) + 5 more (page 1) = cap reached; page 2 never fetched.
+        assert len(jobs) == 25
+        assert len({j.job_id for j in jobs}) == 25
 
     def test_fetch_jobs_track_failure_continues(
         self, default_config: HiringCafeConfig
