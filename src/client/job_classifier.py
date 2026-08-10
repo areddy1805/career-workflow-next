@@ -243,6 +243,22 @@ class JobFilterPipeline2:
         "mts",
         "programmer",
         "react",
+        # AI-context titles that are genuine software/AI roles but do not
+        # contain the generic software tokens (AI/ML Expert, AI Data
+        # Specialist, Solution Architect-Azure+AI, ML Scientist, etc.).
+        "specialist",
+        "expert",
+        "architect",
+        "scientist",
+        "consultant",
+        "researcher",
+        "analyst",
+        "data",
+        "ml",
+        "ai",
+        "llm",
+        "genai",
+        "nlp",
     }
 
     # if ANY of these appear in title → drop it
@@ -376,7 +392,7 @@ class JobFilterPipeline2:
 
     def __init__(
         self,
-        daily_apply_limit: int = 500,
+        daily_apply_limit: int = 50,
         min_apply_score: int = 75,
         ai_score_limit: int = 300,
         batch_size: int = 5,

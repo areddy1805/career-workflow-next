@@ -208,9 +208,10 @@ class CandidateFeatureSuite:
                         "tensorflow", "pytorch", "langchain", "openai", "huggingface"]
         swe_indicators = [".net", "c#", "asp.net", "entity framework", "winforms",
                          "sql server", "vb.net", "sharepoint", "dynamics",
-                         "support", "field service", "desktop support",
-                         "technical support", "customer success",
-                         "business development", "implementation"]
+                         "desktop support", "technical support",
+                         "business development", "helpdesk"]
+        # ponytail: implementation/customer success/field service are LEGITIMATE
+        # FDE signals (deploying to customers), not general-SWE penalties.
 
         has_ai = any(kw in ai_kw_text for kw in ai_indicators)
         has_swe_only = any(kw in tech_text for kw in swe_indicators)
