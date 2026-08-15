@@ -825,27 +825,30 @@ MAX_ROLE_FAMILY_PER_COMPANY=1
 
 ## 13. Quick Start
 
-Start the backend API server:
+Start the backend API server (development, port **8090**):
 ```bash
-uvicorn api.main:app --reload
+.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8090 --reload
 ```
 
-New coopilot server
-```bash
-PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" .venv/bin/uvicorn api.main:app --port 8090
-```
-or
-```bash
-PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright" \
-python -m uvicorn api.main:app --port 8091
-```
+> **Port note:** the backend must run on **8090** — the Vite dev server proxies `/api` to `http://127.0.0.1:8090` (`frontend/vite.config.ts`). Do not use the uvicorn default (8000): that port is reserved for the local OMLX LLM server (`OMLX_BASE_URL`).
+> If Playwright browsers are needed (copilot ingestion), prepend `PLAYWRIGHT_BROWSERS_PATH="$PWD/.playwright"`.
 
-In a new terminal window, start the React frontend:
+In a new terminal window, start the React frontend (port **5173**):
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+
+### Ports (development)
+
+| Service | Port |
+|---|---|
+| Backend API (uvicorn `api.main:app`) | `8090` |
+| Frontend (Vite dev server) | `5173` |
+| Local LLM (OMLX, `OMLX_BASE_URL`) | `8000` |
+
+Verify the stack: open `http://localhost:5173/`, or check `http://localhost:5173/api/copilot/health` (proxied to the backend) returns `{"ok": true, ...}`.
 
 ---
 
