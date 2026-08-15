@@ -420,7 +420,7 @@ export default function Jobs() {
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
           {/* Data Grid */}
-          <ResizablePanel defaultSize={selectedJobId ? 58 : 100} minSize={30} className="relative flex flex-col bg-card">
+          <ResizablePanel defaultSize={selectedJobId ? 58 : 100} minSize={30} className="relative flex flex-col bg-surface">
             <div ref={parentRef} className="flex-1 overflow-auto relative">
               {rows.length === 0 && !isLoading ? (
                 <EmptyState
@@ -577,7 +577,7 @@ export default function Jobs() {
                 defaultSize={42}
                 minSize={28}
                 maxSize={58}
-                className="bg-card border-l border-border/50 flex flex-col relative z-20"
+                className="bg-surface border-l border-border/50 flex flex-col relative z-20"
               >
                 {/* Detail Header */}
                 <div className="h-11 border-b border-border/40 flex items-center justify-between px-4 bg-secondary/20 shrink-0">

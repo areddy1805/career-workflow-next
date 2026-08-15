@@ -3,6 +3,7 @@ import { fetchSettings } from '@/lib/api';
 import { Moon, Sun } from 'lucide-react';
 import { usePreferences } from '@/store/preferences';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 export default function Configuration() {
   const { data: settings, isLoading } = useQuery({
@@ -13,7 +14,7 @@ export default function Configuration() {
   const { theme, setTheme } = usePreferences();
 
   if (isLoading) {
-    return <div className="p-4 text-sm text-muted-foreground animate-pulse">Loading configuration...</div>;
+    return <div className="p-4 max-w-4xl"><GridSkeleton rows={5} /></div>;
   }
 
   return (

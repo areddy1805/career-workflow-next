@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Activity, CheckCircle2, Layers, Target } from 'lucide-react';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 // ─── Label Maps ──────────────────────────────────────────────────────────────
 
@@ -77,15 +78,7 @@ export default function Analytics() {
   if (isLoading) {
     return (
       <div className="h-full flex flex-col bg-background p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted w-1/4 rounded" />
-          <div className="grid grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-muted rounded-lg" />)}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {[1, 2].map(i => <div key={i} className="h-72 bg-muted rounded-lg" />)}
-          </div>
-        </div>
+        <GridSkeleton rows={5} />
       </div>
     );
   }

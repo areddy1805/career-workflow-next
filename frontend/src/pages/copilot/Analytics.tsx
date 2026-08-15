@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAnalytics } from '@/lib/hooks';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import type {
   AnalyticsData,
   FunnelConversions,
@@ -79,10 +80,8 @@ export default function Analytics() {
       <div className="flex-1 overflow-auto pb-8">
         <div className="max-w-5xl mx-auto space-y-5 pb-8">
           {analytics.isLoading && (
-            <div className="space-y-5" aria-label="Loading analytics">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-36 bg-muted/50 rounded-md animate-pulse" />
-              ))}
+            <div aria-label="Loading analytics">
+              <GridSkeleton rows={4} />
             </div>
           )}
 

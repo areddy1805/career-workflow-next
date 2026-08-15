@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { RelativeTime } from '@/components/RelativeTime';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 // ─── Reusable data row ────────────────────────────────────────────────────────
 
@@ -69,11 +70,8 @@ export default function Runtime() {
 
   if (isLoading) {
     return (
-      <div className="h-full p-6 animate-pulse space-y-5 max-w-4xl">
-        <div className="h-5 w-36 bg-muted rounded" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1,2,3].map(i => <div key={i} className="h-32 bg-muted rounded-lg" />)}
-        </div>
+      <div className="h-full p-6 max-w-4xl">
+        <GridSkeleton rows={5} />
       </div>
     );
   }

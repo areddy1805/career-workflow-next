@@ -8,6 +8,7 @@ import {
   useLogsLedger,
 } from '@/lib/hooks';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 type LogTab = 'pipeline' | 'runtime' | 'eventbus' | 'errors' | 'warnings' | 'ledger';
 
@@ -75,16 +76,16 @@ export default function Logs() {
 
       <div role="tabpanel" id={`log-panel-${activeTab}`} className="flex-1 bg-console overflow-auto p-4 flex flex-col-reverse">
         {activeTabData?.loading ? (
-          <div className="text-muted-foreground font-mono text-xs animate-pulse">Loading logs...</div>
+          <GridSkeleton rows={6} />
         ) : logLines.length > 0 ? (
           <div className="font-mono text-[11px] leading-[1.6] space-y-1">
             {logLines.map((line, idx) => {
               // Basic colorization based on log levels if they exist in the string
-              let colorClass = "text-gray-300";
+              let colorClass = "text-console-foreground";
               if (line.includes('ERROR') || line.includes('CRITICAL')) colorClass = "text-failed";
               else if (line.includes('WARN')) colorClass = "text-degraded";
               else if (line.includes('INFO')) colorClass = "text-running";
-              else if (line.includes('DEBUG')) colorClass = "text-gray-500";
+              else if (line.includes('DEBUG')) colorClass = "text-console-foreground/60";
               
               return (
                 <div key={idx} className={`whitespace-pre-wrap break-all ${colorClass}`}>

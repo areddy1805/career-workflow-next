@@ -107,7 +107,7 @@ const STATUS_META: Record<FillStatus, { label: string; className: string }> = {
   },
   sensitive: {
     label: 'sensitive',
-    className: 'border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    className: 'border-failed/40 bg-failed/10 text-failed',
   },
   upload: {
     label: 'upload',
@@ -563,7 +563,7 @@ const ACTION_COLOR: Record<string, string> = {
   open: 'text-running',
   form: 'text-running',
   guidance: 'text-pending',
-  submit: 'text-rose-600 dark:text-rose-400',
+  submit: 'text-failed',
   abort: 'text-failed',
 };
 

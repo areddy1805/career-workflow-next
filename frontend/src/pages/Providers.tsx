@@ -2,6 +2,7 @@ import { useProviders } from '@/lib/hooks';
 import { Server, CheckCircle2, XCircle, Clock, Activity } from 'lucide-react';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { cn } from '@/lib/utils';
 import { RelativeTime } from '@/components/RelativeTime';
 import { StatRow } from '@/components/operations/StatRow';
@@ -52,11 +53,7 @@ export default function Providers() {
 
       <div className="flex-1 overflow-auto pb-8">
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-muted/50 rounded-md h-[280px] animate-pulse"></div>
-            ))}
-          </div>
+          <div className="max-w-4xl"><GridSkeleton rows={5} /></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {providers?.map((provider: any) => (

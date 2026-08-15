@@ -23,6 +23,7 @@ import type { StoredAnswer } from '@/lib/types/copilot';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { Panel, PanelHeader } from '@/components/operations/Panel';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 // ─── Frozen constants (docs/application_copilot) ─────────────────────────────
 // Profile set (06_ANSWER_BANK.md §5), AnswerStatus vocabulary (§3/§6),
@@ -458,10 +459,8 @@ export default function Learning() {
               )}
 
               {answersQ.isLoading && (
-                <div className="space-y-3" aria-label="Loading answers">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-24 bg-muted/50 rounded-md animate-pulse" />
-                  ))}
+                <div aria-label="Loading answers">
+                  <GridSkeleton rows={3} />
                 </div>
               )}
 

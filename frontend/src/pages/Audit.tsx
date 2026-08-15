@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuditPipeline, useAuditFilters, useAuditRanking, useAuditSystem } from '@/lib/hooks';
 import { FileJson } from 'lucide-react';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 type AuditTab = 'pipeline' | 'filters' | 'ranking' | 'system';
 
@@ -67,11 +68,7 @@ export default function Audit() {
           
           <div className="bg-surface border border-border/50 rounded-lg p-4 overflow-auto">
             {activeTabData?.loading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-4 bg-muted w-1/4 rounded"></div>
-                <div className="h-4 bg-muted w-1/2 rounded"></div>
-                <div className="h-4 bg-muted w-1/3 rounded"></div>
-              </div>
+              <GridSkeleton rows={3} />
             ) : (
               <pre className="text-[11px] font-mono leading-relaxed text-foreground/90">
                 {JSON.stringify(activeTabData?.data, null, 2) || 'No data available'}

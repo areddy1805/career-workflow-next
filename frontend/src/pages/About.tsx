@@ -13,7 +13,7 @@ export default function About() {
       <div className="flex-1 overflow-auto bg-muted/5 p-6 flex items-center justify-center">
         <div className="max-w-md w-full bg-surface border border-border/50 rounded-md p-8 text-center space-y-6">
           <div>
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
+            <div className="w-16 h-16 bg-primary/10 rounded-md flex items-center justify-center mx-auto mb-4 border border-primary/20">
               <span className="text-2xl font-black tracking-tighter text-primary">
                 CW
               </span>

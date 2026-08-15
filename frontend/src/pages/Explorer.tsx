@@ -56,7 +56,7 @@ export default function Artifacts() {
       <div className="flex-1 overflow-hidden rounded-md border border-border">
         <ResizablePanelGroup direction="horizontal">
           {/* Left: Run List */}
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="bg-card flex flex-col">
+          <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="bg-surface flex flex-col">
             <div className="h-10 border-b flex items-center px-4 bg-secondary/30 shrink-0">
               <Database className="w-3.5 h-3.5 text-muted-foreground mr-2" />
               <span className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Runs ({artifacts.length})</span>
@@ -101,7 +101,7 @@ export default function Artifacts() {
           <ResizableHandle withHandle className="bg-border/50 hover:bg-primary/50 transition-colors w-1" />
 
           {/* Middle: File List */}
-          <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-card flex flex-col border-r border-border/50">
+          <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-surface flex flex-col border-r border-border/50">
             <div className="h-10 border-b flex items-center px-4 bg-secondary/30 shrink-0">
               <FileJson className="w-3.5 h-3.5 text-muted-foreground mr-2" />
               <span className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
@@ -146,7 +146,7 @@ export default function Artifacts() {
           <ResizableHandle withHandle className="bg-border/50 hover:bg-primary/50 transition-colors w-1" />
 
           {/* Right: File Content */}
-          <ResizablePanel defaultSize={60} className="bg-card flex flex-col relative z-20">
+          <ResizablePanel defaultSize={60} className="bg-surface flex flex-col relative z-20">
             {selectedFile && selectedRunId ? (
               <>
                 <div className="px-3 border-b h-10 flex items-center justify-between bg-secondary/10 shrink-0">

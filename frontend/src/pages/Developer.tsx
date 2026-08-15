@@ -1,17 +1,16 @@
 import { useDeveloper } from '@/lib/hooks';
-import { Zap, Activity, Cpu, Network, Package } from 'lucide-react';
+import { Activity, Cpu, Network, Package } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 export default function Developer() {
   const { data: devData, isLoading } = useDeveloper();
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground text-sm font-mono flex items-center gap-2">
-          <Zap className="w-4 h-4 text-primary" /> Booting Developer Console...
-        </div>
+      <div className="h-full flex items-center justify-center bg-background p-6">
+        <div className="w-full max-w-2xl"><GridSkeleton rows={4} /></div>
       </div>
     );
   }
