@@ -172,6 +172,7 @@ function QueryBrowser({ queries }: { queries: any[] }) {
         <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Filter active queries…"
+          aria-label="Filter queries"
           value={filter}
           onChange={e => setFilter(e.target.value)}
           className="h-8 text-[11px] bg-background/50 border-0 focus-visible:ring-0 flex-1 p-0 placeholder:text-muted-foreground/50 shadow-none font-mono"

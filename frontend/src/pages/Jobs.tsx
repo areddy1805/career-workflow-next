@@ -408,6 +408,7 @@ export default function Jobs() {
           <Filter className="w-3 h-3 text-muted-foreground" />
           <Input
             placeholder="Filter…"
+            aria-label="Filter jobs"
             value={globalFilter ?? ''}
             onChange={e => setGlobalFilter(e.target.value)}
             className="h-7 w-52 text-xs bg-transparent border-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/50"

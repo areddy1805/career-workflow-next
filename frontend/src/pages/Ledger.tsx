@@ -63,6 +63,7 @@ export default function Ledger() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
             <Input 
               placeholder="Search companies, titles…"
+              aria-label="Search ledger"
               value={query}
               onChange={e => { setQuery(e.target.value); setOffset(0); }}
               className="h-8 pl-9 text-xs bg-background/50 focus-visible:bg-background"
