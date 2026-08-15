@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, History as HistoryIcon, Inbox, Loader2, X } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RelativeTime } from '@/components/RelativeTime';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useCopilotOpportunities, useSession, useSessions } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState as SharedEmptyState } from '@/components/operations/EmptyState';
+import { ErrorState as SharedErrorState } from '@/components/operations/ErrorState';
 
 const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -35,31 +39,31 @@ export default function History() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <HistoryIcon className="w-4 h-4 text-primary" /> History
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Application sessions and their event timelines.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        coordinate="03 · 02"
+        title="History"
+        subtitle="Application sessions and their event timelines."
+      />
 
-      <div className="flex-1 overflow-auto p-6">
-        {sessionsQ.isLoading && <LoadingState />}
+      <div className="flex-1 overflow-auto">
+        {sessionsQ.isLoading && <GridSkeleton rows={5} className="max-w-5xl mx-auto" />}
         {sessionsQ.isError && (
-          <ErrorState
+          <SharedErrorState
             message={sessionsQ.error?.message ?? 'Failed to load sessions.'}
             onRetry={() => sessionsQ.refetch()}
+            className="max-w-5xl mx-auto mt-2"
           />
         )}
         {!sessionsQ.isLoading && !sessionsQ.isError && sessions.length === 0 && (
-          <EmptyState />
+          <SharedEmptyState
+            title="No sessions yet"
+            description="Sessions appear here once you start an application flow."
+            className="max-w-5xl mx-auto mt-8"
+          />
         )}
         {!sessionsQ.isLoading && !sessionsQ.isError && sessions.length > 0 && (
           <div className="max-w-5xl mx-auto space-y-4 pb-8">
-            <div className="bg-card border border-border/60 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-surface border border-border rounded-md overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-b border-border/40">
@@ -144,7 +148,7 @@ function SessionTimeline({ sessionId, onClose }: { sessionId: string; onClose: (
   return (
     <section
       aria-label="Session timeline"
-      className="bg-card border border-border/60 rounded-xl shadow-sm"
+      className="bg-surface border border-border rounded-md"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <h2 className="text-sm font-semibold">Session timeline</h2>
@@ -155,13 +159,10 @@ function SessionTimeline({ sessionId, onClose }: { sessionId: string; onClose: (
 
       <div className="p-4 space-y-4">
         {detailQ.isLoading && (
-          <div className="space-y-2 animate-pulse" aria-label="Loading session detail">
-            <div className="h-8 bg-muted/50 rounded-md" />
-            <div className="h-24 bg-muted/50 rounded-md" />
-          </div>
+          <GridSkeleton rows={3} aria-label="Loading session detail" />
         )}
         {detailQ.isError && (
-          <p className="text-xs text-red-500 flex items-center gap-2">
+          <p className="text-xs text-failed flex items-center gap-2">
             <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
             {detailQ.error?.message ?? 'Failed to load session detail.'}
           </p>
@@ -210,42 +211,5 @@ function SessionTimeline({ sessionId, onClose }: { sessionId: string; onClose: (
         )}
       </div>
     </section>
-  );
-}
-
-// ─── States ──────────────────────────────────────────────────────────────────
-
-function LoadingState() {
-  return (
-    <div className="max-w-5xl mx-auto space-y-3 animate-pulse" aria-label="Loading sessions">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="h-14 bg-muted/50 rounded-xl" />
-      ))}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="max-w-sm mx-auto bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm mt-8">
-      <Inbox className="w-8 h-8 text-muted-foreground/40 mx-auto" aria-hidden="true" />
-      <p className="text-sm font-medium">No sessions yet</p>
-      <p className="text-xs text-muted-foreground">
-        Sessions appear here once you start an application flow.
-      </p>
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="max-w-sm mx-auto bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm mt-8">
-      <AlertCircle className="w-8 h-8 text-red-500/70 mx-auto" aria-hidden="true" />
-      <p className="text-sm font-medium">Could not load sessions</p>
-      <p className="text-xs text-muted-foreground break-words">{message}</p>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        <Loader2 className="w-3.5 h-3.5" /> Retry
-      </Button>
-    </div>
   );
 }

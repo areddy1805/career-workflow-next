@@ -28,11 +28,26 @@ export function SortableHeader({
 }: SortableHeaderProps) {
   const isActive = sort.column === column;
   const indicator = isActive ? sortIndicator(sort.direction) : '';
+  const ariaSort = isActive
+    ? sort.direction === 'asc'
+      ? 'ascending'
+      : 'descending'
+    : 'none';
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSort(column);
+    }
+  };
 
   return (
     <TableHead
+      aria-sort={ariaSort}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
       className={cn(
-        'text-[10px] font-semibold uppercase tracking-wider py-3 h-auto select-none cursor-pointer hover:text-foreground transition-colors group',
+        'text-[10px] font-semibold uppercase tracking-wider py-3 h-auto select-none cursor-pointer hover:text-foreground transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         isActive ? 'text-foreground' : 'text-muted-foreground',
         align === 'right' && 'text-right',
         align === 'center' && 'text-center',

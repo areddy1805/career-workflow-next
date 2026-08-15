@@ -11,6 +11,17 @@ export function useDashboard() {
   });
 }
 
+// --- Runtime (process truth, DESIGN.md §4) ---
+export function useRuntime() {
+  return useQuery({
+    queryKey: ['runtime'],
+    queryFn: api.fetchRuntime,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: false,
+  });
+}
+
 export function useCopilotHealth() {
   return useQuery({
     queryKey: ['copilot', 'health'],

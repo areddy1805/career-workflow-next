@@ -5,7 +5,6 @@ import {
   Check,
   Database,
   Eye,
-  GraduationCap,
   Loader2,
   Lock,
   Pencil,
@@ -16,12 +15,16 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { RelativeTime } from '@/components/RelativeTime';
 import { StatusBadge } from '@/components/StatusBadge';
 import { confirmAnswer, lockAnswer, switchProfile } from '@/lib/api/copilot';
 import { useAnswers } from '@/lib/hooks';
 import type { StoredAnswer } from '@/lib/types/copilot';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { Panel, PanelHeader } from '@/components/operations/Panel';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 
 // ─── Frozen constants (docs/application_copilot) ─────────────────────────────
 // Profile set (06_ANSWER_BANK.md §5), AnswerStatus vocabulary (§3/§6),
@@ -34,14 +37,6 @@ const PROFILES = [
 
 const STATUSES = ['auto', 'confirm', 'confirmed', 'locked', 'superseded'] as const;
 const PROFILE_STORAGE_KEY = 'cw-copilot-profile';
-
-// StatusBadge color overrides — global semantics (emerald=confirmed,
-// amber=needs-confirm, blue=locked; auto/superseded keep neutral gray).
-const STATUS_STYLE: Record<string, string> = {
-  confirm: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  confirmed: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  locked: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-};
 
 // CP-7-03 frozen constants — deterministic display only (no fetch).
 const MAX_BIAS = 1.0;
@@ -184,7 +179,7 @@ export default function Learning() {
         key={a.question_fp}
         tabIndex={0}
         aria-label={`Answer ${label}, status ${a.status}`}
-        className="rounded-xl border border-border/60 bg-card p-4 space-y-2.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-md border border-border/60 bg-surface p-4 space-y-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -205,7 +200,7 @@ export default function Learning() {
               </span>
             </p>
           </div>
-          <StatusBadge status={a.status} className={STATUS_STYLE[a.status]} />
+          <StatusBadge status={a.status} />
         </div>
 
         {editing ? (
@@ -320,18 +315,13 @@ export default function Learning() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-primary" /> Learning
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Answer bank editor, profiles, evidence, and signals.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        coordinate="03 · 04"
+        title="Learning"
+        subtitle="Answer bank editor, profiles, evidence, and signals."
+      />
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto pb-8">
         <div className="max-w-5xl mx-auto space-y-5 pb-8">
           {/* ── Profile switcher (atomic namespace swap, 06 §5) ── */}
           <SectionCard
@@ -358,7 +348,7 @@ export default function Learning() {
                     profileRefs.current[next.id]?.focus();
                   }
                 }}
-                className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-1 gap-1"
+                className="inline-flex rounded-md border border-border/60 bg-muted/30 p-1 gap-1"
               >
                 {PROFILES.map((p) => (
                   <button
@@ -375,7 +365,7 @@ export default function Learning() {
                       'px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       profileId === p.id
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
@@ -411,13 +401,13 @@ export default function Learning() {
                       className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <input
+                    <Input
                       id="answer-search"
                       type="search"
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                       placeholder="e.g. experience.rag_years"
-                      className="w-full rounded-md border border-input bg-background pl-8 pr-3 py-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="pl-8"
                     />
                   </div>
                 </div>
@@ -454,7 +444,7 @@ export default function Learning() {
               {actionError && (
                 <p
                   role="alert"
-                  className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
+                  className="flex items-center gap-1.5 text-xs text-failed"
                 >
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   {actionError}
@@ -462,16 +452,14 @@ export default function Learning() {
               )}
 
               {answersQ.isLoading && (
-                <div className="space-y-3" aria-label="Loading answers">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-24 bg-muted/50 rounded-xl animate-pulse" />
-                  ))}
+                <div aria-label="Loading answers">
+                  <GridSkeleton rows={3} />
                 </div>
               )}
 
               {answersQ.isError && (
-                <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
-                  <AlertCircle className="w-8 h-8 text-red-500/70 mx-auto" aria-hidden="true" />
+                <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
+                  <AlertCircle className="w-8 h-8 text-failed/70 mx-auto" aria-hidden="true" />
                   <p className="text-sm font-medium">Could not load answers</p>
                   <p className="text-xs text-muted-foreground break-words">
                     {answersQ.error?.message ?? 'Unknown error.'}
@@ -483,7 +471,7 @@ export default function Learning() {
               )}
 
               {!answersQ.isLoading && !answersQ.isError && answers.length === 0 && (
-                <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
+                <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
                   <Database className="w-8 h-8 text-muted-foreground/40 mx-auto" aria-hidden="true" />
                   <p className="text-sm font-medium">No answers</p>
                   <p className="text-xs text-muted-foreground">
@@ -578,7 +566,7 @@ export default function Learning() {
                   bounded EMA — explore early, exploit later, zero randomness (D-028).
                 </p>
                 <div className="grid sm:grid-cols-3 gap-2 pt-1">
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Gate
                     </p>
@@ -590,7 +578,7 @@ export default function Learning() {
                       — rollback is flag-off → identical to today.
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Max bias
                     </p>
@@ -599,7 +587,7 @@ export default function Learning() {
                       EMA clamp bound — engine also clamps providers to the same range.
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Brief probability adjust
                     </p>
@@ -630,21 +618,19 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border/60 rounded-xl shadow-sm">
-      <div className="px-4 py-3 border-b border-border/50">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        )}
-      </div>
+    <Panel>
+      <PanelHeader title={title} />
+      {description && (
+        <p className="text-meta text-muted-foreground px-4 pt-3 max-w-[65ch]">{description}</p>
+      )}
       <div className="p-4">{children}</div>
-    </section>
+    </Panel>
   );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+    <div className="rounded-md border border-border/60 p-3 bg-muted/20">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </p>
@@ -655,7 +641,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 
 function PendingPh8Card({ title, body, next }: { title: string; body: string; next: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 p-3.5 space-y-1.5">
+    <div className="rounded-md border border-dashed border-border/70 p-3.5 space-y-1.5">
       <div className="flex items-center gap-2">
         <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
         <p className="text-xs font-semibold">{title}</p>

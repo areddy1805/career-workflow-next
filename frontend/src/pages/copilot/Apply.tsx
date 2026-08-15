@@ -23,6 +23,7 @@ import {
   type WorkspaceStep,
 } from '@/store/copilot';
 import { StatusBadge } from '@/components/StatusBadge';
+import { StateMarker, type StateSemantic } from '@/components/operations/StateMarker';
 import { Button } from '@/components/ui/button';
 import { cn, formatSalary } from '@/lib/utils';
 import type { CopilotSession, SessionEvent, StoredAnswer } from '@/lib/types/copilot';
@@ -150,27 +151,19 @@ function stringifyAnswer(value: unknown): string {
 
 // ─── Small pieces ───────────────────────────────────────────────────────────
 
-const ANSWER_STATUS_STYLES: Record<string, string> = {
-  auto: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  confirmed: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  confirm: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  manual: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  manual_review: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  locked: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  superseded: 'bg-muted text-muted-foreground',
+const ANSWER_STATUS_STATE: Record<string, StateSemantic> = {
+  auto: 'healthy',
+  confirmed: 'healthy',
+  confirm: 'degraded',
+  manual: 'pending',
+  manual_review: 'pending',
+  locked: 'running',
+  superseded: 'idle',
 };
 
 function AnswerStatusChip({ status }: { status: string }) {
-  const upper = (status || 'unknown').toUpperCase();
   return (
-    <span
-      className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono uppercase tracking-wide leading-none whitespace-nowrap',
-        ANSWER_STATUS_STYLES[status] ?? 'bg-muted/40 text-muted-foreground',
-      )}
-    >
-      {upper}
-    </span>
+    <StateMarker state={ANSWER_STATUS_STATE[status] ?? 'unknown'} label={(status || 'unknown').toUpperCase()} />
   );
 }
 
@@ -178,7 +171,7 @@ function ErrorBanner({ message }: { message: string }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+      className="flex items-start gap-2 rounded-md border border-failed/40 bg-failed/5 px-3 py-2 text-xs text-failed"
     >
       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 break-words">{message}</span>
@@ -284,7 +277,7 @@ function HoldToConfirmButton({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           'disabled:opacity-50 disabled:pointer-events-none',
           armed
-            ? 'bg-emerald-600 text-white hover:bg-emerald-600'
+            ? 'bg-healthy text-white hover:bg-healthy'
             : 'bg-primary text-primary-foreground hover:bg-primary/90',
         )}
       >
@@ -296,12 +289,12 @@ function HoldToConfirmButton({
         <span
           aria-hidden="true"
           className={cn(
-            'absolute inset-y-0 left-0 bg-white/25',
+            'absolute inset-y-0 left-0 origin-left bg-white/25',
             holding ? 'opacity-100' : 'opacity-0',
           )}
           style={{
-            width: holding ? '100%' : '0%',
-            transition: holding ? `width ${HOLD_MS}ms linear` : 'none',
+            transform: holding ? 'scaleX(1)' : 'scaleX(0)',
+            transition: holding ? `transform ${HOLD_MS}ms linear` : 'none',
           }}
         />
       </button>
@@ -657,8 +650,8 @@ export default function Apply() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background text-sm animate-in fade-in duration-300">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
+    <div className="h-full flex flex-col bg-background text-sm">
+      <header className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border shrink-0 bg-background/95 z-10">
         <div className="flex items-center gap-3 min-w-0">
           <Link
             to="/copilot/inbox"
@@ -668,11 +661,11 @@ export default function Apply() {
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-              <Send className="w-4 h-4 text-primary" aria-hidden="true" />
-              Application Workspace
+            <h1 className="text-page text-foreground flex items-baseline gap-3">
+              <span className="font-mono text-[10px] tracking-[0.1em] text-faint select-none" aria-hidden="true">03 · APPLY</span>
+              <span className="truncate">Application Workspace</span>
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-meta text-muted-foreground mt-1.5 truncate">
               {opportunity
                 ? `${opportunity.title} · ${opportunity.company}`
                 : 'Loading opportunity…'}
@@ -682,7 +675,7 @@ export default function Apply() {
         <div className="flex items-center gap-2 shrink-0">
           {session ? <StatusBadge status={state ?? ''} /> : null}
           {sessionId ? (
-            <span className="text-[10px] font-mono text-muted-foreground">
+            <span className="font-mono text-[10px] text-muted-foreground">
               #{sessionId.slice(0, 8)}
             </span>
           ) : null}
@@ -693,7 +686,7 @@ export default function Apply() {
         {/* Progress rail (§3.2) */}
         <nav
           aria-label="Workspace steps"
-          className="w-48 shrink-0 border-r border-border/50 bg-card/30 p-3 space-y-1 overflow-y-auto"
+          className="w-48 shrink-0 border-r border-border/50 bg-surface/30 p-3 space-y-1 overflow-y-auto"
         >
           {WORKSPACE_STEPS.map((s, i) => {
             const active = s === step;
@@ -719,7 +712,7 @@ export default function Apply() {
                   className={cn(
                     'w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-semibold shrink-0',
                     done
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      ? 'border-healthy/40 bg-healthy/10 text-healthy'
                       : active
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border',
@@ -739,8 +732,8 @@ export default function Apply() {
         {/* Step content */}
         <main className="flex-1 overflow-y-auto p-6">
           {createError ? (
-            <div className="max-w-xl mx-auto mt-16 bg-card border border-border/50 rounded-xl p-6 space-y-4 text-center">
-              <AlertTriangle className="w-8 h-8 text-red-500 mx-auto" aria-hidden="true" />
+            <div className="max-w-xl mx-auto mt-16 bg-surface border border-border/50 rounded-md p-6 space-y-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-failed mx-auto" aria-hidden="true" />
               <p className="text-sm font-medium">Could not start a workspace session</p>
               <p className="text-xs text-muted-foreground">{createError}</p>
               <Button
@@ -762,8 +755,8 @@ export default function Apply() {
               Loading session…
             </div>
           ) : sessionQuery.isError ? (
-            <div className="max-w-xl mx-auto mt-16 bg-card border border-border/50 rounded-xl p-6 space-y-4 text-center">
-              <AlertTriangle className="w-8 h-8 text-red-500 mx-auto" aria-hidden="true" />
+            <div className="max-w-xl mx-auto mt-16 bg-surface border border-border/50 rounded-md p-6 space-y-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-failed mx-auto" aria-hidden="true" />
               <p className="text-sm font-medium">Could not load the session</p>
               <p className="text-xs text-muted-foreground">
                 {sessionQuery.error instanceof Error ? sessionQuery.error.message : 'Unknown error'}
@@ -778,7 +771,7 @@ export default function Apply() {
               {state === 'ABORTED' ? (
                 <div
                   role="status"
-                  className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+                  className="flex items-center gap-2 rounded-md border border-degraded/40 bg-degraded/5 px-3 py-2 text-xs text-degraded"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   This session was aborted. Start a new session from the inbox to apply again.
@@ -889,10 +882,10 @@ function BriefStep({
           className={cn(
             'flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium',
             verdict === 'apply'
-              ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+              ? 'border-healthy/40 bg-healthy/5 text-healthy'
               : verdict === 'skip'
-                ? 'border-red-500/30 bg-red-500/5 text-red-600 dark:text-red-400'
-                : 'border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400',
+                ? 'border-failed/40 bg-failed/5 text-failed'
+                : 'border-degraded/40 bg-degraded/5 text-degraded',
           )}
         >
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
@@ -939,7 +932,7 @@ function BriefStep({
           Loading brief…
         </div>
       ) : briefQuery.isError ? (
-        <div className="bg-card border border-border/50 rounded-xl p-4 space-y-2">
+        <div className="bg-surface border border-border/50 rounded-md p-4 space-y-2">
           <p className="text-xs text-muted-foreground">
             Brief could not be loaded: {briefQuery.error instanceof Error ? briefQuery.error.message : 'unknown error'}
           </p>
@@ -952,7 +945,7 @@ function BriefStep({
           {sections.map((section) => (
             <div
               key={section.key}
-              className="bg-card border border-border/50 rounded-xl p-4 space-y-1.5"
+              className="bg-surface border border-border/50 rounded-md p-4 space-y-1.5"
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
@@ -1001,7 +994,7 @@ function BriefStep({
 
 function GlanceStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-card border border-border/50 rounded-lg px-3 py-2">
+    <div className="bg-surface border border-border/50 rounded-md px-3 py-2">
       <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">
         {label}
       </p>
@@ -1084,7 +1077,7 @@ function AnswersStep({
               <li
                 key={entry.question_fp}
                 className={cn(
-                  'bg-card border border-border/50 rounded-xl p-4 flex gap-3',
+                  'bg-surface border border-border/50 rounded-md p-4 flex gap-3',
                   isEditing && 'ring-2 ring-ring',
                 )}
               >
@@ -1161,7 +1154,7 @@ function AnswersStep({
           })}
         </ul>
       ) : briefQuestions && briefQuestions.length > 0 ? (
-        <div className="bg-card border border-border/50 rounded-xl p-4 space-y-3">
+        <div className="bg-surface border border-border/50 rounded-md p-4 space-y-3">
           <p className="text-xs text-muted-foreground">
             Answers are resolved when the wizard begins. Likely screening questions from the brief:
           </p>
@@ -1182,7 +1175,7 @@ function AnswersStep({
           </ul>
         </div>
       ) : (
-        <div className="bg-card border border-dashed border-border/60 rounded-xl p-8 text-center space-y-1">
+        <div className="bg-surface border border-dashed border-border/60 rounded-md p-8 text-center space-y-1">
           <p className="text-sm font-medium">No screening answers</p>
           <p className="text-xs text-muted-foreground">
             No likely questions were detected for this opportunity.
@@ -1229,7 +1222,7 @@ function ResumeStep({
       </div>
 
       {rec ? (
-        <div className="bg-card border border-primary/20 rounded-xl p-4 space-y-1.5">
+        <div className="bg-surface border border-primary/20 rounded-md p-4 space-y-1.5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
             <h3 className="text-xs font-semibold uppercase tracking-wider">
@@ -1288,7 +1281,7 @@ function ResumeStep({
               }}
               onClick={() => onSelect(t)}
               className={cn(
-                'rounded-xl border bg-card p-4 text-left transition-colors',
+                'rounded-md border bg-surface p-4 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 isSelected
                   ? 'border-primary ring-1 ring-primary'
@@ -1304,7 +1297,7 @@ function ResumeStep({
                     </span>
                   ) : null}
                   {chosen === t ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" aria-label="Chosen" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-healthy" aria-label="Chosen" />
                   ) : null}
                 </span>
               </div>
@@ -1316,7 +1309,7 @@ function ResumeStep({
       {chosen ? (
         <div
           role="status"
-          className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400"
+          className="flex items-center gap-2 rounded-md border border-healthy/40 bg-healthy/5 px-3 py-2 text-xs text-healthy"
         >
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           Resume chosen: <span className="font-semibold">{chosen}</span>
@@ -1362,7 +1355,7 @@ function AssistantStep({
         </p>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-xl p-8 text-center space-y-3">
+      <div className="bg-surface border border-border/50 rounded-md p-8 text-center space-y-3">
         <Bot className="w-8 h-8 text-muted-foreground/40 mx-auto" aria-hidden="true" />
         <p className="text-sm font-medium">Live assistant panel</p>
         <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -1385,7 +1378,7 @@ function AssistantStep({
       {formFilled ? (
         <div
           role="status"
-          className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400"
+          className="flex items-center gap-2 rounded-md border border-healthy/40 bg-healthy/5 px-3 py-2 text-xs text-healthy"
         >
           <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           Form filled — the application is ready for the final submit step.
@@ -1429,7 +1422,7 @@ function SubmitStep({
       </div>
 
       {/* Review */}
-      <div className="bg-card border border-border/50 rounded-xl divide-y divide-border/50">
+      <div className="bg-surface border border-border/50 rounded-md divide-y divide-border/50">
         <ReviewRow label="Opportunity" value={opportunity ? `${opportunity.title} · ${opportunity.company}` : session.opportunity_id} />
         <ReviewRow label="Session state" value={<StatusBadge status={session.state} />} />
         <ReviewRow label="Answers" value={`${answersCount} confirmed`} />
@@ -1446,15 +1439,15 @@ function SubmitStep({
         <div
           role="status"
           className={cn(
-            'rounded-xl border p-5 space-y-1.5',
+            'rounded-md border p-5 space-y-1.5',
             session.outcome
-              ? 'border-emerald-500/30 bg-emerald-500/5'
-              : 'border-border bg-card',
+              ? 'border-healthy/40 bg-healthy/5'
+              : 'border-border bg-surface',
           )}
         >
           <div className="flex items-center gap-2">
             <CheckCircle2
-              className={cn('w-4 h-4', session.outcome ? 'text-emerald-500' : 'text-muted-foreground')}
+              className={cn('w-4 h-4', session.outcome ? 'text-healthy' : 'text-muted-foreground')}
               aria-hidden="true"
             />
             <p className="text-sm font-semibold">
@@ -1483,7 +1476,7 @@ function SubmitStep({
 
       {/* Event trail */}
       {events.length > 0 ? (
-        <div className="bg-card border border-border/50 rounded-xl p-4 space-y-1.5">
+        <div className="bg-surface border border-border/50 rounded-md p-4 space-y-1.5">
           <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             Session trail
           </h3>
