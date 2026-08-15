@@ -57,18 +57,19 @@ tsconfig.tsbuildinfo
 # Python build and packaging
 # ==============================================================================
 
-build/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+# Python build artifacts (root-level; NOT nested dirs like frontend/src/lib).
+/build/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+/share/python-wheels/
 
 *.egg
 *.egg-info/
@@ -158,6 +159,9 @@ temp/
 .kilo/
 .playwright-mcp/
 review_bundle/
+
+# PH5: pinned Playwright browser binaries (scripts/install_playwright.sh)
+.playwright/
 
 
 # ==============================================================================

@@ -64,6 +64,7 @@ from src.acquisition.config import load_acquisition_config
 from src.acquisition.acquisition_service import fetch_jobspy_jobs
 from src.acquisition.merge import merge_jobs
 from src.acquisition.base_provider import AcquisitionProvider
+from src.acquisition.boundaries import GlobalAcquisitionBudget, ProviderBoundary
 from src.acquisition.providers.jobspy_provider import (
     JobSpyConfig,
     JobSpyProvider,
@@ -159,6 +160,13 @@ def print_acquisition_summary(
             fetch_result.search_skipped_due_to_cooldown,
         ),
     ]
+
+    # Acquisition boundary telemetry (provider + global caps).
+    _boundary = fetch_result.acquisition_boundary or {}
+    _global = _boundary.get("global") or {}
+    if _global or _boundary:
+        rows.append(("Global cap (accepted/dropped)",
+                     f"{_global.get('accepted', 0)}/{_global.get('dropped', 0)}"))
 
     for label, value in rows:
         print(
@@ -567,6 +575,8 @@ class JobFetchResult:
     secondary_provider_health: dict = field(default_factory=dict)
     # Backward-compat alias — mirrors secondary_provider_health["jobspy"]
     jobspy_health: dict = field(default_factory=dict)
+    # Acquisition boundary telemetry (provider + global caps).
+    acquisition_boundary: dict = field(default_factory=dict)
 
 
 def fetch_all_jobs(
@@ -626,6 +636,16 @@ def fetch_all_jobs(
     stop_reasons: dict[str, int] = {}
     min_new_yield = int(os.getenv("SEARCH_MIN_NEW_JOBS_PER_PAGE", "2"))
     low_yield_patience = int(os.getenv("SEARCH_LOW_YIELD_PATIENCE", "1"))
+    # Phase E: global cap on Naukri HTTP requests. Expanded query set
+    # (multi-location × titles) must stay bounded — challenge cooldown and
+    # low-yield exits still apply, this is the backstop.
+    max_requests = int(os.getenv("SEARCH_MAX_REQUESTS", "400"))
+
+    # Hard acquisition boundary (code-enforced): request cap AND result cap
+    # are separate budgets.  Config may only lower the result ceiling.
+    boundary = ProviderBoundary.naukri(requests_cap=max_requests)
+    max_requests = boundary.max_requests  # code-clamped value
+    naukri_max_results = boundary.max_results_total
 
     total_searches = len(SEARCH_TRACKS) * len(EXPERIENCE_LEVELS) * PAGES
 
@@ -639,15 +659,30 @@ def fetch_all_jobs(
     for query in SEARCH_TRACKS:
         if challenge_encountered:
             break
+        if stop_reasons.get("max_requests") or stop_reasons.get("max_results"):
+            break
 
         for exp in EXPERIENCE_LEVELS:
             if challenge_encountered:
+                break
+            if stop_reasons.get("max_requests") or stop_reasons.get("max_results"):
                 break
 
             previous_page_signature: tuple[str, ...] | None = None
             consecutive_low_yield = 0
 
             for page in range(1, PAGES + 1):
+                if search_requests_attempted >= max_requests:
+                    stop_reasons["max_requests"] = stop_reasons.get("max_requests", 0) + 1
+                    break
+                if len(all_jobs) >= naukri_max_results:
+                    stop_reasons["max_results"] = stop_reasons.get("max_results", 0) + 1
+                    boundary.cap_reason = "max_results_total"
+                    logger.warning(
+                        "Naukri result cap reached (%d) — stopping acquisition",
+                        naukri_max_results,
+                    )
+                    break
                 search_index += 1
                 query_start = time.perf_counter()
                 try:
@@ -733,11 +768,26 @@ def fetch_all_jobs(
 
                         setattr(
                             job,
+                            "search_profile",
+                            query.get("search_profile", "unknown"),
+                        )
+
+                        setattr(
+                            job,
                             "acquisition_source",
                             "live",
                         )
 
                         new_jobs.append(job)
+
+                    # Boundary telemetry: received = raw page, accepted =
+                    # post-dedup new jobs admitted to the pool.
+                    boundary.requests += 1
+                    boundary.results_received += len(jobs)
+                    boundary.results_accepted += len(new_jobs)
+                    boundary.results_dropped_provider_cap += max(
+                        0, len(jobs) - len(new_jobs)
+                    )
 
                     all_jobs.extend(new_jobs)
 
@@ -825,6 +875,7 @@ def fetch_all_jobs(
         search_requests_attempted=search_requests_attempted,
         pages_stopped_low_yield=pages_stopped_low_yield,
         stop_reasons=stop_reasons,
+        acquisition_boundary=boundary.to_dict(),
     )
 
 
@@ -1062,6 +1113,12 @@ def acquire_jobs(
     additional_jobs: list = []
     _secondary = {k: v for k, v in providers.items() if k != "naukri"}
 
+    # Global acquisition safety cap (provider-independent).  Applied per
+    # provider as results arrive — BEFORE merge/dedup, before persistence,
+    # and before the expensive fuzzy dedup.  No provider can flood the pool
+    # regardless of its own caps, pagination, retries, or response size.
+    global_budget = GlobalAcquisitionBudget()
+
     if _secondary:
         planner = SearchPlanner()
         search_tracks = planner.generate_queries()
@@ -1081,6 +1138,9 @@ def acquire_jobs(
             _p_jobs: list = _provider.fetch_jobs(search_tracks)
             for _job in _p_jobs:
                 setattr(_job, "provider_id", _provider_name)
+            # Global cap truncates this provider's output before it ever
+            # enters the pool.
+            _p_jobs = global_budget.try_admit(_p_jobs, _provider_name)
             additional_jobs.extend(_p_jobs)
 
             _p_health = _provider.health_summary()
@@ -1105,11 +1165,20 @@ def acquire_jobs(
         ["naukri", "indeed", "linkedin", "google"],
     )
 
+    # Naukri output also passes through the global cap before merge.
+    naukri_admitted = global_budget.try_admit(naukri_jobs, "naukri")
+
     jobs = merge_jobs(
-        naukri_jobs=naukri_jobs,
+        naukri_jobs=naukri_admitted,
         additional_jobs=additional_jobs,
         provider_priority=provider_priority,
     )
+
+    fetch_result.acquisition_boundary["global"] = global_budget.to_dict()
+    fetch_result.acquisition_boundary["unique_before_dedup"] = (
+        len(naukri_admitted) + len(additional_jobs)
+    )
+    fetch_result.acquisition_boundary["unique_after_dedup"] = len(jobs)
 
     print(f"Merged {len(jobs)} jobs")
 
@@ -1650,9 +1719,21 @@ def run_application_batch(
         # ----------------------------------------------------------
         # Resume Routing Engine
         # ----------------------------------------------------------
-        resume_routing = resume_router.route(
-            job.to_dict() if hasattr(job, "to_dict") else vars(job)
-        )
+        # Phase F3: prefer the deterministic ranker's role_family (stored in
+        # meta during selection) so AI_FDE roles get the AI resume and pure
+        # FDE roles get the customer-deployment resume.  Fall back to the
+        # legacy keyword router when the analysis is absent.
+        rank_analysis = meta.get("deterministic_rank") or {}
+        family = rank_analysis.get("role_family")
+        if family:
+            resume_routing = resume_router.route_from_family(
+                family=family,
+                ai_depth=rank_analysis.get("ai_depth", 0),
+            )
+        else:
+            resume_routing = resume_router.route(
+                job.to_dict() if hasattr(job, "to_dict") else vars(job)
+            )
         meta["resume_type"] = resume_routing["resume_type"]
         meta["resume_reason"] = resume_routing["resume_reason"]
         meta["resume_score_ai"] = resume_routing["resume_score_ai"]

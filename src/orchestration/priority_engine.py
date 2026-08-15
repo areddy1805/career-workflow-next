@@ -25,13 +25,15 @@ Where:
 - freshness_multiplier: from AgePolicy (1.0 for new, decaying to 0.0).
 - semantic_bonus: additional points for semantic match (0-5).
 - overlay_bonus: additional points for candidate overlay match (0-3).
-- learning_bias: from adaptive learning stub (currently 0.0).
+- learning_bias: from the persisted learning store via the injectable
+  provider (0.0 when no provider is given, the flag is off, or the store
+  is unavailable — identical to the pre-CP-7-03 stub).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional
 
 from src.orchestration.age_policy import apply_age_penalty
 from src.orchestration.explanation import DecisionExplanation
@@ -82,16 +84,43 @@ class RankedOpportunity:
     explanation: DecisionExplanation
 
 
+# Bounded-range guard for provider output (CP-7-03 AC: bias only affects
+# ranking within a bounded range). Mirrors src/copilot/learning/bias.py
+# ``MAX_BIAS = 1.0`` — duplicated across the boundary by design (repo
+# precedent: OUTCOME_TO_STATUS in session/outcome.py). The copilot store
+# clamps every write to ±MAX_BIAS; this guard keeps out-of-contract
+# providers in range too.
+_MAX_LEARNING_BIAS = 1.0
+
+
+def _clamp_bias(value: float) -> float:
+    return max(-_MAX_LEARNING_BIAS, min(_MAX_LEARNING_BIAS, value))
+
+
 class PriorityEngine:
     """Stateless priority engine for ranking opportunities.
 
     Usage::
         engine = PriorityEngine()
         ranked = engine.rank(pool)
+
+    Parameters
+    ----------
+    learning_bias_provider : callable, optional
+        Returns the current learning bias (already within ±MAX_BIAS; the
+        copilot store guarantees this by clamping every write). ``None``
+        means 0.0 — the seam exists so the copilot side (or tests) can
+        inject ``bias.default_bias_provider`` or a fake. Any provider
+        exception or out-of-range value degrades to a bounded 0.0/±1.0.
     """
 
-    def __init__(self, config: Optional[RankingConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[RankingConfig] = None,
+        learning_bias_provider: Optional[Callable[[], float]] = None,
+    ) -> None:
         self._config = config or RankingConfig()
+        self._learning_bias_provider = learning_bias_provider
 
     def rank(
         self,
@@ -135,10 +164,16 @@ class PriorityEngine:
         overlay = float(opp.meta.get("overlay_score", 0) if opp.meta else 0)
         overlay_bonus = min(overlay, self._config.overlay_weight)
 
-        # Learning bias (stub — returns 0 until adaptive learning is active)
-        learning_bias = 0.0
+        # Learning bias (CP-7-03: persisted, bounded; 0.0 when disabled)
+        learning_bias = self._bias()
 
-        final_score = base + freshness_adj + semantic_bonus + overlay_bonus + learning_bias
+        final_score = (
+            base
+            + freshness_adj
+            + semantic_bonus
+            + overlay_bonus
+            + learning_bias
+        )
         final_score = round(max(0.0, final_score), 1)
 
         components = {
@@ -169,3 +204,13 @@ class PriorityEngine:
             components=components,
             explanation=explanation,
         )
+
+    def _bias(self) -> float:
+        """Learning bias for scoring; 0.0 without a provider or on failure."""
+        if self._learning_bias_provider is None:
+            return 0.0
+        try:
+            value = float(self._learning_bias_provider())
+        except Exception:  # noqa: BLE001 - bias must never break ranking
+            return 0.0
+        return _clamp_bias(value)

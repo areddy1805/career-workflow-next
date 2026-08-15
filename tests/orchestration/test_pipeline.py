@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from src.orchestration.pipeline import (
     CareerWorkflowPipeline,
 )
@@ -7,6 +9,15 @@ from src.orchestration.stages import (
     PipelineStatus,
     StageStatus,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_runtime_state(tmp_path, monkeypatch):
+    """D-033: isolate the live dashboard state (data/ui_runtime) from tests
+    that construct a real pipeline."""
+    monkeypatch.setenv("RUNTIME_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setenv("PIPELINE_STATE_PATH", str(tmp_path / "pipeline_state.json"))
+    monkeypatch.setenv("PIPELINE_LOCK_PATH", str(tmp_path / "pipeline.lock"))
 
 
 class RecordingPipeline(CareerWorkflowPipeline):

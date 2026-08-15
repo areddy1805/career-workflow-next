@@ -1,5 +1,24 @@
 CANDIDATE_PROFILE = {
     # ==================================================================
+    # Candidate identity (D-034: canonical truth — the answer bank never
+    # overrides these; every ATS maps into them via the fingerprint
+    # ontology). Keep ``*_url``/``resume_path`` as full values.
+    # ==================================================================
+    "first_name": "Ashwini",
+    "last_name": "Reddy",
+    "full_name": "Ashwini Reddy",
+    "email": "ashwini.reddy@example.com",
+    "phone": "+91 90000 00000",
+    "city": "Pune",
+    "country": "India",
+    "address": "Pune, Maharashtra, India",
+    "linkedin_url": "https://www.linkedin.com/in/ashwinireddy",
+    "github_url": "https://github.com/ashwinireddy",
+    "portfolio_url": None,
+    "resume_path": "docs/resume/Applied_AI.pdf",
+    "work_authorization": "Indian Citizen",
+    "visa_status": None,
+    # ==================================================================
     # Compensation
     # ==================================================================
     "current_ctc_lpa": "16",
@@ -93,6 +112,19 @@ CANDIDATE_PROFILE = {
     "willing_f2f_interview": "Yes",
     "former_infosys_employee": "No",
     "edtech_experience": "No",
+    # ==================================================================
+    # Education & employment facts (Phase F4: optional, explicit-None)
+    #
+    # These stay None unless the candidate supplies the facts.  When None,
+    # the matching questionnaire questions keep going to manual review —
+    # the automation never invents education history, gaps, or employer
+    # type.
+    # ==================================================================
+    "education_history": None,
+    "has_education_gap": None,
+    "education_gap_reason": None,
+    "organization_type": None,
+    "accept_direct_payroll": None,
     # ==================================================================
     # Sensitive fields
     # ==================================================================

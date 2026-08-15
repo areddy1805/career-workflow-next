@@ -25,6 +25,54 @@ class ResumeRouter:
         self.ai_keywords = ["ai", "machine learning", "llm", "genai", "rag", "agentic", "model", "python", "backend"]
         self.fde_keywords = ["customer", "client", "implementation", "solution", "consultant", "delivery", "integration", "full stack"]
 
+    def route_from_family(
+        self,
+        family: str,
+        ai_depth: int = 0,
+    ) -> Dict[str, Any]:
+        """Route the resume from the deterministic ranker's analysis.
+
+        AI_FDE is an AI role first (ai_depth >= 3 + strong FDE evidence) —
+        it gets the AI resume.  FDE gets the customer-deployment resume.
+        AI_ADJACENT/GENERIC with no AI depth fall back to the keyword
+        heuristic so adjacent roles still route sensibly.
+        """
+        resumes = self.load_resumes()
+
+        if family == "AI_FDE" or family == "AI_ENGINEERING":
+            return {
+                "resume_type": ResumeType.AI.value,
+                "resume_reason": (
+                    f"Deterministic ranker family {family} (ai_depth={ai_depth}) "
+                    "→ AI resume"
+                ),
+                "resume_score_ai": 100 if family == "AI_FDE" else 90,
+                "resume_score_fde": 60 if family == "AI_FDE" else 10,
+                "resume_path": resumes.get(ResumeType.AI.value),
+            }
+
+        if family == "FDE":
+            return {
+                "resume_type": ResumeType.FDE.value,
+                "resume_reason": (
+                    f"Deterministic ranker family {family} "
+                    "→ FDE resume"
+                ),
+                "resume_score_ai": 10,
+                "resume_score_fde": 100,
+                "resume_path": resumes.get(ResumeType.FDE.value),
+            }
+
+        # AI_ADJACENT / GENERIC / NON_TARGET — fall back to keyword scoring.
+        return self.route(
+            {
+                "title": "",
+                "description": "",
+                "required_skills": [],
+                "preferred_skills": [],
+            }
+        )
+
     def load_resumes(self) -> Dict[str, str]:
         config_path = os.environ.get("RESUMES_CONFIG", "config/resumes.yaml")
         if not os.path.exists(config_path):

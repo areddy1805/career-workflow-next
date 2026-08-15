@@ -99,9 +99,12 @@ class SearchPlanner:
         Returns a list of dictionaries compatible with the legacy SEARCH_TRACKS interface.
         """
         active_profiles = self.user_profile.get("active_profiles", [])
-        locations = self.user_profile.get("preferred_locations", ["Pune"])
+        global_locations = self.user_profile.get("preferred_locations", ["Pune"])
 
-        max_queries = self.planner_config.get("max_queries_per_profile", 15)
+        # Cap applies to TITLES per profile, not to the flattened
+        # location×title list — otherwise adding locations silently drops
+        # title coverage (the pre-Phase-E bug).
+        max_titles = self.planner_config.get("max_queries_per_profile", 15)
 
         generated_queries = set()
 
@@ -110,7 +113,10 @@ class SearchPlanner:
             if not profile:
                 continue
 
-            titles = profile.get("titles", [])
+            titles = profile.get("titles", [])[:max_titles]
+            # Per-profile locations (ai.yaml/fde.yaml) win over the global
+            # preferred_locations list.
+            locations = profile.get("locations") or global_locations
             weight = profile.get("weight", 1.0)
 
             # Legacy track mapping based on weight
@@ -161,7 +167,7 @@ class SearchPlanner:
                     )
 
                     # 2. Role + Technology query
-                    for tech in tech_keywords[:max_queries]:
+                    for tech in tech_keywords[:max_titles]:
                         query_str = f"{title} {tech}{neg_suffix}"
                         profile_queries.append(
                             SearchQuery(
@@ -174,9 +180,7 @@ class SearchPlanner:
                             )
                         )
 
-            # Apply limit per profile to prevent explosion
-            profile_queries = profile_queries[:max_queries]
-
+            # Titles are capped above; no further per-profile flattening cut.
             for q in profile_queries:
                 generated_queries.add(
                     (

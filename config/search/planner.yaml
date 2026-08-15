@@ -1,2 +1,4 @@
-max_queries_per_profile: 10
+# Cap applies to titles per profile (32 AI + 14 FDE titles configured).
+# Location coverage is no longer traded off against title coverage.
+max_queries_per_profile: 50
 deduplicate: true

@@ -59,6 +59,7 @@ from src.acquisition.base_provider import (
     ProviderCapabilities,
     ProviderRunMetrics,
 )
+from src.acquisition.boundaries import ProviderBoundary
 from src.application.capability import ApplicationCapabilities, ApplicationMode
 
 logger = logging.getLogger(__name__)
@@ -304,6 +305,12 @@ class JobSpyProvider:
             site: _SiteHealth() for site in config.sites
         }
 
+        # Acquisition safety boundary — code-enforced hard caps (config may
+        # only lower these).
+        self._boundary = ProviderBoundary.jobspy(
+            max_results_per_query=config.results_wanted,
+        )
+
         # One SearchChallengeCooldown instance per site so challenges on
         # LinkedIn do not suppress Indeed or Google.
         self._cooldowns: dict[str, SearchChallengeCooldown] = {
@@ -416,7 +423,9 @@ class JobSpyProvider:
 
     def health_summary(self) -> dict:
         """Return health stats for all configured sites."""
-        return {site: h.to_dict() for site, h in self._health.items()}
+        summary = {site: h.to_dict() for site, h in self._health.items()}
+        summary["acquisition_boundary"] = self._boundary.to_dict()
+        return summary
 
     def fetch_jobs(self, search_tracks: list[dict]) -> list[Job]:
         """
@@ -552,6 +561,18 @@ class JobSpyProvider:
             t_query = time.perf_counter()
             success_query = False
 
+            # Provider-total cap: stop scheduling further queries once the
+            # code-enforced result ceiling is reached.
+            if self._boundary.remaining_total() <= 0:
+                self._boundary.cap_reason = "max_results_total"
+                logger.warning(
+                    "JobSpy provider result cap reached (%d) — stopping "
+                    "further queries at %r",
+                    self._boundary.max_results_total,
+                    keyword,
+                )
+                break
+
             try:
                 print(
                     f"  [{i}/{len(planned_queries)}] "
@@ -585,6 +606,40 @@ class JobSpyProvider:
                     logger.warning("Provider '%s' marked DEGRADED.", site)
 
             new_jobs: list[Job] = []
+            # Per-query result cap (code-enforced ceiling; config may only
+            # lower results_wanted).  Slice BEFORE dedup so an oversized
+            # provider response can never flood the pool.  Also clamp to the
+            # remaining provider-total room so a single query cannot overshoot
+            # the total cap.
+            per_query_cap = self._boundary.max_results_per_query or 0
+            if per_query_cap and len(jobs) > per_query_cap:
+                self._boundary.cap_reason = "max_results_per_query"
+                dropped_raw = len(jobs) - per_query_cap
+                self._boundary.results_dropped_provider_cap += dropped_raw
+                logger.warning(
+                    "JobSpy per-query cap: dropped %d of %d results for %r on %s",
+                    dropped_raw,
+                    len(jobs),
+                    keyword,
+                    site,
+                )
+                jobs = jobs[:per_query_cap]
+            remaining_room = self._boundary.remaining_total()
+            if remaining_room >= 0 and len(jobs) > remaining_room:
+                self._boundary.cap_reason = "max_results_total"
+                dropped_room = len(jobs) - remaining_room
+                self._boundary.results_dropped_provider_cap += dropped_room
+                logger.warning(
+                    "JobSpy provider-total clamp: dropped %d of %d results "
+                    "for %r on %s (remaining=%d)",
+                    dropped_room,
+                    len(jobs),
+                    keyword,
+                    site,
+                    remaining_room,
+                )
+                jobs = jobs[:remaining_room]
+
             for job in jobs:
                 job_hash = _compute_job_hash(job)
                 if job_hash in seen_hashes:
@@ -599,6 +654,15 @@ class JobSpyProvider:
                 setattr(job, "search_profile", query.search_profile)
                 setattr(job, "matched_technology", query.layer)
                 new_jobs.append(job)
+
+            # Boundary telemetry: received = raw provider result (post
+            # per-query slice), accepted = post-dedup new jobs.
+            self._boundary.requests += 1
+            self._boundary.results_received += len(jobs)
+            self._boundary.results_accepted += len(new_jobs)
+            self._boundary.results_dropped_provider_cap += max(
+                0, len(jobs) - len(new_jobs)
+            )
 
             all_jobs.extend(new_jobs)
 

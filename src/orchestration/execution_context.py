@@ -125,12 +125,17 @@ class PipelineExecutionContext:
     def acquire(self, job: Any, lifecycle: JobLifecycleStore) -> None:
         self.emit_job_event(job, "JobAcquired", {})
         jid = str(getattr(job, "job_id", ""))
+        # Integration (D-033): the pipeline UUID is the canonical id; the
+        # legacy ``_last_jid`` guard never resolved (no such method), leaving
+        # every lifecycle record with an empty pipeline_job_id and breaking
+        # the Copilot outcome -> WorkflowQueue seam. register() assigns the
+        # UUID and stamps it on the job (idempotent).
         lifecycle.create(
             jid,
             title=str(getattr(job, "title", "")),
             company=str(getattr(job, "company", "")),
             provider_id=str(getattr(job, "provider_id", "")),
-            pipeline_job_id=self.registry._last_jid(job) if hasattr(self.registry, '_last_jid') else "",
+            pipeline_job_id=self.registry.register(job),
         )
 
     def reject(self, job: Any, reason: str, code: str, lifecycle: JobLifecycleStore | None = None) -> None:

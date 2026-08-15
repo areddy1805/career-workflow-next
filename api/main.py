@@ -14,6 +14,7 @@ from api.routers.ledger import router as ledger_router
 from api.routers.logs import router as logs_router
 from api.routers.providers import router as providers_router
 from api.routers.developer import router as developer_router
+from api.routers.copilot import router as copilot_router
 
 app = FastAPI(title="Career Workflow API")
 
@@ -31,6 +32,7 @@ app.include_router(ledger_router, prefix="/api")
 app.include_router(logs_router, prefix="/api")
 app.include_router(providers_router, prefix="/api")
 app.include_router(developer_router, prefix="/api")
+app.include_router(copilot_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host="127.0.0.1", port=8000, reload=True)

@@ -450,6 +450,19 @@ class JobLifecycleStore:
             return 0
         return self.count_by_state(state)
 
+    def count_deferred_since(self, since: str) -> int:
+        """Records whose most recent DEFERRED transition is >= ``since``
+        (ISO timestamp) — the run-scoped deferred count used by the
+        accounting validator (the store is cumulative across runs)."""
+        count = 0
+        for record in self._records.values():
+            for t in reversed(record.transitions):
+                if t.to_state == JobState.DEFERRED:
+                    if t.timestamp >= since:
+                        count += 1
+                    break
+        return count
+
     def find_by_routing_code(self, code: str) -> list[JobLifecycleRecord]:
         state = ROUTING_CODE_TO_STATE.get(code)
         if state is None:

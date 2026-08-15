@@ -153,6 +153,41 @@ class TestCapacityPlannerEdgeCases:
         assert len(plan.planned) == 1
         assert plan.planned[0].mode == "EXTERNAL_BROWSER"
 
+    def test_non_budget_modes_route_when_budget_exhausted(self):
+        """MANUAL_REVIEW / ATS / EXTERNAL must route even when the AUTO
+        budget is exhausted — they never consume the Naukri apply budget."""
+        model = CapacityModel(daily_budget=0)  # no AUTO budget at all
+        planner = CapacityPlanner(model, [QualityConstraint(min_score=0)])
+        pool = [
+            _make_opp(
+                "manual",
+                score=95,
+                application_mode=ApplicationMode.MANUAL_REVIEW,
+            ),
+            _make_opp(
+                "ats",
+                score=90,
+                application_mode=ApplicationMode.ATS,
+            ),
+            _make_opp(
+                "ext",
+                score=85,
+                is_external=True,
+                application_mode=ApplicationMode.EXTERNAL_BROWSER,
+            ),
+            _make_opp("auto", score=99),  # AUTO deferred — budget 0
+        ]
+        plan = planner.plan(_rank(pool))
+        modes = {p.opportunity.job_id: p.mode for p in plan.planned}
+        assert modes == {
+            "manual": "MANUAL_REVIEW",
+            "ats": "ATS",
+            "ext": "EXTERNAL_BROWSER",
+        }
+        # AUTO job deferred (budget exhausted), non-budget modes planned.
+        assert any(d.opportunity.job_id == "auto" for d in plan.deferred)
+        assert plan.summary.planned == 3
+
     def test_auto_apply_mode(self):
         model = CapacityModel(daily_budget=50)
         planner = CapacityPlanner(model, [QualityConstraint(min_score=0)])

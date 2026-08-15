@@ -63,6 +63,53 @@ def resolve_answer(
         return profile.get("last_working_day")
 
     # ==========================================================================
+    # Education & employment facts (Phase F4)
+    #
+    # These rules only fire when the candidate explicitly supplied the
+    # fact in the profile.  When the key is None, resolution falls through
+    # to the LLM safety gate, which abstains (manual review).  The
+    # automation never invents education history, gaps, or employer type.
+    # ==========================================================================
+
+    if (
+        (
+            "education" in q
+            or "graduation" in q
+            or "degree" in q
+            or "diploma" in q
+            or "10th" in q
+            or "12th" in q
+            or "ug" in q
+            or "pg" in q
+        )
+        and (
+            "passing year" in q
+            or "passout" in q
+            or "passed out" in q
+            or "year of completion" in q
+            or "which year" in q
+        )
+    ):
+        return _education_passing_year(profile)
+
+    if "gap" in q and (
+        "education" in q
+        or "graduation" in q
+        or "10th" in q
+        or "12th" in q
+        or "employment" in q
+    ):
+        return _education_gap_answer(profile)
+
+    if "type of organization" in q or (
+        "organization" in q and "type" in q
+    ):
+        return profile.get("organization_type")
+
+    if "direct payroll" in q and ("interested" in q or "agree" in q):
+        return profile.get("accept_direct_payroll")
+
+    # ==========================================================================
     # Sensitive personal fields
     # ==========================================================================
 
@@ -875,6 +922,46 @@ def resolve_answer(
 # ==============================================================================
 # Serialization
 # ==============================================================================
+
+
+def _education_passing_year(profile: dict):
+    """Compose an education-history answer from explicit profile facts.
+
+    Returns None unless every requested stage is present in
+    ``profile["education_history"]`` — the automation never invents a
+    passing year.  When None, resolution falls through to the LLM safety
+    gate (which abstains) → manual review.
+    """
+    history = profile.get("education_history") or {}
+    if not isinstance(history, dict):
+        return None
+
+    stages = ["10th", "12th", "diploma", "ug", "pg"]
+    parts = []
+    for stage in stages:
+        year = history.get(stage)
+        if year is None or year == "":
+            continue
+        parts.append(f"{stage}: {year}")
+
+    return " ; ".join(parts) if parts else None
+
+
+def _education_gap_answer(profile: dict):
+    """Answer a gap question only from explicit profile facts.
+
+    ``has_education_gap`` False → "No".  ``True`` + reason → reason.
+    None (unconfigured) → None → manual review.
+    """
+    has_gap = profile.get("has_education_gap")
+    if has_gap is None:
+        return None
+    if str(has_gap).strip().lower() in ("no", "false", "0"):
+        return "No"
+    reason = profile.get("education_gap_reason")
+    if reason:
+        return reason
+    return None
 
 
 def serialize_answer(

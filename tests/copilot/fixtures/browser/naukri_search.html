@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head><title>Naukri Jobs — Search</title></head>
+<body>
+<!-- D-035 fixture: a job-board SEARCH page. Search/nav widgets only —
+     no identity fields, no resume upload, no application submit control.
+     The "Apply" buttons below are job-card links, NOT form submit. -->
+<header>
+  <form role="search">
+    <input type="text" placeholder="Enter keyword, designation, or companies" name="q">
+    <select name="experienceDD" aria-label="Select experience">
+      <option value="">Select experience</option>
+      <option value="0-1">0-1 years</option>
+      <option value="1-3">1-3 years</option>
+      <option value="3-5">3-5 years</option>
+    </select>
+    <input type="text" placeholder="Enter location" name="loc">
+    <button type="submit">Search</button>
+  </form>
+</header>
+<main>
+  <h1>Jobs in Bangalore</h1>
+  <section>
+    <article>
+      <h2>Senior Engineer</h2>
+      <p>Acme Corp — Bangalore</p>
+      <a href="/job/senior-engineer">Apply</a>
+    </article>
+    <article>
+      <h2>Product Manager</h2>
+      <p>Globex Inc — Remote</p>
+      <a href="/job/pm">Apply</a>
+    </article>
+  </section>
+</main>
+</body>
+</html>

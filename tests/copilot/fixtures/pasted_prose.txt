@@ -1,0 +1,6 @@
+Acme Corp is hiring a Senior Backend Engineer to join the Berlin office.
+The salary band is $80k - $120k with equity.
+We offer a hybrid work model (2 days on-site).
+You have 5+ years of experience with Python, SQL and AWS, and you love
+building REST APIs with FastAPI and PostgreSQL.
+Nice to have: experience with Kubernetes and Terraform.

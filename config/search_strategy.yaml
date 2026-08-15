@@ -155,13 +155,21 @@ acquisition:
 
       # Maximum pages to fetch per search track.  null = unlimited (paginate
       # until ssrIsLastPage is true).  Set a positive integer to cap depth.
-      max_pages: 5
+      max_pages: 2
+
+      # Maximum normalized jobs to keep per search track.  HiringCafe SSR
+      # returns ~80 jobs/page, so max_pages alone does NOT bound volume
+      # (5 pages x 55 tracks = ~22k jobs).  Cap per-track yield so the merge
+      # and downstream stages stay bounded; results come back in relevance
+      # order so the top of each track is what we want.
+      max_results_per_track: 50
 
       # Optional default filter values applied when the SearchPlanner track
       # does not specify remote/seniority and the provider supports them.
-      # Leave empty to fetch all results without filtering.
+      # Leave empty to fetch all results without filtering. Previously forced
+      # Remote-only, dropping Office/Hybrid roles the user wants.
       search_state_defaults:
-        workplaceTypes: ["Remote"]
+        workplaceTypes: []
         seniorityLevels: []     # e.g. ["SENIOR", "STAFF", "PRINCIPAL"]
 
 job_policy:

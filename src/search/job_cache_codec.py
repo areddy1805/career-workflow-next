@@ -45,6 +45,8 @@ class JobCacheCodec:
             "provider_name": getattr(job, "provider_name", "unknown"),
             "provider_source": getattr(job, "provider_source", "unknown"),
             "provider_job_id": getattr(job, "provider_job_id", ""),
+            "search_query": getattr(job, "search_query", ""),
+            "search_profile": getattr(job, "search_profile", "unknown"),
         }
 
     @classmethod
@@ -88,6 +90,12 @@ class JobCacheCodec:
             job,
             "acquisition_source",
             str(payload.get("acquisition_source") or "cache"),
+        )
+        setattr(job, "search_query", str(payload.get("search_query") or ""))
+        setattr(
+            job,
+            "search_profile",
+            str(payload.get("search_profile") or "unknown"),
         )
 
         return job

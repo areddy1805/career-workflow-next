@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head><title>Greenhouse Application</title></head>
+<body>
+<h1>Senior Engineer</h1>
+<form id="application_form">
+  <label for="first_name">First Name</label>
+  <input id="first_name" name="first_name" type="text" required>
+
+  <label for="last_name">Last Name</label>
+  <input id="last_name" name="last_name" type="text" required>
+
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required>
+
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" type="tel">
+
+  <label for="linkedin">LinkedIn Profile</label>
+  <input id="linkedin" name="linkedin" type="url">
+
+  <label for="resume">Resume/CV</label>
+  <input id="resume" name="resume" type="file" required>
+
+  <label for="source">How did you hear about this job?</label>
+  <select id="source" name="source" required>
+    <option value="">Select...</option>
+    <option value="linkedin">LinkedIn</option>
+    <option value="referral">Referral</option>
+    <option value="website">Company Website</option>
+  </select>
+
+  <label for="start_date">Earliest start date</label>
+  <input id="start_date" name="start_date" type="date">
+
+  <label for="years">Years of experience</label>
+  <input id="years" name="years" type="number">
+
+  <textarea id="cover" name="cover_letter" placeholder="Cover letter"></textarea>
+
+  <input type="hidden" name="csrf_token" value="abc">
+  <input type="submit" value="Submit Application">
+</form>
+</body>
+</html>

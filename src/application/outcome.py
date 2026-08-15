@@ -8,6 +8,7 @@ class ApplicationStatus(str, Enum):
     QUESTIONNAIRE_REQUIRED = "questionnaire_required"
     PROFILE_DATA_REQUIRED = "profile_data_required"
     ALREADY_APPLIED = "already_applied"
+    SKIPPED = "skipped"
     VALIDATION_FAILED = "validation_failed"
     UNKNOWN = "unknown"
 

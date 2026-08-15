@@ -7,6 +7,16 @@ from src.orchestration.stages import StageStatus
 from src.orchestration.job_lifecycle import JobState
 
 
+@pytest.fixture(autouse=True)
+def _isolate_runtime_state(tmp_path, monkeypatch):
+    """D-033: these tests construct a real CareerWorkflowPipeline; without
+    isolation they clobber the live dashboard state (data/ui_runtime) every
+    time the suite runs. Pin every runtime/state path to the tmp dir."""
+    monkeypatch.setenv("RUNTIME_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setenv("PIPELINE_STATE_PATH", str(tmp_path / "pipeline_state.json"))
+    monkeypatch.setenv("PIPELINE_LOCK_PATH", str(tmp_path / "pipeline.lock"))
+
+
 def test_duplicate_budget_exceeded_regression():
     """
     Test that BUDGET_EXCEEDED does not emit duplicate JobRejected events.

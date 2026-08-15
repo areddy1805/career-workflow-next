@@ -47,6 +47,7 @@ class ExecutionSummary:
     total_planned: int = 0
     auto_applied: int = 0
     auto_already_applied: int = 0
+    dry_run_skipped: int = 0
     external_queued: int = 0
     manual_review: int = 0
     ats_queued: int = 0
@@ -113,8 +114,10 @@ class ApplicationScheduler:
             try:
                 submitted = self._execute_one(planned, run_id)
                 if planned.mode == "AUTO":
-                    if submitted:
+                    if submitted == "applied":
                         summary.auto_applied += 1
+                    elif submitted == "skipped":
+                        summary.dry_run_skipped += 1
                     else:
                         summary.auto_already_applied += 1
                 elif planned.mode == "MANUAL_REVIEW":
@@ -164,11 +167,13 @@ class ApplicationScheduler:
         self,
         planned: PlannedApplication,
         run_id: str,
-    ) -> bool:
+    ) -> str:
         """Execute a single planned application.
 
-        Returns ``True`` when an AUTO job produced a genuine new
-        submission; ``False`` otherwise.
+        Returns ``"applied"`` for a genuine new AUTO submission,
+        ``"already_applied"`` for server-confirmed duplicates, and
+        ``"skipped"`` for dry-run suppression; any other mode returns
+        ``"routed"`` (queued, no submission).
         """
         if planned.mode == "AUTO":
             return self._execute_auto(planned, run_id)
@@ -178,9 +183,9 @@ class ApplicationScheduler:
             self._execute_ats(planned, run_id)
         elif planned.mode in ("EXTERNAL", "EXTERNAL_BROWSER"):
             self._execute_external(planned, run_id)
-        return False
+        return "routed"
 
-    def _execute_auto(self, planned: PlannedApplication, run_id: str) -> bool:
+    def _execute_auto(self, planned: PlannedApplication, run_id: str) -> str:
         """Execute an AUTO-mode application.
 
         Only genuine, server-confirmed submissions are counted as applied.
@@ -188,7 +193,9 @@ class ApplicationScheduler:
         submission, a RuntimeError is raised so the caller records a
         failure instead of a phantom success.
 
-        Returns ``True`` when a new application was submitted.
+        Returns ``"applied"`` when a new application was submitted,
+        ``"already_applied"`` for server duplicates, and ``"skipped"``
+        for dry-run suppression.
         """
         from src.application.outcome import ApplicationStatus
 
@@ -230,9 +237,23 @@ class ApplicationScheduler:
                         "reason": outcome.reasoning or "",
                     },
                 )
-            return False
+            return "already_applied"
 
         if not outcome.applied:
+            if outcome.status == ApplicationStatus.SKIPPED:
+                # Dry-run suppression: planned but not submitted, not an error.
+                self._repo.mark_status(
+                    opp.job_id,
+                    "DRY_RUN_SKIPPED",
+                    explanation=outcome.reasoning or "Dry run",
+                )
+                if self._exec_context:
+                    self._exec_context.skip(
+                        opp,
+                        reason=outcome.reasoning or "Dry run mode is enabled",
+                        code="DRY_RUN",
+                    )
+                return "skipped"
             raise RuntimeError(
                 f"Application not submitted for {opp.job_id}: "
                 f"{outcome.status.value} — {outcome.reasoning or 'no evidence of submission'}"
@@ -264,7 +285,7 @@ class ApplicationScheduler:
                     "reason": planned.explanation.summary if planned.explanation else "",
                 },
             )
-        return True
+        return "applied"
 
     @staticmethod
     def _interpret_result(result: Any) -> "ApplicationOutcome":

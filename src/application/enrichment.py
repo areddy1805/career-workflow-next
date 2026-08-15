@@ -153,8 +153,6 @@ def fetch_and_enrich(
                     if monitor:
                         monitor.task_phase("persistence")
                     if cache_manager and fingerprint:
-                        import json
-
                         start_time = time.perf_counter()
                         cache_manager.detail.set(
                             fingerprint=fingerprint,
