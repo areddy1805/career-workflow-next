@@ -9,6 +9,9 @@ import { Database, FileJson, FileText, ChevronRight } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState } from '@/components/operations/EmptyState';
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -17,7 +20,7 @@ function formatBytes(bytes: number) {
 }
 
 function FileIcon({ name }: { name: string }) {
-  if (name.endsWith('.json')) return <FileJson className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
+  if (name.endsWith('.json')) return <FileJson className="w-3.5 h-3.5 text-running shrink-0" />;
   return <FileText className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />;
 }
 
@@ -44,11 +47,13 @@ export default function Artifacts() {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <div className="flex items-center px-4 py-2 border-b shrink-0 bg-background/95 backdrop-blur z-10">
-        <h2 className="font-semibold tracking-tight">Artifact Explorer</h2>
-      </div>
+      <PageHeader
+        coordinate="04 · 03"
+        title="Explorer"
+        subtitle="Controlled investigation of run artifacts — state, traces, and evidence."
+      />
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden rounded-md border border-border">
         <ResizablePanelGroup direction="horizontal">
           {/* Left: Run List */}
           <ResizablePanel defaultSize={20} minSize={15} maxSize={30} className="bg-card flex flex-col">
@@ -58,14 +63,14 @@ export default function Artifacts() {
             </div>
             <ScrollArea className="flex-1 custom-scrollbar">
               {isLoading ? (
-                <div className="p-2 space-y-1">
-                  {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
+                <div className="p-2">
+                  <GridSkeleton rows={6} className="border-0" />
                 </div>
               ) : (
                 <div className="flex flex-col">
                   {artifacts.map((a: any) => {
                     const status = a.result?.status || a.state?.status || 'UNKNOWN';
-                    const statusColor = status === 'SUCCESS' ? 'text-green-500' : status === 'FAILED' ? 'text-red-500' : 'text-muted-foreground';
+                    const statusColor = status === 'SUCCESS' ? 'text-healthy' : status === 'FAILED' ? 'text-failed' : 'text-muted-foreground';
                     return (
                       <button
                         key={a.run_id}
@@ -85,7 +90,9 @@ export default function Artifacts() {
                       </button>
                     );
                   })}
-                  {!artifacts.length && <div className="p-4 text-xs text-muted-foreground text-center">No artifacts found.</div>}
+                  {!artifacts.length && (
+                    <EmptyState title="No artifacts found" className="py-6" />
+                  )}
                 </div>
               )}
             </ScrollArea>
@@ -105,8 +112,8 @@ export default function Artifacts() {
               {!selectedRunId ? (
                 <div className="p-4 text-xs text-muted-foreground text-center">Select a run to browse files.</div>
               ) : runDetailLoading ? (
-                <div className="p-2 space-y-1">
-                  {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
+                <div className="p-2">
+                  <GridSkeleton rows={6} className="border-0" />
                 </div>
               ) : (
                 <div className="flex flex-col">
@@ -156,9 +163,7 @@ export default function Artifacts() {
                 </div>
                 <div className="flex-1 overflow-auto bg-background/50">
                   {fileLoading ? (
-                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                      Loading…
-                    </div>
+                    <GridSkeleton rows={8} className="m-4 border-0" />
                   ) : typeof fileContent === 'object' && fileContent !== null ? (
                     <ScrollArea className="h-full w-full">
                       <div className="p-4">
@@ -182,8 +187,8 @@ export default function Artifacts() {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4 bg-muted/10">
-                <FileJson className="w-12 h-12 text-muted/30" />
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4 bg-muted/10">
+                <FileJson className="w-12 h-12 text-faint/40" />
                 <p className="text-sm">{selectedRunId ? 'Select a file to inspect its contents.' : 'Select a run from the sidebar to explore its artifacts.'}</p>
               </div>
             )}

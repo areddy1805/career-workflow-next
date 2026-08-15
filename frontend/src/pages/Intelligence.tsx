@@ -5,7 +5,8 @@ import {
   Filter, ChevronDown, ChevronRight, Zap, Database, Server,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SectionTitle } from '@/components/operations/SectionTitle';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +15,9 @@ import { Badge } from '@/components/ui/badge';
 
 const PROVIDER_META: Record<string, { label: string; icon: string; color: string }> = {
   naukri: { label: 'Naukri', icon: 'N', color: 'text-indigo-500' },
-  google: { label: 'Google Jobs', icon: 'G', color: 'text-blue-500' },
+  google: { label: 'Google Jobs', icon: 'G', color: 'text-running' },
   indeed: { label: 'Indeed', icon: 'I', color: 'text-yellow-500' },
-  linkedin: { label: 'LinkedIn', icon: 'in', color: 'text-sky-500' },
+  linkedin: { label: 'LinkedIn', icon: 'in', color: 'text-running' },
 };
 
 function ProviderCard({ id, data }: { id: string; data: any }) {
@@ -27,7 +28,7 @@ function ProviderCard({ id, data }: { id: string; data: any }) {
   const latency = (data.average_latency_seconds ?? 0).toFixed(2);
 
   return (
-    <div className="flex flex-col p-4 rounded-md border border-border bg-card shadow-card group hover:border-foreground/20 transition-colors">
+    <div className="flex flex-col p-4 rounded-md border border-border bg-surface group hover:border-foreground/20 transition-colors">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={cn('w-8 h-8 rounded border border-border bg-muted/30 flex items-center justify-center text-[10px] font-bold tracking-wider', meta.color)}>
@@ -51,11 +52,11 @@ function ProviderCard({ id, data }: { id: string; data: any }) {
         </div>
         <div className="border border-border/50 bg-muted/20 rounded p-2 text-center group-hover:bg-muted/40 transition-colors">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Success</p>
-          <p className={cn('text-[13px] font-bold font-mono', Number(successPct) >= 90 ? 'text-emerald-500' : 'text-amber-500')}>{successPct}%</p>
+          <p className={cn('text-[13px] font-bold font-mono', Number(successPct) >= 90 ? 'text-healthy' : 'text-degraded')}>{successPct}%</p>
         </div>
         <div className="border border-border/50 bg-muted/20 rounded p-2 text-center group-hover:bg-muted/40 transition-colors">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Latency</p>
-          <p className={cn('text-[13px] font-bold font-mono', Number(latency) > 10 ? 'text-amber-500' : 'text-foreground')}>{latency}s</p>
+          <p className={cn('text-[13px] font-bold font-mono', Number(latency) > 10 ? 'text-degraded' : 'text-foreground')}>{latency}s</p>
         </div>
       </div>
     </div>
@@ -102,7 +103,7 @@ function CoverageMatrix({ queries }: { queries: any[] }) {
         <tbody className="divide-y divide-border/50">
           {profiles.map((profile) => (
             <tr key={profile} className="hover:bg-muted/30 transition-colors">
-              <td className="px-4 py-2.5 font-mono text-[10px] font-medium text-foreground border-r border-border/50 sticky left-0 bg-card z-10 whitespace-nowrap">
+              <td className="px-4 py-2.5 font-mono text-[10px] font-medium text-foreground border-r border-border/50 sticky left-0 bg-surface z-10 whitespace-nowrap">
                 {(profile as string).replace(/_/g, ' ')}
               </td>
               {orderedTechs.map(tech => {
@@ -113,7 +114,7 @@ function CoverageMatrix({ queries }: { queries: any[] }) {
                   <td key={tech} className="text-center py-2.5">
                     {has ? (
                       <span title={`${tier}`} className={cn(
-                        'inline-block w-4 h-4 rounded-sm mx-auto shadow-sm',
+                        'inline-block w-4 h-4 rounded-sm mx-auto',
                         tier === 'TIER_A' ? 'bg-primary' : 'bg-muted-foreground/40'
                       )} />
                     ) : (
@@ -167,7 +168,7 @@ function QueryBrowser({ queries }: { queries: any[] }) {
 
   return (
     <div className="flex flex-col gap-0 h-full">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/50">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface/50">
         <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Filter active queries…"
@@ -206,8 +207,8 @@ function QueryBrowser({ queries }: { queries: any[] }) {
                 {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                 <span className="font-mono text-[11px] font-medium flex-1 text-foreground">{profile.replace(/_/g, ' ')}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded shadow-sm">{tierA} TIER_A</span>
-                  {tierB > 0 && <span className="text-[9px] font-mono bg-muted text-muted-foreground border border-border/50 px-1.5 py-0.5 rounded shadow-sm">{tierB} TIER_B</span>}
+                  <span className="text-[9px] font-mono bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded">{tierA} TIER_A</span>
+                  {tierB > 0 && <span className="text-[9px] font-mono bg-muted text-muted-foreground border border-border/50 px-1.5 py-0.5 rounded">{tierB} TIER_B</span>}
                 </div>
               </button>
               {isOpen && (
@@ -273,42 +274,44 @@ export default function Search() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col p-6 animate-in fade-in duration-300">
-        <div className="animate-pulse space-y-6">
-          <div className="h-10 bg-muted/50 w-1/3 rounded-md" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="h-32 bg-muted/50 rounded-md" />)}</div>
-          <div className="h-80 bg-muted/50 rounded-md" />
-        </div>
+      <div className="h-full flex flex-col">
+        <PageHeader
+          coordinate="04 · 02"
+          title="AI Insights"
+          subtitle="Active search strategy, provider health, and query coverage matrix."
+        />
+        <GridSkeleton rows={6} className="flex-1" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-300 overflow-auto">
-      <SectionTitle 
-        title="Search Intelligence" 
+    <div className="h-full flex flex-col overflow-auto">
+      <PageHeader
+        coordinate="04 · 02"
+        title="AI Insights"
         subtitle="Active search strategy, provider health, and query coverage matrix."
       />
 
-      <div className="flex-1 flex flex-col gap-8 pb-8">
+      <div className="flex-1 flex flex-col gap-6 pb-8">
 
         {/* Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-card border border-border rounded-md shadow-card p-5">
+          <div className="bg-surface border border-border rounded-md p-5">
             <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-2 flex items-center gap-2"><Layers className="w-3.5 h-3.5" /> Active Profiles</p>
             <p className="text-2xl font-bold tracking-tight text-foreground font-mono">{active_profiles.length}</p>
           </div>
-          <div className="bg-card border border-border rounded-md shadow-card p-5">
+          <div className="bg-surface border border-border rounded-md p-5">
             <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-2 flex items-center gap-2"><MapPin className="w-3.5 h-3.5" /> Locations</p>
             <p className="text-2xl font-bold tracking-tight text-foreground font-mono">{locations.length}</p>
             <p className="text-[10px] text-muted-foreground mt-1 truncate">{(locations as string[]).join(', ')}</p>
           </div>
-          <div className="bg-card border border-border rounded-md shadow-card p-5">
+          <div className="bg-surface border border-border rounded-md p-5">
             <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-2 flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-primary" /> Tier A Queries</p>
             <p className="text-2xl font-bold tracking-tight text-primary font-mono">{tierCounts['TIER_A'] ?? 0}</p>
             <p className="text-[10px] text-muted-foreground mt-1">Priority acquisition</p>
           </div>
-          <div className="bg-card border border-border rounded-md shadow-card p-5">
+          <div className="bg-surface border border-border rounded-md p-5">
             <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-2 flex items-center gap-2"><Database className="w-3.5 h-3.5" /> Total Combos</p>
             <p className="text-2xl font-bold tracking-tight text-foreground font-mono">{total_queries.toLocaleString()}</p>
             <p className="text-[10px] text-muted-foreground mt-1">TIER_B: {tierCounts['TIER_B'] ?? 0}</p>
@@ -340,7 +343,7 @@ export default function Search() {
               <Cpu className="w-3.5 h-3.5" />
               Coverage Matrix
             </h3>
-            <div className="bg-card border border-border rounded-md shadow-card flex-1">
+            <div className="bg-surface border border-border rounded-md flex-1">
               <CoverageMatrix queries={queries} />
             </div>
           </div>
@@ -350,7 +353,7 @@ export default function Search() {
               <Globe className="w-3.5 h-3.5" />
               Active Query Browser
             </h3>
-            <div className="bg-card border border-border rounded-md shadow-card flex-1 max-h-[445px]">
+            <div className="bg-surface border border-border rounded-md flex-1 max-h-[445px]">
               <QueryBrowser queries={queries} />
             </div>
           </div>

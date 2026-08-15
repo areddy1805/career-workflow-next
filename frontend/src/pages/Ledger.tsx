@@ -2,9 +2,14 @@ import { useState } from 'react';
 import { useLedgerSearch, useLedgerStats, useLedgerJob } from '@/lib/hooks';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { StatRow } from '@/components/operations/StatRow';
-import { SectionTitle } from '@/components/operations/SectionTitle';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState } from '@/components/operations/EmptyState';
 import { RelativeTime } from '@/components/RelativeTime';
 import { Search, ChevronLeft, ChevronRight, FileJson, Cpu, MapPin, Building, Globe } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -30,29 +35,30 @@ export default function Ledger() {
   const hasMore = offset + limit < total;
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-300">
-      <SectionTitle 
-        title="Decision Ledger" 
+    <div className="h-full flex flex-col">
+      <PageHeader
+        coordinate="04 · 01"
+        title="Decision Ledger"
         subtitle="Operational state and AI analysis for every discovered opportunity."
-        action={
+        actions={
           stats ? (
             <div className="flex items-center gap-6 text-right">
               <div>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Tracked</p>
-                <p className="font-mono text-[13px] font-semibold text-foreground tracking-tight">{stats.total?.toLocaleString()}</p>
+                <p className="font-mono text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Tracked</p>
+                <p className="font-mono text-[13px] font-semibold text-foreground tracking-tight tabular-nums">{stats.total?.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Applied</p>
-                <p className="font-mono text-[13px] font-semibold text-emerald-500 tracking-tight">{stats.applied?.toLocaleString()}</p>
+                <p className="font-mono text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">Total Applied</p>
+                <p className="font-mono text-[13px] font-semibold text-healthy tracking-tight tabular-nums">{stats.applied?.toLocaleString()}</p>
               </div>
             </div>
           ) : null
         }
       />
 
-      <div className="flex-1 flex flex-col min-h-0 bg-card border border-border rounded-md shadow-card">
+      <div className="flex-1 flex flex-col min-h-0 bg-surface border border-border rounded-md">
         {/* Filters */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/50 shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface/80 shrink-0">
           <div className="relative w-64 group">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
             <Input 
@@ -62,34 +68,36 @@ export default function Ledger() {
               className="h-8 pl-9 text-xs bg-background/50 focus-visible:bg-background"
             />
           </div>
-          <select 
-            className="h-8 rounded-md border border-input bg-background/50 focus:bg-background px-3 py-1 text-xs shadow-sm transition-colors outline-none focus:ring-1 focus:ring-ring"
-            value={status}
-            onChange={e => { setStatus(e.target.value); setOffset(0); }}
-          >
-            <option value="">All Statuses</option>
-            <option value="applied">Applied</option>
-            <option value="rejected">Rejected</option>
-            <option value="qualified">Qualified</option>
-          </select>
-          <select 
-            className="h-8 rounded-md border border-input bg-background/50 focus:bg-background px-3 py-1 text-xs shadow-sm transition-colors outline-none focus:ring-1 focus:ring-ring"
-            value={provider}
-            onChange={e => { setProvider(e.target.value); setOffset(0); }}
-          >
-            <option value="">All Providers</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="naukri">Naukri</option>
-            <option value="indeed">Indeed</option>
-            <option value="google">Google</option>
-          </select>
+          <Select value={status} onValueChange={v => { setStatus(v); setOffset(0); }}>
+            <SelectTrigger aria-label="Filter by status" className="h-8 w-auto min-w-[120px] text-xs">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All Statuses</SelectItem>
+              <SelectItem value="applied">Applied</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="qualified">Qualified</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={provider} onValueChange={v => { setProvider(v); setOffset(0); }}>
+            <SelectTrigger aria-label="Filter by provider" className="h-8 w-auto min-w-[120px] text-xs">
+              <SelectValue placeholder="All Providers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All Providers</SelectItem>
+              <SelectItem value="linkedin">LinkedIn</SelectItem>
+              <SelectItem value="naukri">Naukri</SelectItem>
+              <SelectItem value="indeed">Indeed</SelectItem>
+              <SelectItem value="google">Google</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Table */}
         <div className="flex-1 overflow-auto relative">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-muted/30 z-20 backdrop-blur-sm">
-              <tr className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <table className="w-full min-w-[900px] text-left border-collapse">
+            <thead className="sticky top-0 bg-muted/30 z-20">
+              <tr className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 <th className="px-4 py-3 border-b border-border w-32">Status</th>
                 <th className="px-4 py-3 border-b border-border">Company</th>
                 <th className="px-4 py-3 border-b border-border">Title</th>
@@ -103,7 +111,9 @@ export default function Ledger() {
               {items.map((job: any) => (
                 <tr 
                   key={job.job_id} 
-                  className="hover:bg-muted/30 transition-colors group cursor-pointer"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedFingerprint(job.job_id); } }}
+                  className="hover:bg-muted/30 transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   onClick={() => setSelectedFingerprint(job.job_id)}
                 >
                   <td className="px-4 py-3">
@@ -129,26 +139,22 @@ export default function Ledger() {
             </tbody>
           </table>
 
-          {isLoading && (
-            <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex justify-center pt-32 z-30">
-              <div className="flex items-center gap-3 text-sm text-foreground font-mono bg-card px-5 py-3 border border-border rounded-full shadow-lg h-12">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                Querying ledger...
-              </div>
+          {isLoading && items.length === 0 && (
+            <div className="m-4">
+              <GridSkeleton rows={8} />
             </div>
           )}
           
           {!isLoading && items.length === 0 && (
-            <div className="py-24 flex flex-col items-center justify-center text-center">
-              <Search className="w-8 h-8 text-muted-foreground/30 mb-3" />
-              <p className="text-sm font-medium text-foreground">No records found</p>
-              <p className="text-xs text-muted-foreground mt-1">Try adjusting your filters or search query.</p>
-            </div>
+            <EmptyState
+              title="No records found"
+              description="Try adjusting your filters or search query."
+            />
           )}
         </div>
 
         {/* Pagination */}
-        <div className="h-12 border-t border-border flex items-center justify-between px-4 bg-card/50 shrink-0">
+        <div className="h-12 border-t border-border flex items-center justify-between px-4 bg-surface/80 shrink-0">
           <span className="text-[11px] font-mono text-muted-foreground">
             Showing {Math.min(offset + 1, total)}-{Math.min(offset + limit, total)} of {total.toLocaleString()}
           </span>
@@ -177,8 +183,8 @@ export default function Ledger() {
 
       {/* Details Sheet */}
       <Sheet open={!!selectedFingerprint} onOpenChange={(v) => !v && setSelectedFingerprint(null)}>
-        <SheetContent className="w-[480px] sm:w-[600px] flex flex-col p-0 border-l border-border bg-background shadow-2xl">
-          <SheetHeader className="px-6 py-5 border-b border-border bg-card/50 shrink-0">
+        <SheetContent className="w-[480px] sm:w-[600px] flex flex-col p-0 border-l border-border bg-surface">
+          <SheetHeader className="px-6 py-5 border-b border-border bg-surface/80 shrink-0">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-base font-semibold tracking-tight text-foreground">Intelligence Trace</SheetTitle>
               {selectedFingerprint && <CopyButton value={selectedFingerprint} className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
@@ -190,10 +196,7 @@ export default function Ledger() {
           <ScrollArea className="flex-1 bg-muted/10">
             <div className="p-6">
               {detailsLoading ? (
-                 <div className="animate-pulse space-y-6">
-                   <div className="h-6 bg-muted/50 w-2/3 rounded"></div>
-                   <div className="h-40 bg-card rounded border border-border"></div>
-                 </div>
+                 <GridSkeleton rows={4} />
               ) : jobDetails ? (
                 <div className="space-y-8">
                   {/* Job Header */}
@@ -228,7 +231,7 @@ export default function Ledger() {
                         <Cpu className="w-3.5 h-3.5" />
                         AI Analysis
                       </h4>
-                      <div className="bg-card border border-border rounded-md shadow-card p-4 space-y-3">
+                      <div className="bg-surface border border-border rounded-md p-4 space-y-3">
                         {typeof jobDetails.job.llm_analysis === 'object' ? (
                            <>
                               <StatRow label="Qualification" value={
@@ -269,7 +272,7 @@ export default function Ledger() {
                             <RelativeTime date={evt.created_at} className="text-[11px] font-mono text-muted-foreground" />
                           </div>
                           {evt.detail && (
-                            <div className="text-xs text-muted-foreground bg-card border border-border/50 rounded-md p-3 shadow-sm leading-relaxed">
+                            <div className="text-xs text-muted-foreground bg-surface border border-border/50 rounded-md p-3 leading-relaxed">
                               {evt.detail}
                             </div>
                           )}
@@ -284,8 +287,8 @@ export default function Ledger() {
                       <FileJson className="w-3.5 h-3.5" /> 
                       Raw Ledger Entity
                     </h4>
-                    <div className="bg-[#0a0a0a] border border-border rounded-md overflow-hidden">
-                      <pre className="text-[10px] font-mono text-zinc-400 p-4 overflow-auto max-h-[300px]">
+                    <div className="bg-console border border-border rounded-md overflow-hidden">
+                      <pre className="text-[10px] font-mono text-console-foreground/75 p-4 overflow-auto max-h-[300px]">
                         {JSON.stringify(jobDetails.job, null, 2)}
                       </pre>
                     </div>
