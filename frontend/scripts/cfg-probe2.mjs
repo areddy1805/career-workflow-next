@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const page = await b.newPage();
+const errors = [];
+page.on('pageerror', e => errors.push(String(e)));
+await page.goto('http://localhost:5173/configuration', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(4000);
+const main = await page.locator('main').textContent();
+console.log('main:', JSON.stringify(main?.slice(0, 300)));
+const sections = await page.locator('main > *').count();
+console.log('main children:', sections);
+await b.close();

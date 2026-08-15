@@ -1,21 +1,17 @@
-import { Info, Code, ExternalLink } from "lucide-react";
+import { Code, ExternalLink } from "lucide-react";
+import { PageHeader } from '@/components/operations/PageHeader';
 
 export default function About() {
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <Info className="w-4 h-4 text-primary" /> About
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Platform information and resources.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="07 · 02"
+        title="About"
+        subtitle="Platform information and resources."
+      />
 
       <div className="flex-1 overflow-auto bg-muted/5 p-6 flex items-center justify-center">
-        <div className="max-w-md w-full bg-card border border-border/50 rounded-xl p-8 text-center space-y-6 shadow-sm">
+        <div className="max-w-md w-full bg-surface border border-border/50 rounded-md p-8 text-center space-y-6">
           <div>
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
               <span className="text-2xl font-black tracking-tighter text-primary">

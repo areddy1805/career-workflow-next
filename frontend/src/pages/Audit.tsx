@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuditPipeline, useAuditFilters, useAuditRanking, useAuditSystem } from '@/lib/hooks';
-import { ShieldAlert, FileJson } from 'lucide-react';
+import { FileJson } from 'lucide-react';
+import { PageHeader } from '@/components/operations/PageHeader';
 
 type AuditTab = 'pipeline' | 'filters' | 'ranking' | 'system';
 
@@ -23,25 +24,30 @@ export default function Audit() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-primary" /> System Audit
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Read-only operational view of system configurations, ranking logic, and pipeline rules.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="06 · 04"
+        title="Audit"
+        subtitle="Read-only operational view of system configurations, ranking logic, and pipeline rules."
+      />
 
-      <div className="flex items-center border-b border-border/40 px-6 bg-background/80">
+      <div role="tablist" aria-label="Audit surfaces" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0">
         {tabs.map(tab => (
           <button
             key={tab.id}
+            role="tab"
+            id={`audit-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`audit-panel-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-0 py-3 mr-6 text-xs font-medium border-b-2 transition-colors ${
+            onKeyDown={e => {
+              const ids = tabs.map(t => t.id);
+              const idx = ids.indexOf(activeTab);
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab(ids[(idx + 1) % ids.length]); }
+              else if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab(ids[(idx - 1 + ids.length) % ids.length]); }
+            }}
+            className={`flex items-center gap-2 px-0 py-3 mr-6 text-xs font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
               activeTab === tab.id
-                ? 'border-primary text-primary'
+                ? 'border-foreground text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
             }`}
           >
@@ -50,7 +56,7 @@ export default function Audit() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-auto bg-muted/5 p-6">
+      <div role="tabpanel" id={`audit-panel-${activeTab}`} className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center gap-2 mb-2 text-muted-foreground">
             <FileJson className="w-4 h-4" />
@@ -59,7 +65,7 @@ export default function Audit() {
             </span>
           </div>
           
-          <div className="bg-card border border-border/50 rounded-lg p-4 overflow-auto shadow-sm">
+          <div className="bg-surface border border-border/50 rounded-lg p-4 overflow-auto">
             {activeTabData?.loading ? (
               <div className="animate-pulse space-y-2">
                 <div className="h-4 bg-muted w-1/4 rounded"></div>

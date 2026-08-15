@@ -7,7 +7,7 @@ import {
   useLogsWarnings,
   useLogsLedger,
 } from '@/lib/hooks';
-import { Terminal } from 'lucide-react';
+import { PageHeader } from '@/components/operations/PageHeader';
 
 type LogTab = 'pipeline' | 'runtime' | 'eventbus' | 'errors' | 'warnings' | 'ledger';
 
@@ -35,40 +35,45 @@ export default function Logs() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-primary" /> System Logs
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Read-only stream of operational logs across all services.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="06 · 02"
+        title="Logs"
+        subtitle="Read-only stream of operational logs across all services."
+      />
 
-      <div className="flex items-center border-b border-border/40 px-6 bg-background/80">
+      <div role="tablist" aria-label="Log sources" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0">
         {tabs.map(tab => (
           <button
             key={tab.id}
+            role="tab"
+            id={`log-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`log-panel-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-0 py-3 mr-6 text-xs font-medium border-b-2 transition-colors ${
+            onKeyDown={e => {
+              const ids = tabs.map(t => t.id);
+              const idx = ids.indexOf(activeTab);
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab(ids[(idx + 1) % ids.length]); }
+              else if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab(ids[(idx - 1 + ids.length) % ids.length]); }
+            }}
+            className={`flex items-center gap-2 px-0 py-3 mr-6 text-xs font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
               activeTab === tab.id
-                ? 'border-primary text-primary'
+                ? 'border-foreground text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
             }`}
           >
             {tab.label}
             {tab.id === 'errors' && tab.data?.logs?.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              <span className="w-2 h-2 rounded-full bg-failed"></span>
             )}
             {tab.id === 'warnings' && tab.data?.logs?.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span className="w-2 h-2 rounded-full bg-degraded"></span>
             )}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 bg-[#0d1117] overflow-auto p-4 flex flex-col-reverse">
+      <div role="tabpanel" id={`log-panel-${activeTab}`} className="flex-1 bg-console overflow-auto p-4 flex flex-col-reverse">
         {activeTabData?.loading ? (
           <div className="text-muted-foreground font-mono text-xs animate-pulse">Loading logs...</div>
         ) : logLines.length > 0 ? (
@@ -76,9 +81,9 @@ export default function Logs() {
             {logLines.map((line, idx) => {
               // Basic colorization based on log levels if they exist in the string
               let colorClass = "text-gray-300";
-              if (line.includes('ERROR') || line.includes('CRITICAL')) colorClass = "text-red-400";
-              else if (line.includes('WARN')) colorClass = "text-amber-400";
-              else if (line.includes('INFO')) colorClass = "text-blue-300";
+              if (line.includes('ERROR') || line.includes('CRITICAL')) colorClass = "text-failed";
+              else if (line.includes('WARN')) colorClass = "text-degraded";
+              else if (line.includes('INFO')) colorClass = "text-running";
               else if (line.includes('DEBUG')) colorClass = "text-gray-500";
               
               return (

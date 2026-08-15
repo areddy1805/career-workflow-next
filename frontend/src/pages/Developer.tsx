@@ -1,6 +1,7 @@
 import { useDeveloper } from '@/lib/hooks';
 import { Zap, Activity, Cpu, Network, Package } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
+import { PageHeader } from '@/components/operations/PageHeader';
 
 export default function Developer() {
   const { data: devData, isLoading } = useDeveloper();
@@ -17,23 +18,18 @@ export default function Developer() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" /> Developer Console
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Internal administrative diagnostics and API health.
-          </p>
-        </div>
-        <StatusBadge status={devData?.api_health === 'Healthy' ? 'HEALTHY' : 'DEGRADED'} />
-      </div>
+      <PageHeader
+        coordinate="06 · 03"
+        title="Developer Console"
+        subtitle="Internal administrative diagnostics and API health."
+        actions={<StatusBadge status={devData?.api_health === 'Healthy' ? 'HEALTHY' : 'DEGRADED'} />}
+      />
 
-      <div className="flex-1 overflow-auto bg-muted/5 p-6">
+      <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           
           {/* Environment */}
-          <div className="bg-card border border-border/50 rounded-lg p-5">
+          <div className="bg-surface border border-border/50 rounded-lg p-5">
             <h2 className="text-sm font-semibold flex items-center gap-2 mb-4">
               <Package className="w-4 h-4 text-muted-foreground" /> Environment
             </h2>
@@ -48,7 +44,7 @@ export default function Developer() {
           </div>
 
           {/* Feature Flags */}
-          <div className="bg-card border border-border/50 rounded-lg p-5">
+          <div className="bg-surface border border-border/50 rounded-lg p-5">
             <h2 className="text-sm font-semibold flex items-center gap-2 mb-4">
               <Activity className="w-4 h-4 text-muted-foreground" /> Feature Flags
             </h2>
@@ -57,7 +53,7 @@ export default function Developer() {
                 <div key={key} className="flex justify-between items-center text-xs">
                   <span className="text-muted-foreground">{key}</span>
                   {enabled ? (
-                    <span className="text-emerald-500 font-bold text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded">ON</span>
+                    <span className="text-healthy font-bold text-[10px] bg-healthy/10 px-1.5 py-0.5 rounded">ON</span>
                   ) : (
                     <span className="text-muted-foreground font-bold text-[10px] bg-muted px-1.5 py-0.5 rounded">OFF</span>
                   )}
@@ -67,7 +63,7 @@ export default function Developer() {
           </div>
 
           {/* Thread Pools & Runtime */}
-          <div className="bg-card border border-border/50 rounded-lg p-5">
+          <div className="bg-surface border border-border/50 rounded-lg p-5">
             <h2 className="text-sm font-semibold flex items-center gap-2 mb-4">
               <Cpu className="w-4 h-4 text-muted-foreground" /> Runtime Diagnostics
             </h2>
@@ -82,7 +78,7 @@ export default function Developer() {
           </div>
 
           {/* Registered Routes */}
-          <div className="bg-card border border-border/50 rounded-lg p-5 lg:col-span-3">
+          <div className="bg-surface border border-border/50 rounded-lg p-5 lg:col-span-3">
             <h2 className="text-sm font-semibold flex items-center gap-2 mb-4">
               <Network className="w-4 h-4 text-muted-foreground" /> Registered API Routes
             </h2>

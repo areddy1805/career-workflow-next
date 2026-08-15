@@ -14,6 +14,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { TrendingUp, Activity, CheckCircle2, Layers, Target } from 'lucide-react';
+import { PageHeader } from '@/components/operations/PageHeader';
 
 // ─── Label Maps ──────────────────────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ function KpiCard({
   label, value, sub, icon: Icon, color = 'text-primary',
 }: { label: string; value: string | number; sub?: string; icon: any; color?: string }) {
   return (
-    <div className="bg-card border border-border/50 rounded-lg p-4 flex items-start gap-3">
+    <div className="bg-surface border border-border/50 rounded-lg p-4 flex items-start gap-3">
       <div className={`mt-0.5 p-2 rounded-md bg-current/10 ${color}`}>
         <Icon className="w-3.5 h-3.5" />
       </div>
@@ -131,30 +132,25 @@ export default function Analytics() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      {/* Page Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Analytics</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Pipeline performance, application lifecycle, and outcome trends.
-            <span className="ml-1 text-muted-foreground/60">{totalRuns} runs · {totalJobs.toLocaleString()} jobs</span>
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="05 · 01"
+        title="Metrics"
+        subtitle={`Pipeline performance, application lifecycle, and outcome trends. ${totalRuns} runs · ${totalJobs.toLocaleString()} jobs.`}
+      />
 
-      <div className="flex-1 overflow-auto p-5 space-y-5">
+      <div className="flex-1 overflow-auto pb-5">
         {/* KPI Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard label="Total Jobs" value={totalJobs.toLocaleString()} sub="ingested from all providers" icon={Layers} color="text-primary" />
-          <KpiCard label="Total Applied" value={totalApplied.toLocaleString()} sub="across all runs" icon={CheckCircle2} color="text-green-500" />
-          <KpiCard label="Run Success Rate" value={`${successRate}%`} sub={`${successRuns} of ${totalRuns} runs`} icon={Target} color="text-blue-400" />
-          <KpiCard label="Avg Jobs / Run" value={avgAcquired} sub="acquired per run (last 20)" icon={Activity} color="text-amber-400" />
+          <KpiCard label="Total Applied" value={totalApplied.toLocaleString()} sub="across all runs" icon={CheckCircle2} color="text-healthy" />
+          <KpiCard label="Run Success Rate" value={`${successRate}%`} sub={`${successRuns} of ${totalRuns} runs`} icon={Target} color="text-running" />
+          <KpiCard label="Avg Jobs / Run" value={avgAcquired} sub="acquired per run (last 20)" icon={Activity} color="text-degraded" />
         </div>
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           {/* Lifecycle Distribution — 2 cols */}
-          <div className="xl:col-span-2 bg-card border border-border/50 rounded-lg p-4">
+          <div className="xl:col-span-2 bg-surface border border-border/50 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Application Lifecycle Distribution</span>
             </div>
@@ -203,7 +199,7 @@ export default function Analytics() {
           </div>
 
           {/* Pipeline Yield Trend — 3 cols */}
-          <div className="xl:col-span-3 bg-card border border-border/50 rounded-lg p-4">
+          <div className="xl:col-span-3 bg-surface border border-border/50 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-3 h-3 text-muted-foreground" />
               <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Pipeline Yield Trend — Last {recentRuns.length} Runs</span>
@@ -236,7 +232,7 @@ export default function Analytics() {
         </div>
 
         {/* Outcomes Row */}
-        <div className="bg-card border border-border/50 rounded-lg p-4">
+        <div className="bg-surface border border-border/50 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Application Outcomes per Run — Last {recentRuns.length} Runs</span>
           </div>

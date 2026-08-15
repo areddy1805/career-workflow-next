@@ -4,6 +4,7 @@ import { Activity, Server, Clock, Lock, Cpu, CheckCircle, AlertCircle } from 'lu
 import { StatusBadge } from '@/components/StatusBadge';
 import { RelativeTime } from '@/components/RelativeTime';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/operations/PageHeader';
 
 // ─── Reusable data row ────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ function ModuleCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-border/50 rounded-lg bg-card overflow-hidden">
+    <div className="border border-border/50 rounded-lg bg-surface overflow-hidden">
       <div className="h-10 px-4 border-b border-border/50 bg-muted/10 flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <Icon className="w-3.5 h-3.5" />
@@ -48,7 +49,7 @@ function ModuleCard({
 function AliveIndicator({ alive }: { alive: boolean | undefined }) {
   if (alive == null) return <span className="text-muted-foreground">—</span>;
   return (
-    <span className={cn('flex items-center gap-1.5 justify-end', alive ? 'text-emerald-500' : 'text-red-400')}>
+    <span className={cn('flex items-center gap-1.5 justify-end', alive ? 'text-healthy' : 'text-failed')}>
       {alive
         ? <CheckCircle className="w-3.5 h-3.5" />
         : <AlertCircle className="w-3.5 h-3.5" />}
@@ -87,17 +88,13 @@ export default function Runtime() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      {/* Page Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Pipeline Health</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Real-time status of the scheduler, pipeline worker, and API server.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="06 · 01"
+        title="System Health"
+        subtitle="Real-time status of the scheduler, pipeline worker, and API server."
+      />
 
-      <div className="flex-1 overflow-auto p-6 max-w-4xl space-y-6">
+      <div className="flex-1 overflow-auto max-w-4xl space-y-6 pb-8">
 
         {/* Process modules — 3 cards in a grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -114,7 +111,7 @@ export default function Runtime() {
             <DataRow label="Process"  value={<AliveIndicator alive={pipeline?.is_alive} />} />
             <DataRow label="Lock"     value={
               scheduler?.lock
-                ? <span className="flex items-center gap-1.5 text-red-400 justify-end"><Lock className="w-3 h-3" /> Locked</span>
+                ? <span className="flex items-center gap-1.5 text-failed justify-end"><Lock className="w-3 h-3" /> Locked</span>
                 : <span className="text-muted-foreground">Free</span>
             } />
             <DataRow label="PID"      value={pipeline?.pid ?? '—'} mono />
@@ -146,7 +143,7 @@ export default function Runtime() {
               </ModuleCard>
 
               {/* Stage Checklist */}
-              <div className="border border-border/50 rounded-lg bg-card overflow-hidden">
+              <div className="border border-border/50 rounded-lg bg-surface overflow-hidden">
                 <div className="h-10 px-4 border-b border-border/50 bg-muted/10 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider gap-2">
                   <Cpu className="w-3.5 h-3.5" /> Stage Checklist
                 </div>
@@ -184,12 +181,12 @@ export default function Runtime() {
 
               {/* Application */}
               <ModuleCard icon={Activity} title="Application">
-                <DataRow label="Submitted (Live)"   value={<span className="text-emerald-500 font-semibold">{latest_run_details.application?.submitted ?? '—'}</span>} />
+                <DataRow label="Submitted (Live)"   value={<span className="text-healthy font-semibold">{latest_run_details.application?.submitted ?? '—'}</span>} />
                 <DataRow label="Dry Run Skipped"    value={latest_run_details.application?.dry_run_skipped ?? '—'} mono />
-                <DataRow label="Sent to Review"     value={<span className="text-purple-400 font-semibold">{latest_run_details.application?.manual_review ?? '—'}</span>} />
+                <DataRow label="Sent to Review"     value={<span className="text-pending font-semibold">{latest_run_details.application?.manual_review ?? '—'}</span>} />
                 <DataRow label="Failed"             value={
                   (latest_run_details.application?.failed ?? 0) > 0
-                    ? <span className="text-red-400 font-semibold">{latest_run_details.application?.failed}</span>
+                    ? <span className="text-failed font-semibold">{latest_run_details.application?.failed}</span>
                     : '0'
                 } />
               </ModuleCard>
@@ -197,9 +194,9 @@ export default function Runtime() {
 
             {/* Errors */}
             {latest_run_details.errors?.length > 0 && (
-              <div className="border border-red-500/20 rounded-lg bg-red-500/5 p-4">
-                <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider mb-3">Runtime Errors</p>
-                <ul className="space-y-1 text-xs text-red-400 font-mono">
+              <div className="border border-failed/40 rounded-lg bg-failed/5 p-4">
+                <p className="text-[10px] font-semibold text-failed uppercase tracking-wider mb-3">Runtime Errors</p>
+                <ul className="space-y-1 text-xs text-failed font-mono">
                   {latest_run_details.errors.map((err: string, i: number) => (
                     <li key={i} className="flex gap-2 items-start">
                       <span className="shrink-0 opacity-60">•</span>
