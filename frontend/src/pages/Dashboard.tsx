@@ -1,314 +1,363 @@
-import React from 'react';
-import { useDashboard } from '@/lib/hooks';
-import { StatusBadge } from '@/components/operations/StatusBadge';
-import { MetricCard, MetricGrid } from '@/components/operations/MetricCard';
-import { SectionTitle } from '@/components/operations/SectionTitle';
+import { Link } from 'react-router-dom';
+import { useDashboard, useRuntime, useManualReviewQueue, useExternalApplyQueue, useOtherActionQueue } from '@/lib/hooks';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { Panel, PanelHeader } from '@/components/operations/Panel';
+import { StateMarker, type StateSemantic } from '@/components/operations/StateMarker';
+import { StationTopology, type TopoStation, type TopoBreaker } from '@/components/operations/StationTopology';
+import { EnvelopeTrace } from '@/components/operations/EnvelopeTrace';
+import { EmptyState } from '@/components/operations/EmptyState';
+import { ErrorState } from '@/components/operations/ErrorState';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { RelativeTime } from '@/components/RelativeTime';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { Briefcase, CheckCircle2, TrendingUp, Play, Cpu, CheckCircle, AlertCircle, Clock, Activity } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
-// ─── Lifecycle map ────────────────────────────────────────────────────────────
-const LIFECYCLE_LABELS: Record<string, string> = {
-  UNKNOWN:     'Acquired',
-  SUBMITTED:   'Submitted',
-  VIEWED:      'Viewed',
-  SHORTLISTED: 'Shortlisted',
-  INTERVIEW:   'Interview',
-  REJECTED:    'Rejected',
-  OFFER:       'Offer',
-};
+// ─── Overview — the Grid Control dispatch view (DESIGN.md §6) ────────────────
+// Five zones, real data only: topology strip → operating-state bar →
+// attention/fault conditions → execution activity → key readings.
+// Not a metric-card grid; honest idle/unknown when data is absent.
 
-const PIPELINE_STAGES = [
-  { key: 'preflight',      label: 'Preflight'       },
-  { key: 'acquisition',   label: 'Acquisition'     },
-  { key: 'classification',label: 'Classification'  },
-  { key: 'selection',     label: 'Selection'       },
-  { key: 'application',   label: 'Application'     },
-  { key: 'reconciliation',label: 'Reconciliation'  },
-  { key: 'strategy',      label: 'Strategy'        },
-  { key: 'report',        label: 'Report'          },
+const STAGES = [
+  'preflight', 'acquisition', 'classification', 'selection',
+  'application', 'reconciliation', 'strategy', 'report',
 ];
 
-// ─── Pipeline Progress ───────────────────────────────────────────────────────
+const STAGE_STATUS_STATE: Record<string, StateSemantic> = {
+  SUCCESS: 'healthy',
+  RUNNING: 'running',
+  FAILED: 'failed',
+  PARTIAL: 'degraded',
+  PENDING: 'pending',
+  CANCELLED: 'terminal',
+  SKIPPED: 'blocked',
+};
 
-function PipelineTracker({ latestRun }: { latestRun: any }) {
-  if (!latestRun?.run_id) return null;
+const STAGE_DETAIL_KEY: Record<string, string> = {
+  acquisition: 'acquired',
+  classification: 'classified',
+  selection: 'selected',
+};
 
-  return (
-    <div className="bg-card border border-border rounded-md shadow-card mb-6">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-            Pipeline Execution
-          </span>
-        </div>
-        <span className="text-[10px] font-mono text-muted-foreground truncate">
-          Run ID: {latestRun.run_id}
-        </span>
-      </div>
-      <div className="px-4 py-4 flex items-center justify-between overflow-x-auto gap-2">
-        {PIPELINE_STAGES.map((stage, idx) => {
-          const raw = (latestRun?.stages?.[stage.key] ?? latestRun?.stage_results?.[stage.key] ?? 'PENDING').toUpperCase();
-          const isSuccess = raw === 'SUCCESS';
-          const isFailed  = raw === 'FAILED';
-          const isRunning = raw === 'RUNNING' || raw === 'IN_PROGRESS';
-          // const isPending = raw === 'PENDING' || raw === 'SKIPPED';
+const SCHEDULER_STATE: Record<string, { state: StateSemantic; pulse?: boolean }> = {
+  RUNNING: { state: 'running', pulse: true },
+  IDLE: { state: 'idle' },
+  STOPPED: { state: 'blocked' },
+  STALE: { state: 'degraded' },
+  ORPHANED: { state: 'failed' },
+};
 
-          let icon = <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />;
-          if (isSuccess) icon = <CheckCircle2 className="w-3 h-3 text-emerald-500" />;
-          if (isFailed) icon = <AlertCircle className="w-3 h-3 text-red-500" />;
-          if (isRunning) icon = <span className="w-1.5 h-1.5 rounded-full bg-blue-500 pulse-green" />;
-
-          return (
-            <React.Fragment key={stage.key}>
-              <div className="flex flex-col items-center gap-2 min-w-[72px]">
-                <div className={cn(
-                  "w-8 h-8 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                  isSuccess ? "border-emerald-500/30 bg-emerald-500/10" :
-                  isFailed ? "border-red-500/30 bg-red-500/10" :
-                  isRunning ? "border-blue-500/30 bg-blue-500/10" :
-                  "border-border bg-muted/30"
-                )}>
-                  {icon}
-                </div>
-                <span className={cn(
-                  "text-[10px] font-medium tracking-wide uppercase",
-                  isSuccess ? "text-emerald-600 dark:text-emerald-400" :
-                  isFailed ? "text-red-600 dark:text-red-400" :
-                  isRunning ? "text-blue-600 dark:text-blue-400 font-bold" :
-                  "text-muted-foreground"
-                )}>
-                  {stage.label}
-                </span>
-              </div>
-              {idx < PIPELINE_STAGES.length - 1 && (
-                <div className="flex-1 h-[1px] bg-border mx-2 min-w-[16px]" />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
+function providerIsDegraded(status: unknown): boolean {
+  const s = String(status ?? '').toLowerCase();
+  return ['degraded', 'warning', 'error', 'down', 'failed'].some((w) => s.includes(w));
 }
-
-// ─── Funnel Chart ────────────────────────────────────────────────────────────
-
-function FunnelChart({ lifecycle }: { lifecycle: any[] }) {
-  if (!lifecycle?.length) return (
-    <div className="h-[240px] flex items-center justify-center text-muted-foreground text-sm border border-dashed rounded-md">
-      No funnel data available
-    </div>
-  );
-
-  return (
-    <div className="bg-card border border-border rounded-md shadow-card">
-      <div className="px-4 py-3 border-b border-border/50">
-        <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Application Funnel</span>
-      </div>
-      <div className="p-4 h-[240px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={lifecycle} layout="vertical" margin={{ left: 16, right: 24, top: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-            <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-            <YAxis
-              dataKey="lifecycle_stage"
-              type="category"
-              width={80}
-              tick={{ fontSize: 11, fill: 'hsl(var(--foreground))', fontWeight: 500 }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: 'hsl(var(--muted) / 0.4)' }}
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: 'hsl(var(--foreground))',
-                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-              }}
-            />
-            <Bar dataKey="count" fill="hsl(var(--foreground))" radius={[0, 2, 2, 0]} maxBarSize={20} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-// ─── Activity Feed ───────────────────────────────────────────────────────────
-
-function ActivityFeed({ latestRun, upcomingExecutions }: { latestRun: any; upcomingExecutions: any[] }) {
-  const activities: Array<{ icon: React.ReactNode; label: string; time?: string; type: 'success' | 'warning' | 'neutral' }> = [];
-
-  if (latestRun?.run_id) {
-    if (latestRun.status === 'SUCCESS' || latestRun.status === 'COMPLETED') {
-      activities.push({ icon: <CheckCircle className="w-3.5 h-3.5" />, label: `Run ${latestRun.run_id} completed successfully`, time: latestRun.started_at, type: 'success' });
-    } else if (latestRun.status === 'FAILED') {
-      activities.push({ icon: <AlertCircle className="w-3.5 h-3.5" />, label: `Run ${latestRun.run_id} failed`, time: latestRun.started_at, type: 'warning' });
-    } else {
-      activities.push({ icon: <Play className="w-3.5 h-3.5" />, label: `Run ${latestRun.run_id} is active`, time: latestRun.started_at, type: 'neutral' });
-    }
-  }
-
-  if (upcomingExecutions?.length > 0) {
-    activities.push({
-      icon: <Clock className="w-3.5 h-3.5" />,
-      label: `Next scheduled execution: ${upcomingExecutions[0].task}`,
-      time: upcomingExecutions[0].scheduled_for,
-      type: 'neutral',
-    });
-  }
-
-  if (activities.length === 0) {
-    activities.push({ icon: <Activity className="w-3.5 h-3.5" />, label: 'System idle. Awaiting operational input.', type: 'neutral' });
-  }
-
-  const typeColors = {
-    success: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-    warning: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    neutral: 'text-muted-foreground bg-muted border-border',
-  };
-
-  return (
-    <div className="bg-card border border-border rounded-md shadow-card">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50">
-        <Activity className="w-4 h-4 text-muted-foreground" />
-        <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Operational Log</span>
-      </div>
-      <div className="divide-y divide-border/50">
-        {activities.map((act, i) => (
-          <div key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-            <div className={cn("mt-0.5 w-6 h-6 rounded flex items-center justify-center shrink-0 border", typeColors[act.type])}>
-              {act.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] text-foreground font-medium">{act.label}</p>
-              {act.time && (
-                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                  <RelativeTime date={act.time} />
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Skeletons ────────────────────────────────────────────────────────────────
-
-function OverviewSkeleton() {
-  return (
-    <div className="animate-pulse space-y-6">
-      <div className="h-[120px] bg-muted/50 rounded-md" />
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted/50 rounded-md" />)}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-[300px] bg-muted/50 rounded-md" />
-        <div className="h-[300px] bg-muted/50 rounded-md" />
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { data: dashboard, isLoading } = useDashboard();
-  
+  const dashboard = useDashboard();
+  const runtime = useRuntime();
+  const manual = useManualReviewQueue();
+  const external = useExternalApplyQueue();
+  const other = useOtherActionQueue();
 
-  if (isLoading) return <OverviewSkeleton />;
+  if (dashboard.isPending || runtime.isPending) {
+    return (
+      <div className="reveal">
+        <PageHeader coordinate="01 · OVERVIEW" title="Overview" subtitle="System operating state, pipeline topology, and attention conditions." />
+        <div className="flex flex-col gap-5">
+          <GridSkeleton rows={2} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <GridSkeleton rows={4} />
+            <GridSkeleton rows={4} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const {
-    lifecycle_metrics,
-    summary,
-    lifecycle: rawLifecycle,
-    latest_run,
-    system_health,
-    upcoming_executions,
-  } = dashboard ?? {};
+  if (dashboard.isError || runtime.isError) {
+    return (
+      <div className="reveal">
+        <PageHeader coordinate="01 · OVERVIEW" title="Overview" subtitle="System operating state, pipeline topology, and attention conditions." />
+        <ErrorState
+          message={(dashboard.error as Error)?.message ?? (runtime.error as Error)?.message ?? 'Failed to load system state'}
+          onRetry={() => { dashboard.refetch(); runtime.refetch(); }}
+        />
+      </div>
+    );
+  }
 
-  // Prefer lifecycle-derived metrics (canonical source of truth)
-  const lc = lifecycle_metrics ?? {};
-  const totalJobs = lc.acquired ?? summary?.total_jobs ?? 0;
-  const totalSubmitted = lc.submitted ?? summary?.total_applied ?? 0;
-  const totalRouted = lc.routed ?? 0;
-  const latestRun = latest_run?.run_id ? <RelativeTime date={latest_run.started_at} /> : 'None';
+  const data = dashboard.data;
+  const run = data?.latest_run ?? {};
+  // latest_run merges run.json/result.json whose payload nests under `data`;
+  // some environments surface it top-level. Read both, prefer top-level.
+  const runData = run?.data ?? {};
+  const runStages: Record<string, string> = run.stages ?? runData.stages ?? {};
+  const runCounts: Record<string, number> = run.counts ?? runData.counts ?? {};
+  const runStatus: string = String(run?.status ?? 'NONE').toUpperCase();
+  const runId = run?.run_id ?? run?.id;
+  const dryRun = run?.dry_run ?? runData?.dry_run;
+  const startedAt = run?.started_at ?? runData?.started_at;
+  void startedAt;
+  const runLimit = typeof (run?.max_applications ?? runData?.max_applications) === 'number'
+    ? (run?.max_applications ?? runData?.max_applications)
+    : undefined;
+  const lc = data?.lifecycle_metrics ?? {};
+  const summary = data?.summary ?? {};
+  const providers = data?.provider_health ?? {};
 
-  // Build lifecycle distribution from canonical lifecycle metrics
-  const PIPELINE_LIFECYCLE = [
-    { lifecycle_stage: 'Acquired', count: lc.acquired ?? 0 },
-    { lifecycle_stage: 'Pre-App Rejected', count: lc.pre_app_rejected ?? 0 },
-    { lifecycle_stage: 'Selected', count: lc.selected ?? 0 },
-    { lifecycle_stage: 'Routed', count: lc.routed ?? 0 },
-    { lifecycle_stage: 'Submitted', count: lc.submitted ?? 0 },
-    { lifecycle_stage: 'Failed', count: lc.application_failed ?? 0 },
-    { lifecycle_stage: 'Deferred', count: lc.deferred ?? 0 },
-  ].filter(d => d.count > 0);
+  // ── Zone 1: topology ──
+  const stations: TopoStation[] = STAGES.map((id) => {
+    const stageStatus = runStages[id];
+    const state = stageStatus ? (STAGE_STATUS_STATE[stageStatus.toUpperCase()] ?? 'idle') : 'idle';
+    const detailKey = STAGE_DETAIL_KEY[id];
+    const count = detailKey && runCounts[detailKey] != null ? runCounts[detailKey] : undefined;
+    return { id, label: id, state, detail: count != null ? String(count) : undefined };
+  });
+  const activeId = runStatus === 'RUNNING'
+    ? (Object.entries(runStages).find(([, s]) => String(s).toUpperCase() === 'RUNNING')?.[0] ?? null)
+    : null;
+  const breakers: TopoBreaker[] = [];
+  if (dryRun === true) {
+    breakers.push({ after: 'selection', state: 'tagged', label: 'DRY RUN' });
+  }
 
-  // Fall back to legacy lifecycle distribution if no metrics available
-  const lifecycle = !lc.acquired && (rawLifecycle ?? []).length > 0
-    ? (rawLifecycle ?? []).map((d: any) => ({
-        ...d,
-        lifecycle_stage: LIFECYCLE_LABELS[d.lifecycle_stage] ?? d.lifecycle_stage,
-      })).filter((d: any) => d.count > 0)
-    : PIPELINE_LIFECYCLE;
+  // ── Zone 5: readings (real lifecycle accounting) ──
+  const acquired = lc.acquired ?? 0;
+  const submitted = lc.submitted ?? 0;
+  const routed = lc.routed ?? 0;
+  const selected = lc.selected ?? 0;
+  const appFailed = lc.application_failed ?? 0;
+  const submitRate = submitted + appFailed > 0 ? Math.round((submitted / (submitted + appFailed)) * 100) : null;
+  const envelopePoints = [
+    { x: 0, y: acquired },
+    { x: 1, y: lc.classified ?? acquired },
+    { x: 2, y: selected },
+  ];
 
-  const sysStatus = system_health?.status === 'HEALTHY' ? 'success' : system_health?.status === 'WARNING' ? 'warning' : 'error';
+  // ── Zone 3: attention (real queues + degraded providers) ──
+  const queueRows = [
+    ...(manual.data?.items ?? []).map((i: any) => ({ ...i, lane: 'MANUAL' })),
+    ...(external.data?.items ?? []).map((i: any) => ({ ...i, lane: 'EXTERNAL' })),
+    ...(other.data?.items ?? []).map((i: any) => ({ ...i, lane: 'OTHER' })),
+  ].slice(0, 8);
+  const degradedProviders = Object.entries(providers)
+    .filter(([, p]: [string, any]) => providerIsDegraded(p?.status))
+    .map(([name, p]: [string, any]) => ({ name, status: String(p?.status ?? 'degraded') }));
+  const attentionCount = queueRows.length + degradedProviders.length;
+
+  // ── Zone 4: activity ──
+  const lifecycleEntries = Object.entries(lc).filter(([, v]) => Number(v) > 0);
+  const scheduler = runtime.data?.scheduler;
+  const schedulerState = SCHEDULER_STATE[String(scheduler?.status ?? '').toUpperCase()] ?? { state: 'unknown' as StateSemantic };
+  const hasRun = runStatus !== 'NONE' && runId != null;
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300">
-      <SectionTitle 
-        title="Overview" 
-        subtitle="System health, pipeline status, and application metrics."
-        action={
-          <StatusBadge 
-            status={sysStatus} 
-            label={`System ${system_health?.status ?? 'Unknown'}`} 
-            pulse={sysStatus === 'success'}
-          />
-        }
+    <div className="reveal flex flex-col gap-5">
+      <PageHeader
+        coordinate="01 · OVERVIEW"
+        title="Overview"
+        subtitle="Closed-loop AI job-operations control plane — topology, operating state, attention, and evidence."
       />
 
-      <PipelineTracker latestRun={latest_run} />
+      {/* Zone 1 — topology strip */}
+      <Panel>
+        <PanelHeader
+          index="01"
+          title="Pipeline topology"
+          actions={
+            <Link to="/explorer" className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Explorer →
+            </Link>
+          }
+        />
+        <div className="px-4 py-4">
+          <StationTopology
+            stations={stations}
+            breakers={breakers}
+            activeId={activeId}
+            running={runStatus === 'RUNNING'}
+            ariaLabel="Pipeline topology — acquisition, classification, selection, application, reconciliation, strategy, report"
+          />
+          <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-x-5 gap-y-1.5 text-meta text-muted-foreground">
+            {hasRun ? (
+              <>
+                <span className="inline-flex items-center gap-2">
+                  <StateMarker
+                    state={STAGE_STATUS_STATE[runStatus] ?? (runStatus === 'NONE' ? 'idle' : 'unknown')}
+                    label={runStatus}
+                    pulse={runStatus === 'RUNNING'}
+                  />
+                  <span className="font-mono text-[11px] text-faint">RUN {runId}</span>
+                </span>
+                {run?.started_at && (
+                  <span>
+                    started <RelativeTime date={run.started_at} />
+                  </span>
+                )}
+                {typeof run?.dry_run === 'boolean' && (
+                  <span>{run.dry_run ? 'DRY RUN — execution isolated' : 'LIVE MODE — applications may submit'}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-faint">No run on record — pipeline idle.</span>
+            )}
+          </div>
+        </div>
+      </Panel>
 
-      <MetricGrid className="mb-6">
-        <MetricCard
-          title="Jobs Acquired"
-          value={totalJobs.toLocaleString()}
-          icon={<Briefcase className="w-4 h-4" />}
-          className="cursor-pointer hover:border-foreground/30 transition-colors"
-        />
-        <MetricCard
-          title="Submitted"
-          value={totalSubmitted.toLocaleString()}
-          icon={<CheckCircle2 className="w-4 h-4" />}
-          className="cursor-pointer hover:border-foreground/30 transition-colors"
-        />
-        <MetricCard
-          title="Routed"
-          value={totalRouted.toLocaleString()}
-          icon={<TrendingUp className="w-4 h-4" />}
-        />
-        <MetricCard
-          title="Latest Run"
-          value={latestRun}
-          icon={<Play className="w-4 h-4" />}
-          className="cursor-pointer hover:border-foreground/30 transition-colors"
-        />
-      </MetricGrid>
+      {/* Zones 2 + 3 — operating state | attention */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Panel>
+          <PanelHeader index="02" title="Operating state" />
+          <div className="px-4 py-3 flex flex-col divide-y divide-border/70">
+            <TruthRow
+              label="Process"
+              detail={String(scheduler?.status ?? 'UNKNOWN')}
+              state={schedulerState.state}
+              pulse={schedulerState.pulse}
+            />
+            <TruthRow
+              label="Artifact"
+              detail={hasRun ? `RUN ${runId} · ${runStatus}` : 'No run on record'}
+              state={hasRun ? (STAGE_STATUS_STATE[runStatus] ?? 'unknown') : 'idle'}
+            />
+            <TruthRow
+              label="Portfolio"
+              detail={`${summary?.total_jobs ?? 0} jobs · ${summary?.total_applied ?? 0} applied · ${summary?.total_rejected ?? 0} rejected · ${summary?.total_offer ?? 0} offer`}
+              state={(summary?.total_jobs ?? 0) > 0 ? 'healthy' : 'idle'}
+            />
+          </div>
+        </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
-        <FunnelChart lifecycle={lifecycle} />
-        <ActivityFeed latestRun={latest_run} upcomingExecutions={upcoming_executions ?? []} />
+        <Panel>
+          <PanelHeader
+            index="03"
+            title="Attention & faults"
+            actions={
+              <Link to="/applications" className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Queues →
+              </Link>
+            }
+          />
+          {attentionCount > 0 ? (
+            <div className="px-4 py-3 flex flex-col gap-2.5">
+              {queueRows.length > 0 && (
+                <div className="flex flex-col">
+                  {queueRows.map((row: any) => (
+                    <Link
+                      key={row.job_id ?? row.id}
+                      to="/applications"
+                      className="flex items-center gap-3 px-1 py-1.5 rounded-sm text-[13px] hover:bg-muted/40 transition-colors group"
+                    >
+                      <StateMarker state="manual" label={row.lane} />
+                      <span className="truncate text-foreground group-hover:underline underline-offset-2">{row.title ?? row.job_id}</span>
+                      <span className="ml-auto text-meta text-faint truncate shrink-0">{row.company}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {degradedProviders.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {degradedProviders.map((p) => (
+                    <Link key={p.name} to="/providers" className="flex items-center gap-3 px-1 py-1.5 rounded-sm text-[13px] hover:bg-muted/40 transition-colors group">
+                      <StateMarker state="degraded" label="FAULT" />
+                      <span className="text-foreground capitalize">{p.name}</span>
+                      <span className="ml-auto text-meta text-faint">{p.status}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <EmptyState title="No attention items" description="Queues clear, providers healthy." />
+          )}
+        </Panel>
       </div>
+
+      {/* Zones 4 + 5 — execution activity | key readings */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Panel>
+          <PanelHeader index="04" title="Execution activity" />
+          {hasRun ? (
+            <div className="px-4 py-3 flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+                <span className="font-mono text-[11px] text-faint">RUN {runId}</span>
+                <StateMarker
+                  state={STAGE_STATUS_STATE[runStatus] ?? 'unknown'}
+                  label={runStatus}
+                  pulse={runStatus === 'RUNNING'}
+                />
+                {run?.started_at && <span className="text-meta text-muted-foreground">started <RelativeTime date={run.started_at} /></span>}
+              </div>
+              {Object.entries(runCounts).length > 0 && (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 pt-2 border-t border-border/70">
+                  {Object.entries(runCounts).map(([k, v]) => (
+                    <span key={k} className="flex items-baseline gap-1.5">
+                      <span className="font-mono text-[13px] text-foreground tabular">{v}</span>
+                      <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-faint">{k}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <EmptyState title="System idle — no recent run on record" />
+          )}
+          {lifecycleEntries.length > 0 && (
+            <div className="px-4 pb-3">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 pt-3 border-t border-border/70">
+                {lifecycleEntries.map(([k, v]) => (
+                  <span key={k} className="flex items-baseline gap-1.5">
+                    <span className="font-mono text-[13px] text-foreground tabular">{String(v)}</span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-faint">{k.replace(/_/g, ' ')}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHeader index="05" title="Key readings" />
+          <div className="px-4 py-3 flex flex-col gap-4">
+            {acquired > 0 || selected > 0 ? (
+              <EnvelopeTrace
+                points={envelopePoints}
+                bound={runLimit}
+                boundLabel={runLimit != null ? `RUN LIMIT ${runLimit}` : undefined}
+                xLabel="ACQ · CLS · SEL"
+                yLabel="RECORDS"
+              />
+            ) : (
+              <div className="text-meta text-faint">No throughput on record — run the pipeline to populate readings.</div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 pt-1 border-t border-border/70">
+              <Reading label="Acquired" value={acquired} />
+              <Reading label="Submitted" value={submitted} />
+              <Reading label="Submit rate" value={submitRate != null ? `${submitRate}%` : '—'} />
+              <Reading label="Routed" value={routed} />
+              <Reading label="Selected" value={selected} />
+              <Reading label="App failed" value={appFailed} />
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+function TruthRow({ label, detail, state, pulse }: { label: string; detail: string; state: StateSemantic; pulse?: boolean }) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <span className="w-20 shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-faint">{label}</span>
+      <StateMarker state={state} label={detail} pulse={pulse} hideLabel />
+      <span className="text-[13px] text-muted-foreground truncate">{detail}</span>
+    </div>
+  );
+}
+
+function Reading({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-mono text-[18px] leading-tight text-foreground tabular tracking-tight">{value}</p>
+      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-faint mt-1">{label}</p>
     </div>
   );
 }

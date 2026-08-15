@@ -2,10 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Briefcase, Play, Inbox, Zap, Search, ChevronRight,
-  Settings, PlaySquare, BarChart2, Server, BookOpen, Brain, Activity,
-  Terminal, Wrench, Shield, PanelLeftClose, PanelLeftOpen,
-  History, TrendingUp, GraduationCap, Cog,
+  LayoutDashboard, Briefcase, Play, Inbox, Search, Settings, PlaySquare,
+  BarChart2, Server, BookOpen, Brain, Activity, Terminal, Wrench, Shield,
+  PanelLeftClose, PanelLeftOpen, Menu, X, History, TrendingUp, GraduationCap, Cog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePreferences } from '@/store/preferences';
@@ -15,7 +14,9 @@ import {
   CommandItem, CommandList,
 } from '@/components/ui/command';
 import { fetchManualReviewQueue, fetchExternalApplyQueue } from '@/lib/api';
-import { useCopilotHealth } from '@/lib/hooks';
+import { useCopilotHealth, useRuntime } from '@/lib/hooks';
+import { StateMarker, type StateSemantic } from '@/components/operations/StateMarker';
+import { Toaster } from '@/components/operations/Toaster';
 
 import Dashboard from '@/pages/Dashboard';
 import Jobs from '@/pages/Jobs';
@@ -46,11 +47,12 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
 });
 
-// ─── Information Architecture ──────────────────────────────────────────────────
+// ─── Information Architecture (unchanged — Grid Control chrome only) ─────────
 
-const NAV_GROUPS = [
+const NAV_GROUPS: Array<{ index: string; label: string; items: Array<{ name: string; path: string; icon: React.ComponentType<{ className?: string }>; badge?: 'queue' | 'health' }> }> = [
   {
-    label: 'Operations Center',
+    index: '01',
+    label: 'Operations',
     items: [
       { name: 'Overview',       path: '/',              icon: LayoutDashboard },
       { name: 'Pipeline',       path: '/pipeline',      icon: Play            },
@@ -58,55 +60,62 @@ const NAV_GROUPS = [
     ],
   },
   {
+    index: '02',
     label: 'Workflows',
     items: [
-      { name: 'Jobs',           path: '/jobs',          icon: Briefcase       },
+      { name: 'Jobs',           path: '/jobs',          icon: Briefcase },
       { name: 'Applications',   path: '/applications',  icon: Inbox, badge: 'queue' },
     ],
   },
   {
+    index: '03',
     label: 'Copilot',
     items: [
-      { name: 'Inbox',          path: '/copilot/inbox',              icon: Inbox, badge: 'health' },
+      { name: 'Inbox',          path: '/copilot/inbox', icon: Inbox, badge: 'health' },
       // Apply/Brief/Assistant are parameter routes — reachable only with a
       // real id from the Inbox row / Brief CTA / workspace assistant link.
-      // A literal entry here would make the sidebar + ⌘K navigate to
-      // '/copilot/apply/:id' and the pages would request ':id' (Problem 3).
-      { name: 'History',        path: '/copilot/history',            icon: History        },
-      { name: 'Analytics',      path: '/copilot/analytics',          icon: TrendingUp     },
-      { name: 'Learning',       path: '/copilot/learning',           icon: GraduationCap  },
-      { name: 'Settings',       path: '/copilot/settings',           icon: Cog            },
+      { name: 'History',        path: '/copilot/history',   icon: History       },
+      { name: 'Analytics',      path: '/copilot/analytics', icon: TrendingUp    },
+      { name: 'Learning',       path: '/copilot/learning',  icon: GraduationCap },
+      { name: 'Settings',       path: '/copilot/settings',  icon: Cog           },
     ],
   },
   {
+    index: '04',
     label: 'Intelligence',
     items: [
-      { name: 'Decision Ledger',path: '/ledger',        icon: BookOpen        },
-      { name: 'AI Insights',    path: '/intelligence',  icon: Brain           },
-      { name: 'Explorer',       path: '/explorer',      icon: Search          },
+      { name: 'Decision Ledger', path: '/ledger',       icon: BookOpen },
+      { name: 'AI Insights',     path: '/intelligence', icon: Brain    },
+      { name: 'Explorer',        path: '/explorer',     icon: Search   },
     ],
   },
   {
+    index: '05',
     label: 'Telemetry',
     items: [
-      { name: 'Metrics',        path: '/metrics',       icon: BarChart2       },
-      { name: 'Providers',      path: '/providers',     icon: Server          },
+      { name: 'Metrics',        path: '/metrics',       icon: BarChart2 },
+      { name: 'Providers',      path: '/providers',     icon: Server    },
     ],
   },
   {
+    index: '06',
     label: 'Diagnostics',
     items: [
-      { name: 'System Health',  path: '/system',        icon: Activity        },
-      { name: 'Logs',           path: '/logs',          icon: Terminal        },
-      { name: 'Developer Tools',path: '/developer',     icon: Wrench          },
-      { name: 'Audit',          path: '/audit',         icon: Shield          },
+      { name: 'System Health',  path: '/system',        icon: Activity },
+      { name: 'Logs',           path: '/logs',          icon: Terminal },
+      { name: 'Developer Tools', path: '/developer',    icon: Wrench   },
+      { name: 'Audit',          path: '/audit',         icon: Shield   },
     ],
   },
 ];
 
 const ALL_NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
+const EXTRA_NAV = [
+  { name: 'Settings', path: '/config' },
+  { name: 'About', path: '/about' },
+];
 
-// ─── Inbox badge count ────────────────────────────────────────────────────────
+// ─── Inbox badge count ───────────────────────────────────────────────────────
 
 function useInboxCount() {
   const { data: manual } = useQuery({
@@ -123,9 +132,7 @@ function useInboxCount() {
   return count > 0 ? count : null;
 }
 
-// Copilot Inbox badge: driven by subsystem health until the real pending
-// count exists (PH6). Shows how many subsystems are down; '!' when the
-// health endpoint itself is unreachable.
+// Copilot Inbox badge: subsystem-health driven (existing contract, preserved).
 function useCopilotHealthBadge(): number | string | null {
   const { data, isError } = useCopilotHealth();
   if (isError) return '!';
@@ -135,54 +142,83 @@ function useCopilotHealthBadge(): number | string | null {
   return down > 0 ? down : '!';
 }
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────
+// ─── Truthful runtime status (DESIGN.md §4 — no always-green pill) ───────────
 
-function Sidebar() {
-  const { sidebarOpen, toggleSidebar } = usePreferences();
+const SCHEDULER_STATE: Record<string, { state: StateSemantic; pulse?: boolean }> = {
+  RUNNING: { state: 'running', pulse: true },
+  IDLE: { state: 'idle' },
+  STOPPED: { state: 'blocked' },
+  STALE: { state: 'degraded' },
+  ORPHANED: { state: 'failed' },
+};
+
+function SystemStatus() {
+  const { data, isError, isFetching } = useRuntime();
+  const status = data?.scheduler?.status ?? (isError ? 'UNREACHABLE' : '…');
+  const mapped = SCHEDULER_STATE[status] ?? { state: 'unknown' as StateSemantic };
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      aria-live="polite"
+      aria-label={`System status: ${status}`}
+      title={`Scheduler: ${status}`}
+    >
+      <StateMarker state={mapped.state} label={status} pulse={mapped.pulse && !isFetching} />
+    </span>
+  );
+}
+
+// ─── Sidebar rail ─────────────────────────────────────────────────────────────
+
+function RailContent({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const inboxCount = useInboxCount();
   const copilotBadge = useCopilotHealthBadge();
 
   return (
-    <div className={cn(
-      'border-r border-border/60 bg-card h-screen flex flex-col transition-all duration-200 ease-in-out shrink-0 relative z-40',
-      sidebarOpen ? 'w-[240px]' : 'w-[58px]'
-    )}>
-      {/* Logo */}
-      <div className="h-12 border-b border-border/40 flex items-center px-3 shrink-0">
-        {sidebarOpen ? (
-          <div className="flex items-center gap-2.5 overflow-hidden whitespace-nowrap">
-            <div className="w-6 h-6 rounded-md bg-foreground flex items-center justify-center shrink-0">
-              <Zap className="w-3.5 h-3.5 text-background" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-tight leading-none text-foreground">CareerFlow</p>
-              <p className="text-[9px] text-muted-foreground font-mono tracking-widest mt-0.5">OPERATIONS</p>
-            </div>
-          </div>
+    <>
+      {/* Wordmark */}
+      <div className={cn('h-11 border-b border-border flex items-center shrink-0', collapsed ? 'justify-center px-0' : 'px-3')}>
+        {collapsed ? (
+          <span className="w-6 h-6 flex items-center justify-center" aria-label="Career Workflow">
+            <svg width="16" height="16" viewBox="0 0 12 12" className="text-foreground" aria-hidden="true">
+              <rect x="2" y="2" width="8" height="8" fill="currentColor" />
+              <rect x="4.5" y="4.5" width="3" height="3" fill="var(--background)" />
+            </svg>
+          </span>
         ) : (
-          <div className="w-6 h-6 rounded-md bg-foreground flex items-center justify-center shrink-0 mx-auto">
-            <Zap className="w-3.5 h-3.5 text-background" />
+          <div className="flex items-center gap-2.5 overflow-hidden whitespace-nowrap">
+            <span className="w-6 h-6 flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 12 12" className="text-foreground" aria-hidden="true">
+                <rect x="2" y="2" width="8" height="8" fill="currentColor" />
+                <rect x="4.5" y="4.5" width="3" height="3" fill="var(--background)" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight leading-none text-foreground">Career Workflow</p>
+              <p className="text-[9px] text-faint font-mono tracking-[0.14em] mt-1">CONTROL PLANE</p>
+            </div>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-5 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
+      <nav className="flex-1 px-2.5 py-4 flex flex-col gap-5 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            {sidebarOpen && (
-              <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider px-2 mb-2">
-                {group.label}
+            {!collapsed && (
+              <p className="flex items-center gap-2 text-[10px] font-medium text-faint font-mono uppercase tracking-[0.1em] px-2 mb-1.5">
+                <span aria-hidden="true">{group.index}</span>
+                <span className="text-muted-foreground/70">{group.label}</span>
               </p>
             )}
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col">
               {group.items.map(item => (
-                <NavItem
+                <RailItem
                   key={item.path}
                   item={item}
-                  collapsed={!sidebarOpen}
-                  badge={item.badge === 'queue' ? inboxCount
-                    : item.badge === 'health' ? copilotBadge : null}
+                  collapsed={collapsed}
+                  badge={item.badge === 'queue' ? inboxCount : item.badge === 'health' ? copilotBadge : null}
+                  onNavigate={onNavigate}
                 />
               ))}
             </div>
@@ -191,74 +227,158 @@ function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3 border-t border-border/60 flex flex-col gap-0.5">
-        <NavLink
-          to="/config"
-          title={!sidebarOpen ? 'Settings' : undefined}
-          className={({ isActive }) => cn(
-            'flex items-center gap-3 px-2 py-2 rounded-md text-[13px] font-medium transition-all duration-150 whitespace-nowrap',
-            isActive
-              ? 'bg-secondary text-foreground'
-              : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-          )}
-        >
-          <Settings className="w-4 h-4 shrink-0" />
-          {sidebarOpen && <span>Settings</span>}
-        </NavLink>
-        <button
-          onClick={toggleSidebar}
-          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-          className="flex items-center gap-3 px-2 py-2 rounded-md text-[13px] text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-all duration-150 whitespace-nowrap"
-        >
-          {sidebarOpen
-            ? <PanelLeftClose className="w-4 h-4 shrink-0" />
-            : <PanelLeftOpen className="w-4 h-4 shrink-0" />}
-          {sidebarOpen && <span className="text-[13px] font-medium">Collapse</span>}
-        </button>
+      <div className="px-2.5 py-2.5 border-t border-border flex flex-col">
+        {EXTRA_NAV.map(extra => (
+          <NavLink
+            key={extra.path}
+            to={extra.path}
+            title={collapsed ? extra.name : undefined}
+            onClick={onNavigate}
+            className={({ isActive }) => cn(
+              'flex items-center gap-3 px-2 py-1.5 rounded-sm text-[13px] font-medium whitespace-nowrap relative',
+              isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && <ActiveTick />}
+                {!collapsed && <span className="tracking-tight">{extra.name}</span>}
+              </>
+            )}
+          </NavLink>
+        ))}
       </div>
-    </div>
+    </>
   );
 }
 
-function NavItem({
-  item,
-  collapsed,
-  badge,
+function ActiveTick() {
+  return (
+    <span
+      className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-foreground"
+      aria-hidden="true"
+    />
+  );
+}
+
+function RailItem({
+  item, collapsed, badge, onNavigate,
 }: {
   item: typeof ALL_NAV_ITEMS[0];
   collapsed: boolean;
   badge?: number | string | null;
+  onNavigate?: () => void;
 }) {
   return (
     <NavLink
       to={item.path}
       end={item.path === '/'}
       title={collapsed ? item.name : undefined}
+      onClick={onNavigate}
       className={({ isActive }) => cn(
-        'flex items-center gap-3 px-2 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 whitespace-nowrap group relative',
-        isActive
-          ? 'bg-secondary text-foreground'
-          : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+        'flex items-center gap-3 px-2 py-[7px] rounded-sm text-[13px] font-medium whitespace-nowrap relative transition-colors',
+        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
       )}
     >
       {({ isActive }) => (
         <>
-          {isActive && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-primary rounded-r-full" aria-hidden="true" />
-          )}
-          <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-foreground' : 'group-hover:text-foreground')} />
+          {isActive && <ActiveTick />}
+          <item.icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} aria-hidden="true" />
           {!collapsed && <span className="flex-1 tracking-tight">{item.name}</span>}
           {!collapsed && badge != null && (
-            <span className="ml-auto text-[9px] font-bold bg-muted-foreground/10 text-foreground px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+            <span className="ml-auto text-[9px] font-bold bg-muted text-foreground px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
               {typeof badge === 'number' && badge > 99 ? '99+' : badge}
             </span>
           )}
           {collapsed && badge != null && (
-            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-foreground rounded-full" aria-label={`${badge} items`} />
+            <span
+              className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-foreground"
+              aria-label={`${badge} items`}
+            />
           )}
         </>
       )}
     </NavLink>
+  );
+}
+
+// ─── Sidebar (desktop rail) ──────────────────────────────────────────────────
+
+function Sidebar() {
+  const { sidebarOpen, toggleSidebar } = usePreferences();
+  return (
+    <aside
+      className={cn(
+        'hidden lg:flex border-r border-border bg-surface h-screen flex-col shrink-0 relative z-30 transition-[width] duration-200 ease-out',
+        sidebarOpen ? 'w-[224px]' : 'w-[56px]'
+      )}
+      aria-label="Main navigation"
+    >
+      <RailContent collapsed={!sidebarOpen} />
+      <div className="px-2.5 pb-2.5 border-t border-border">
+        <button
+          onClick={toggleSidebar}
+          aria-label={sidebarOpen ? 'Collapse navigation rail' : 'Expand navigation rail'}
+          className="flex items-center gap-3 px-2 py-1.5 w-full rounded-sm text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {sidebarOpen ? <PanelLeftClose className="w-4 h-4 shrink-0" aria-hidden="true" /> : <PanelLeftOpen className="w-4 h-4 shrink-0" aria-hidden="true" />}
+          {sidebarOpen && <span>Collapse</span>}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+// ─── Mobile drawer (< lg) ────────────────────────────────────────────────────
+
+function MobileDrawer() {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        className="lg:hidden inline-flex items-center justify-center h-9 w-9 rounded-sm text-foreground hover:bg-secondary transition-colors"
+        onClick={() => setOpen(true)}
+        aria-label="Open navigation menu"
+      >
+        <Menu className="w-4 h-4" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <button
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setOpen(false)}
+            aria-label="Close navigation menu"
+            tabIndex={-1}
+          />
+          <aside className="absolute left-0 top-0 bottom-0 w-[264px] bg-surface border-r border-border flex flex-col shadow-none">
+            <button
+              className="absolute right-2 top-2 inline-flex items-center justify-center h-8 w-8 rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setOpen(false)}
+              aria-label="Close navigation menu"
+              autoFocus
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <RailContent collapsed={false} onNavigate={() => setOpen(false)} />
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -270,33 +390,32 @@ function Topbar() {
 
   return (
     <header
-      className="h-12 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center px-4 justify-between shrink-0 z-30 sticky top-0"
+      className="h-11 border-b border-border bg-background flex items-center px-3 lg:px-4 justify-between shrink-0 z-30 sticky top-0"
       role="banner"
     >
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb">
-        <ol className="flex items-center gap-1.5 text-[13px]">
-          {crumbs.map((crumb, i) => (
-            <li key={crumb.label} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40" aria-hidden="true" />}
-              <span className={cn(
-                i === crumbs.length - 1
-                  ? 'font-semibold text-foreground tracking-tight'
-                  : 'text-muted-foreground/60 font-medium tracking-tight'
-              )}>
-                {crumb.label}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <div className="flex items-center gap-2 min-w-0">
+        <MobileDrawer />
+        <nav aria-label="Breadcrumb" className="min-w-0">
+          <ol className="flex items-center gap-2 text-[13px] whitespace-nowrap overflow-hidden">
+            {crumbs.map((crumb, i) => (
+              <li key={crumb.label} className="flex items-center gap-2 min-w-0">
+                {i > 0 && <span className="text-faint font-mono text-[10px]" aria-hidden="true">/</span>}
+                <span className={cn(
+                  'truncate',
+                  i === crumbs.length - 1
+                    ? 'font-semibold text-foreground tracking-tight'
+                    : 'text-muted-foreground font-mono text-[10px] uppercase tracking-[0.1em]'
+                )}>
+                  {crumb.label}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      </div>
 
-      {/* Right side */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground" aria-label="Live data">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-green" aria-hidden="true" />
-          <span className="font-mono uppercase tracking-wider">Operational</span>
-        </div>
+      <div className="flex items-center gap-3">
+        <SystemStatus />
         <CommandTrigger />
       </div>
     </header>
@@ -304,29 +423,39 @@ function Topbar() {
 }
 
 function buildBreadcrumb(pathname: string) {
-  const match = [...ALL_NAV_ITEMS, { path: '/config', name: 'Settings' }, { path: '/about', name: 'About' }]
-    .find(i => i.path === pathname || (i.path === '/' && pathname === '/'));
+  const all = [...ALL_NAV_ITEMS, ...EXTRA_NAV];
+  const match = all.find(i => i.path === pathname);
+  if (match) {
+    const group = NAV_GROUPS.find(g => g.items.some(i => i.path === match.path));
+    return [
+      { label: group ? `${group.index} · ${group.label}` : 'OPS' },
+      { label: match.name },
+    ];
+  }
+  // parameter routes (copilot apply/brief/assistant) — keep group context
+  const prefix = pathname.split('/').filter(Boolean)[0];
+  const group = NAV_GROUPS.find(g => g.items.some(i => i.path.startsWith(`/${prefix}`)));
   return [
-    { label: 'Operations Center' },
-    { label: match?.name ?? (pathname.slice(1) || 'Overview') },
+    { label: group ? `${group.index} · ${group.label}` : 'OPS' },
+    { label: pathname.slice(1) || 'Overview' },
   ];
 }
 
 function CommandTrigger() {
   return (
     <button
-      className="flex items-center gap-2 text-xs text-muted-foreground bg-secondary/40 hover:bg-secondary border border-border/40 px-3 py-1.5 rounded-md transition-all duration-150"
+      className="flex items-center gap-2 text-xs text-muted-foreground border border-border hover:border-borderStrong bg-surface px-2.5 py-1.5 rounded-sm transition-colors"
       onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
       aria-label="Open command palette (⌘K)"
     >
       <Search className="w-3.5 h-3.5" aria-hidden="true" />
-      <span className="font-medium">Search…</span>
-      <kbd className="font-mono text-[9px] bg-background px-1.5 py-0.5 rounded border border-border/60 ml-2" aria-hidden="true">⌘K</kbd>
+      <span className="font-medium hidden sm:inline">Search</span>
+      <kbd className="font-mono text-[9px] text-faint px-1.5 py-0.5 rounded-sm border border-border bg-background" aria-hidden="true">⌘K</kbd>
     </button>
   );
 }
 
-// ─── Command Palette ──────────────────────────────────────────────────────────
+// ─── Command Palette (single implementation, audit X3) ───────────────────────
 
 function CommandMenu() {
   const [open, setOpen] = useState(false);
@@ -356,30 +485,38 @@ function CommandMenu() {
         <CommandGroup heading="Navigate">
           {ALL_NAV_ITEMS.map(item => (
             <CommandItem key={item.path} onSelect={() => run(() => navigate(item.path))}>
-              <item.icon className="mr-2 h-4 w-4 text-muted-foreground" />
+              <item.icon className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <span>{item.name}</span>
             </CommandItem>
           ))}
-          <CommandItem onSelect={() => run(() => navigate('/config'))}>
-            <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-            <span>Settings</span>
-          </CommandItem>
+          {EXTRA_NAV.map(extra => (
+            <CommandItem key={extra.path} onSelect={() => run(() => navigate(extra.path))}>
+              <Settings className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <span>{extra.name}</span>
+            </CommandItem>
+          ))}
         </CommandGroup>
       </CommandList>
     </CommandDialog>
   );
 }
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
+// ─── Layout ──────────────────────────────────────────────────────────────────
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:left-3 focus:top-3 focus:bg-surface focus:border focus:border-borderStrong focus:px-3 focus:py-2 focus:rounded-sm focus:text-[13px]"
+      >
+        Skip to main content
+      </a>
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Topbar />
-        <main className="flex-1 overflow-auto relative p-6 lg:p-8" id="main-content">
-          <div className="max-w-7xl mx-auto w-full h-full">
+        <main className="flex-1 overflow-auto relative p-5 lg:p-7" id="main-content" tabIndex={-1}>
+          <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>
         </main>
@@ -435,6 +572,7 @@ function App() {
                 <Route path="/copilot/settings" element={<CopilotSettings />} />
               </Routes>
             </Layout>
+            <Toaster />
           </Router>
         </ThemeProvider>
       </QueryClientProvider>
