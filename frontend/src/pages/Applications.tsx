@@ -18,6 +18,7 @@ import { SortableHeader } from '@/components/SortableHeader';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { EmptyState } from '@/components/operations/EmptyState';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 type TabId = 'manual-review' | 'external-apply' | 'other-action';
 
@@ -54,6 +55,14 @@ function QueueTable({
     return <GridSkeleton rows={5} className="flex-1" />;
   }
 
+  if (data.isError) {
+    return (
+      <div className="flex-1">
+        <ErrorState message="Queue could not be loaded." onRetry={() => data.refetch()} />
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -64,7 +73,7 @@ function QueueTable({
   }
 
   return (
-    <div className="rounded-md border border-border bg-surface overflow-hidden">
+    <div className="rounded-md border border-border bg-surface overflow-x-auto max-w-full w-full">
       <Table>
         <TableHeader className="bg-muted/30">
           <TableRow className="hover:bg-transparent border-b border-border/40">
@@ -168,7 +177,7 @@ export default function Applications() {
       />
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)}>
-        <TabsList className="w-full justify-start px-1">
+        <TabsList className="w-full justify-start px-1 overflow-x-auto">
           {TABS.map(tab => {
             const count = counts[tab.id];
             return (
@@ -191,7 +200,7 @@ export default function Applications() {
       </Tabs>
 
       <div className="flex-1 overflow-auto py-4">
-        <div className="max-w-[1400px]">
+        <div className="max-w-[1400px] min-w-0">
           {activeTab === 'manual-review'  && <QueueTable data={mrData} onRowClick={setSelectedJobId} />}
           {activeTab === 'external-apply' && <QueueTable data={eaData} onRowClick={setSelectedJobId} />}
           {activeTab === 'other-action'   && <QueueTable data={oaData} onRowClick={setSelectedJobId} />}

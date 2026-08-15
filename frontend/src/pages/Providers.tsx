@@ -3,6 +3,7 @@ import { Server, CheckCircle2, XCircle, Clock, Activity } from 'lucide-react';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 import { cn } from '@/lib/utils';
 import { RelativeTime } from '@/components/RelativeTime';
 import { StatRow } from '@/components/operations/StatRow';
@@ -22,20 +23,33 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 export default function Providers() {
-  const { data, isLoading } = useProviders();
+  const { data, isLoading, isError, refetch } = useProviders();
 
-  const providers = Object.entries(data?.providers || {}).map(([id, p]: [string, any]) => ({
-    id,
-    name: id.charAt(0).toUpperCase() + id.slice(1),
-    healthy: p.status === 'active' || p.status === 'HEALTHY',
-    enabled: p.status !== 'inactive',
-    native_apply: p.native_apply,
-    ats_integration: p.ats !== 'Various',
-    rate_limit_remaining: p.rate_limit_remaining || '—',
-    rate_limit_total: p.rate_limit_total || '—',
-    latency_ms: p.average_latency_seconds ? Math.round(p.average_latency_seconds * 1000) : 0,
-    last_run: p.last_run
-  }));
+  const providers = Object.entries(data?.providers || {}).map(([id, p]: [string, any]) => {
+    const raw = p.status ?? '';
+    // Truthful status mapping — missing/inactive status is never failure.
+    const healthy = raw === 'active' || raw === 'HEALTHY';
+    const degraded = raw === 'degraded' || raw === 'WARNING';
+    const inactive = raw === 'inactive';
+    const statusType = healthy ? 'success' : degraded ? 'warning' : inactive ? 'neutral' : 'neutral';
+    const statusLabel = healthy ? 'HEALTHY' : degraded ? 'DEGRADED' : inactive ? 'INACTIVE' : 'UNKNOWN';
+    return {
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      healthy,
+      degraded,
+      inactive,
+      statusType,
+      statusLabel,
+      enabled: !inactive,
+      native_apply: p.native_apply,
+      ats_integration: p.ats !== 'Various',
+      rate_limit_remaining: p.rate_limit_remaining || '—',
+      rate_limit_total: p.rate_limit_total || '—',
+      latency_ms: p.average_latency_seconds != null ? Math.round(p.average_latency_seconds * 1000) : null,
+      last_run: p.last_run
+    };
+  });
 
   return (
     <div className="h-full flex flex-col">
@@ -54,6 +68,8 @@ export default function Providers() {
       <div className="flex-1 overflow-auto pb-8">
         {isLoading ? (
           <div className="max-w-4xl"><GridSkeleton rows={5} /></div>
+        ) : isError ? (
+          <div className="max-w-4xl"><ErrorState message="Provider telemetry could not be loaded." onRetry={() => refetch()} /></div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {providers?.map((provider: any) => (
@@ -78,8 +94,8 @@ export default function Providers() {
                       label="Status"
                       value={
                         <StatusBadge 
-                          status={provider.healthy ? 'success' : 'error'} 
-                          label={provider.healthy ? 'HEALTHY' : 'UNHEALTHY'} 
+                          status={provider.statusType} 
+                          label={provider.statusLabel} 
                           pulse={provider.healthy}
                         />
                       }
@@ -118,7 +134,7 @@ export default function Providers() {
                   <div className="grid grid-cols-2 gap-px bg-border pt-4 mt-2">
                     <div className="bg-surface px-2 py-3 flex flex-col items-center justify-center text-center">
                       <Clock className="w-3.5 h-3.5 text-muted-foreground mb-1.5" />
-                      <p className="text-[13px] font-bold font-mono text-foreground">{provider.latency_ms}ms</p>
+                      <p className="text-[13px] font-bold font-mono text-foreground">{provider.latency_ms != null ? `${provider.latency_ms}ms` : '—'}</p>
                       <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mt-0.5">Latency</p>
                     </div>
                     <div className="bg-surface px-2 py-3 flex flex-col items-center justify-center text-center">

@@ -109,7 +109,7 @@ export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDraw
 
                 {/* AI Assessment — elevated to the top */}
                 {(data.overview?.reasoning || data.overview?.notes || data.overview?.ai_reason) && (
-                  <div className="bg-secondary/40 border border-border rounded-lg p-4">
+                  <div className="bg-secondary/40 border border-border rounded-md p-4">
                     <div className="flex items-center gap-1.5 mb-2">
                       <Brain className="w-3.5 h-3.5 text-muted-foreground" />
                       <p className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">AI Assessment</p>
@@ -207,7 +207,7 @@ export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDraw
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Job Description</p>
                     <div
-                      className="text-xs bg-muted/20 border border-border/30 p-4 rounded-lg max-h-[400px] overflow-y-auto leading-relaxed [&>p]:mb-3 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-3"
+                      className="text-xs bg-muted/20 border border-border/30 p-4 rounded-md max-h-[400px] overflow-y-auto leading-relaxed [&>p]:mb-3 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-3"
                       dangerouslySetInnerHTML={{ __html: data.overview.description }}
                     />
                   </div>

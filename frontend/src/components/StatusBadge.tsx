@@ -24,6 +24,11 @@ const KEYWORD_STATE: Record<string, StateSemantic> = {
   VIEWED: 'pending',
   OPENED: 'pending',
   NEW: 'pending',
+  CONFIRM: 'degraded',
+  CONFIRMED: 'healthy',
+  AUTO: 'healthy',
+  LOCKED: 'running',
+  SUPERSEDED: 'idle',
   // degraded / caution
   WARNING: 'degraded',
   DEGRADED: 'degraded',

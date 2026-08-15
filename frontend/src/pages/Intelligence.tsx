@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 import { StatusBadge } from '@/components/operations/StatusBadge';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -24,8 +25,8 @@ function ProviderCard({ id, data }: { id: string; data: any }) {
   const meta = PROVIDER_META[id] ?? { label: id, icon: id[0].toUpperCase(), color: 'text-primary' };
   const isActive = data.status === 'active' || data.status === 'HEALTHY';
   const isDegraded = data.status === 'degraded' || data.status === 'WARNING';
-  const successPct = ((data.success_rate ?? 0) * 100).toFixed(0);
-  const latency = (data.average_latency_seconds ?? 0).toFixed(2);
+  const successPct = data.success_rate != null ? Math.round(data.success_rate * 100) : null;
+  const latency = data.average_latency_seconds != null ? data.average_latency_seconds.toFixed(2) : null;
 
   return (
     <div className="flex flex-col p-4 rounded-md border border-border bg-surface group hover:border-foreground/20 transition-colors">
@@ -48,15 +49,15 @@ function ProviderCard({ id, data }: { id: string; data: any }) {
       <div className="grid grid-cols-3 gap-2 mt-auto">
         <div className="border border-border/50 bg-muted/20 rounded p-2 text-center group-hover:bg-muted/40 transition-colors">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Queries</p>
-          <p className="text-[13px] font-bold font-mono text-foreground">{data.total_searches ?? 0}</p>
+          <p className="text-[13px] font-bold font-mono text-foreground">{data.total_searches != null ? data.total_searches : '—'}</p>
         </div>
         <div className="border border-border/50 bg-muted/20 rounded p-2 text-center group-hover:bg-muted/40 transition-colors">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Success</p>
-          <p className={cn('text-[13px] font-bold font-mono', Number(successPct) >= 90 ? 'text-healthy' : 'text-degraded')}>{successPct}%</p>
+          <p className={cn('text-[13px] font-bold font-mono', successPct != null ? (successPct >= 90 ? 'text-healthy' : 'text-degraded') : 'text-muted-foreground')}>{successPct != null ? `${successPct}%` : '—'}</p>
         </div>
         <div className="border border-border/50 bg-muted/20 rounded p-2 text-center group-hover:bg-muted/40 transition-colors">
           <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-1 font-semibold">Latency</p>
-          <p className={cn('text-[13px] font-bold font-mono', Number(latency) > 10 ? 'text-degraded' : 'text-foreground')}>{latency}s</p>
+          <p className={cn('text-[13px] font-bold font-mono', latency != null ? (Number(latency) > 10 ? 'text-degraded' : 'text-foreground') : 'text-muted-foreground')}>{latency != null ? `${latency}s` : '—'}</p>
         </div>
       </div>
     </div>
@@ -90,7 +91,7 @@ function CoverageMatrix({ queries }: { queries: any[] }) {
   return (
     <div className="overflow-auto max-h-[400px]">
       <table className="text-[10px] border-collapse w-full">
-        <thead className="bg-muted/30 sticky top-0 z-10 backdrop-blur-sm">
+        <thead className="bg-muted/30 sticky top-0 z-10">
           <tr>
             <th className="text-left px-4 py-3 text-muted-foreground font-semibold tracking-wider uppercase border-b border-r border-border min-w-[180px]">Profile</th>
             {orderedTechs.map(t => (
@@ -253,8 +254,8 @@ function QueryBrowser({ queries }: { queries: any[] }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Search() {
-  const { data, isLoading: siLoading } = useIntelligence();
-  const { data: dashboard, isLoading: dashLoading } = useDashboard();
+  const { data, isLoading: siLoading, isError: siError, refetch: siRefetch } = useIntelligence();
+  const { data: dashboard, isLoading: dashLoading, isError: dashError, refetch: dashRefetch } = useDashboard();
 
   const isLoading = siLoading || dashLoading;
 
@@ -272,6 +273,14 @@ export default function Search() {
   //   queries.forEach((q: any) => { counts[q.matched_technology] = (counts[q.matched_technology] || 0) + 1; });
   //   return counts;
   // }, [queries]);
+
+  if (siError || dashError) {
+    return (
+      <div className="h-full flex flex-col bg-background p-6">
+        <ErrorState message="Search intelligence could not be loaded." onRetry={() => { siRefetch(); dashRefetch(); }} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -321,10 +330,10 @@ export default function Search() {
 
         {/* Provider Health */}
         <div>
-          <h3 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
+          <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
             <Server className="w-3.5 h-3.5" />
             Multi-Provider Health
-          </h3>
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {Object.entries(providerHealth).map(([id, ph]) => (
               <ProviderCard key={id} id={id} data={ph} />
@@ -340,20 +349,20 @@ export default function Search() {
         {/* Coverage Matrix & Query Browser Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
           <div className="flex flex-col h-full min-h-[400px]">
-            <h3 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
+            <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5" />
               Coverage Matrix
-            </h3>
+            </h2>
             <div className="bg-surface border border-border rounded-md flex-1">
               <CoverageMatrix queries={queries} />
             </div>
           </div>
           
           <div className="flex flex-col h-full min-h-[400px]">
-            <h3 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
+            <h2 className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-3 flex items-center gap-2">
               <Globe className="w-3.5 h-3.5" />
               Active Query Browser
-            </h3>
+            </h2>
             <div className="bg-surface border border-border rounded-md flex-1 max-h-[445px]">
               <QueryBrowser queries={queries} />
             </div>

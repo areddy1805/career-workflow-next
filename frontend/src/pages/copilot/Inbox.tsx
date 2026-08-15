@@ -202,7 +202,7 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
               ) : (
                 <div className="px-5 py-4 space-y-4">
                   {brief.verdict ? (
-                    <div className={cn('rounded-lg border px-3 py-2.5 text-xs font-medium', verdictClass(verdictLabel(brief.verdict) ?? undefined))}>
+                    <div className={cn('rounded-md border px-3 py-2.5 text-xs font-medium', verdictClass(verdictLabel(brief.verdict) ?? undefined))}>
                       <span className="font-semibold uppercase">{verdictLabel(brief.verdict)}</span>
                       {brief.verdict_reason ? ` — ${brief.verdict_reason}` : ''}
                     </div>

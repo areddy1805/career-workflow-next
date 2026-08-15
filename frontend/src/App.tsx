@@ -516,7 +516,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Topbar />
         <main className="flex-1 overflow-auto relative p-5 lg:p-7" id="main-content" tabIndex={-1}>
-          <div className="max-w-7xl mx-auto w-full">
+          <div className="max-w-7xl mx-auto w-full h-full">
             {children}
           </div>
         </main>

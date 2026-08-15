@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLedgerSearch, useLedgerStats, useLedgerJob } from '@/lib/hooks';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { StatRow } from '@/components/operations/StatRow';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { EmptyState } from '@/components/operations/EmptyState';
+import { ErrorState } from '@/components/operations/ErrorState';
 import { RelativeTime } from '@/components/RelativeTime';
 import { Search, ChevronLeft, ChevronRight, FileJson, Cpu, MapPin, Building, Globe } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -24,11 +25,33 @@ export default function Ledger() {
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
-  const { data, isLoading } = useLedgerSearch({ query, provider, status, limit, offset });
+  const { data, isLoading, isError, refetch } = useLedgerSearch({ query, provider, status, limit, offset });
   const { data: stats } = useLedgerStats();
 
   const [selectedFingerprint, setSelectedFingerprint] = useState<string | null>(null);
   const { data: jobDetails, isLoading: detailsLoading } = useLedgerJob(selectedFingerprint || '');
+
+  // Focus restoration — the sheet opens without a Radix trigger, so capture
+  // the invoking row and return focus to it on close (keyboard accessibility).
+  const sheetTriggerRef = useRef<HTMLElement | null>(null);
+  const selectRow = (fp: string) => {
+    sheetTriggerRef.current = document.activeElement as HTMLElement | null;
+    setSelectedFingerprint(fp);
+  };
+  const closeSheet = () => {
+    setSelectedFingerprint(null);
+  };
+  const restoreFocus = (e: Event) => {
+    e.preventDefault();
+    sheetTriggerRef.current?.focus?.();
+    sheetTriggerRef.current = null;
+  };
+  useEffect(() => {
+    if (!selectedFingerprint) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSheet(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selectedFingerprint]);
 
   const items = data?.items || [];
   const total = data?.total || 0;
@@ -113,9 +136,9 @@ export default function Ledger() {
                 <tr 
                   key={job.job_id} 
                   tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedFingerprint(job.job_id); } }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRow(job.job_id); } }}
                   className="hover:bg-muted/30 transition-colors group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                  onClick={() => setSelectedFingerprint(job.job_id)}
+                  onClick={() => selectRow(job.job_id)}
                 >
                   <td className="px-4 py-3">
                     <StatusBadge 
@@ -140,13 +163,19 @@ export default function Ledger() {
             </tbody>
           </table>
 
-          {isLoading && items.length === 0 && (
+          {isError && (
+            <div className="m-4">
+              <ErrorState message="Ledger records could not be loaded." onRetry={() => refetch()} />
+            </div>
+          )}
+
+          {!isError && isLoading && items.length === 0 && (
             <div className="m-4">
               <GridSkeleton rows={8} />
             </div>
           )}
           
-          {!isLoading && items.length === 0 && (
+          {!isError && !isLoading && items.length === 0 && (
             <EmptyState
               title="No records found"
               description="Try adjusting your filters or search query."
@@ -183,8 +212,11 @@ export default function Ledger() {
       </div>
 
       {/* Details Sheet */}
-      <Sheet open={!!selectedFingerprint} onOpenChange={(v) => !v && setSelectedFingerprint(null)}>
-        <SheetContent className="w-[480px] sm:w-[600px] flex flex-col p-0 border-l border-border bg-surface">
+      <Sheet open={!!selectedFingerprint} onOpenChange={(v) => !v && closeSheet()}>
+        <SheetContent
+          onCloseAutoFocus={restoreFocus}
+          className="w-[480px] sm:w-[600px] flex flex-col p-0 border-l border-border bg-surface"
+        >
           <SheetHeader className="px-6 py-5 border-b border-border bg-surface/80 shrink-0">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-base font-semibold tracking-tight text-foreground">Intelligence Trace</SheetTitle>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useRuns } from '@/lib/hooks';
 import {
   Table, TableBody, TableCell, TableHeader, TableRow,
@@ -8,6 +8,7 @@ import { StatRow } from '@/components/operations/StatRow';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { EmptyState } from '@/components/operations/EmptyState';
+import { ErrorState } from '@/components/operations/ErrorState';
 import { RelativeTime } from '@/components/RelativeTime';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -28,8 +29,30 @@ const RUNS_SORT_TYPES = {
 };
 
 export default function Runs() {
-  const { data: runs = [], isLoading } = useRuns();
+  const { data: runs = [], isLoading, isError, refetch } = useRuns();
   const [selectedRun, setSelectedRun] = useState<any | null>(null);
+
+  // Focus restoration — sheet opens without a Radix trigger; return focus to
+  // the invoking row on close (keyboard accessibility).
+  const sheetTriggerRef = useRef<HTMLElement | null>(null);
+  const selectRun = (run: any) => {
+    sheetTriggerRef.current = document.activeElement as HTMLElement | null;
+    setSelectedRun(run);
+  };
+  const closeRunSheet = () => {
+    setSelectedRun(null);
+  };
+  const restoreRunFocus = (e: Event) => {
+    e.preventDefault();
+    sheetTriggerRef.current?.focus?.();
+    sheetTriggerRef.current = null;
+  };
+  useEffect(() => {
+    if (!selectedRun) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRunSheet(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selectedRun]);
   const { sort, handleSort } = useSortable(RUNS_SORT_TYPES);
 
   const runsArray = runs as any[];
@@ -46,7 +69,9 @@ export default function Runs() {
         subtitle={`Audit and inspect past pipeline executions. ${runsArray.length} runs available.`}
       />
 
-      {isLoading ? (
+      {isError ? (
+        <div className="flex-1"><ErrorState message="Run history could not be loaded." onRetry={() => refetch()} /></div>
+      ) : isLoading ? (
         <GridSkeleton rows={6} className="flex-1" />
       ) : (
         <div className="flex-1 bg-surface border border-border rounded-md overflow-hidden flex flex-col">
@@ -69,9 +94,9 @@ export default function Runs() {
                   <TableRow
                     key={run.run_id}
                     tabIndex={0}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedRun(run); } }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectRun(run); } }}
                     className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-border/50 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                    onClick={() => setSelectedRun(run)}
+                    onClick={() => selectRun(run)}
                   >
                     <TableCell className="font-mono text-[11px] text-foreground">
                       <RelativeTime date={run.started_at} />
@@ -110,8 +135,11 @@ export default function Runs() {
       </div>
       )}
 
-      <Sheet open={!!selectedRun} onOpenChange={open => !open && setSelectedRun(null)}>
-        <SheetContent className="w-[480px] sm:w-[540px] flex flex-col p-0 border-l border-border bg-surface">
+      <Sheet open={!!selectedRun} onOpenChange={open => !open && closeRunSheet()}>
+        <SheetContent
+          onCloseAutoFocus={restoreRunFocus}
+          className="w-[480px] sm:w-[540px] flex flex-col p-0 border-l border-border bg-surface"
+        >
           <SheetHeader className="px-6 py-5 border-b border-border bg-surface/80">
             <div className="flex items-center justify-between">
               <SheetTitle className="text-base font-semibold tracking-tight text-foreground">Run Details</SheetTitle>

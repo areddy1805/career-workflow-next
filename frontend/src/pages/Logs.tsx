@@ -9,26 +9,27 @@ import {
 } from '@/lib/hooks';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 type LogTab = 'pipeline' | 'runtime' | 'eventbus' | 'errors' | 'warnings' | 'ledger';
 
 export default function Logs() {
   const [activeTab, setActiveTab] = useState<LogTab>('pipeline');
 
-  const { data: pipeline, isLoading: pipelineLoading } = useLogsPipeline();
-  const { data: runtime, isLoading: runtimeLoading } = useLogsRuntime();
-  const { data: eventbus, isLoading: eventbusLoading } = useLogsEventbus();
-  const { data: errors, isLoading: errorsLoading } = useLogsErrors();
-  const { data: warnings, isLoading: warningsLoading } = useLogsWarnings();
-  const { data: ledger, isLoading: ledgerLoading } = useLogsLedger();
+  const { data: pipeline, isLoading: pipelineLoading, isError: pipelineError, refetch: pipelineRefetch } = useLogsPipeline();
+  const { data: runtime, isLoading: runtimeLoading, isError: runtimeError, refetch: runtimeRefetch } = useLogsRuntime();
+  const { data: eventbus, isLoading: eventbusLoading, isError: eventbusError, refetch: eventbusRefetch } = useLogsEventbus();
+  const { data: errors, isLoading: errorsLoading, isError: errorsError, refetch: errorsRefetch } = useLogsErrors();
+  const { data: warnings, isLoading: warningsLoading, isError: warningsError, refetch: warningsRefetch } = useLogsWarnings();
+  const { data: ledger, isLoading: ledgerLoading, isError: ledgerError, refetch: ledgerRefetch } = useLogsLedger();
 
-  const tabs: Array<{ id: LogTab; label: string; data: any; loading: boolean }> = [
-    { id: 'pipeline', label: 'Pipeline', data: pipeline, loading: pipelineLoading },
-    { id: 'runtime', label: 'Runtime', data: runtime, loading: runtimeLoading },
-    { id: 'eventbus', label: 'EventBus', data: eventbus, loading: eventbusLoading },
-    { id: 'ledger', label: 'Ledger', data: ledger, loading: ledgerLoading },
-    { id: 'warnings', label: 'Warnings', data: warnings, loading: warningsLoading },
-    { id: 'errors', label: 'Errors', data: errors, loading: errorsLoading },
+  const tabs: Array<{ id: LogTab; label: string; data: any; loading: boolean; error: boolean; refetch: () => void }> = [
+    { id: 'pipeline', label: 'Pipeline', data: pipeline, loading: pipelineLoading, error: pipelineError, refetch: pipelineRefetch },
+    { id: 'runtime', label: 'Runtime', data: runtime, loading: runtimeLoading, error: runtimeError, refetch: runtimeRefetch },
+    { id: 'eventbus', label: 'EventBus', data: eventbus, loading: eventbusLoading, error: eventbusError, refetch: eventbusRefetch },
+    { id: 'ledger', label: 'Ledger', data: ledger, loading: ledgerLoading, error: ledgerError, refetch: ledgerRefetch },
+    { id: 'warnings', label: 'Warnings', data: warnings, loading: warningsLoading, error: warningsError, refetch: warningsRefetch },
+    { id: 'errors', label: 'Errors', data: errors, loading: errorsLoading, error: errorsError, refetch: errorsRefetch },
   ];
 
   const activeTabData = tabs.find(t => t.id === activeTab);
@@ -42,7 +43,7 @@ export default function Logs() {
         subtitle="Read-only stream of operational logs across all services."
       />
 
-      <div role="tablist" aria-label="Log sources" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0">
+      <div role="tablist" aria-label="Log sources" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -75,7 +76,9 @@ export default function Logs() {
       </div>
 
       <div role="tabpanel" id={`log-panel-${activeTab}`} className="flex-1 bg-console overflow-auto p-4 flex flex-col-reverse">
-        {activeTabData?.loading ? (
+        {activeTabData?.error ? (
+          <ErrorState message={`${activeTabData.label} log stream could not be loaded.`} onRetry={activeTabData.refetch} />
+        ) : activeTabData?.loading ? (
           <GridSkeleton rows={6} />
         ) : logLines.length > 0 ? (
           <div className="font-mono text-[11px] leading-[1.6] space-y-1">

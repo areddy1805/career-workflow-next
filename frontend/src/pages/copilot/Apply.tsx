@@ -23,6 +23,7 @@ import {
   type WorkspaceStep,
 } from '@/store/copilot';
 import { StatusBadge } from '@/components/StatusBadge';
+import { StateMarker, type StateSemantic } from '@/components/operations/StateMarker';
 import { Button } from '@/components/ui/button';
 import { cn, formatSalary } from '@/lib/utils';
 import type { CopilotSession, SessionEvent, StoredAnswer } from '@/lib/types/copilot';
@@ -150,27 +151,19 @@ function stringifyAnswer(value: unknown): string {
 
 // ─── Small pieces ───────────────────────────────────────────────────────────
 
-const ANSWER_STATUS_STYLES: Record<string, string> = {
-  auto: 'bg-healthy/10 text-healthy',
-  confirmed: 'bg-healthy/10 text-healthy',
-  confirm: 'bg-degraded/10 text-degraded',
-  manual: 'bg-pending/10 text-pending',
-  manual_review: 'bg-pending/10 text-pending',
-  locked: 'bg-running/10 text-running',
-  superseded: 'bg-muted text-muted-foreground',
+const ANSWER_STATUS_STATE: Record<string, StateSemantic> = {
+  auto: 'healthy',
+  confirmed: 'healthy',
+  confirm: 'degraded',
+  manual: 'pending',
+  manual_review: 'pending',
+  locked: 'running',
+  superseded: 'idle',
 };
 
 function AnswerStatusChip({ status }: { status: string }) {
-  const upper = (status || 'unknown').toUpperCase();
   return (
-    <span
-      className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono uppercase tracking-wide leading-none whitespace-nowrap',
-        ANSWER_STATUS_STYLES[status] ?? 'bg-muted/40 text-muted-foreground',
-      )}
-    >
-      {upper}
-    </span>
+    <StateMarker state={ANSWER_STATUS_STATE[status] ?? 'unknown'} label={(status || 'unknown').toUpperCase()} />
   );
 }
 
@@ -296,12 +289,12 @@ function HoldToConfirmButton({
         <span
           aria-hidden="true"
           className={cn(
-            'absolute inset-y-0 left-0 bg-white/25',
+            'absolute inset-y-0 left-0 origin-left bg-white/25',
             holding ? 'opacity-100' : 'opacity-0',
           )}
           style={{
-            width: holding ? '100%' : '0%',
-            transition: holding ? `width ${HOLD_MS}ms linear` : 'none',
+            transform: holding ? 'scaleX(1)' : 'scaleX(0)',
+            transition: holding ? `transform ${HOLD_MS}ms linear` : 'none',
           }}
         />
       </button>
@@ -1001,7 +994,7 @@ function BriefStep({
 
 function GlanceStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-surface border border-border/50 rounded-lg px-3 py-2">
+    <div className="bg-surface border border-border/50 rounded-md px-3 py-2">
       <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">
         {label}
       </p>

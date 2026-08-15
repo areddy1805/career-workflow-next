@@ -31,14 +31,14 @@ const FUNNEL_STAGES: { key: keyof FunnelStageCounts; label: string }[] = [
 ];
 
 const FUNNEL_COLORS = [
-  'bg-sky-500/80',
-  'bg-cyan-500/80',
-  'bg-teal-500/80',
-  'bg-emerald-500/80',
-  'bg-lime-500/80',
-  'bg-amber-500/80',
-  'bg-orange-500/80',
-  'bg-rose-500/80',
+  'bg-chart-1/80',
+  'bg-chart-2/80',
+  'bg-chart-3/80',
+  'bg-chart-4/80',
+  'bg-chart-5/80',
+  'bg-chart-1/80',
+  'bg-chart-2/80',
+  'bg-chart-3/80',
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -135,7 +135,7 @@ export default function Analytics() {
                     label="Manual (baseline)"
                     value={data.effort.manual_estimate_min}
                     max={data.effort.manual_estimate_min}
-                    color="bg-orange-500/60"
+                    color="bg-chart-3/60"
                   />
                   <CompareBar
                     label="Assisted (median)"
@@ -260,7 +260,7 @@ function FunnelBar({
         aria-label={`Application funnel — ${FUNNEL_STAGES.map(
           (s) => `${s.label}: ${stages[s.key]}`,
         ).join(', ')}`}
-        className="flex h-8 w-full overflow-hidden rounded-lg border border-border/60"
+        className="flex h-8 w-full overflow-hidden rounded-md border border-border/60"
       >
         {FUNNEL_STAGES.map((s, i) => {
           const count = stages[s.key];
@@ -380,7 +380,7 @@ function CalibrationBars({ data }: { data: AnalyticsData }) {
           className="h-2.5 w-full rounded-full bg-muted/50 overflow-hidden"
         >
           <div
-            className="h-full rounded-full bg-sky-500/70"
+            className="h-full rounded-full bg-running/70"
             style={{ width: `${Math.min(avgPredicted * 100, 100)}%` }}
           />
         </div>
@@ -452,7 +452,7 @@ function SectionCard({
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+    <div className="rounded-md border border-border/60 p-3 bg-muted/20">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </p>
@@ -463,7 +463,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 
 function PendingCard({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 p-3.5 space-y-1.5">
+    <div className="rounded-md border border-dashed border-border/70 p-3.5 space-y-1.5">
       <div className="flex items-center gap-2">
         <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
         <p className="text-xs font-semibold">{title}</p>

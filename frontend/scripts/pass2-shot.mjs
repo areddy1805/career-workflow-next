@@ -1,0 +1,21 @@
+import { chromium } from 'playwright';
+const BASE = 'http://localhost:5173';
+const OUT = '../.impeccable/review';
+const b = await chromium.launch();
+const shot = async (file, path, w, h, theme) => {
+  const p = await b.newPage({ viewport: { width: w, height: h }, colorScheme: theme });
+  await p.goto(BASE + path, { waitUntil: 'networkidle' });
+  await p.evaluate((t) => { const r = document.documentElement; r.classList.remove('light', 'dark'); r.classList.add(t); }, theme);
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: `${OUT}/${file}`, fullPage: true });
+  await p.close();
+  console.log('saved', file);
+};
+await shot('pass2-ledger.png', '/ledger', 1440, 900, 'dark');
+await shot('pass2-jobs.png', '/jobs', 1440, 900, 'dark');
+await shot('pass2-copilot-inbox.png', '/copilot/inbox', 1440, 900, 'dark');
+await shot('pass2-metrics.png', '/metrics', 1440, 900, 'dark');
+await shot('pass2-providers.png', '/providers', 1440, 900, 'dark');
+await shot('pass2-light-overview.png', '/', 1440, 900, 'light');
+await shot('pass2-mobile.png', '/', 375, 812, 'dark');
+await b.close();

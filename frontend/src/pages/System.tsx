@@ -6,6 +6,7 @@ import { RelativeTime } from '@/components/RelativeTime';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 // ─── Reusable data row ────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ function ModuleCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border border-border/50 rounded-lg bg-surface overflow-hidden">
+    <div className="border border-border/50 rounded-md bg-surface overflow-hidden">
       <div className="h-10 px-4 border-b border-border/50 bg-muted/10 flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <Icon className="w-3.5 h-3.5" />
@@ -62,11 +63,19 @@ function AliveIndicator({ alive }: { alive: boolean | undefined }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Runtime() {
-  const { data: runtime, isLoading } = useQuery({
+  const { data: runtime, isLoading, isError, refetch } = useQuery({
     queryKey: ['runtime'],
     queryFn: fetchSystem,
     refetchInterval: 3000,
   });
+
+  if (isError) {
+    return (
+      <div className="h-full p-6 max-w-4xl">
+        <ErrorState message="System health telemetry could not be loaded." onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -141,7 +150,7 @@ export default function Runtime() {
               </ModuleCard>
 
               {/* Stage Checklist */}
-              <div className="border border-border/50 rounded-lg bg-surface overflow-hidden">
+              <div className="border border-border/50 rounded-md bg-surface overflow-hidden">
                 <div className="h-10 px-4 border-b border-border/50 bg-muted/10 flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider gap-2">
                   <Cpu className="w-3.5 h-3.5" /> Stage Checklist
                 </div>
@@ -192,7 +201,7 @@ export default function Runtime() {
 
             {/* Errors */}
             {latest_run_details.errors?.length > 0 && (
-              <div className="border border-failed/40 rounded-lg bg-failed/5 p-4">
+              <div className="border border-failed/40 rounded-md bg-failed/5 p-4">
                 <p className="text-[10px] font-semibold text-failed uppercase tracking-wider mb-3">Runtime Errors</p>
                 <ul className="space-y-1 text-xs text-failed font-mono">
                   {latest_run_details.errors.map((err: string, i: number) => (

@@ -27,6 +27,8 @@ import type {
 import { useSession } from '@/lib/hooks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { StateMarker, type StateSemantic } from '@/components/operations/StateMarker';
 import {
   Card,
   CardContent,
@@ -83,42 +85,42 @@ function fillStatus(fill: FieldFill | undefined, field: TypedField): FillStatus 
   return fill.confidence != null && fill.confidence >= 0.95 ? 'filled' : 'flagged';
 }
 
-const STATUS_META: Record<FillStatus, { label: string; className: string }> = {
-  pending: { label: 'pending', className: 'border-border text-muted-foreground' },
+const STATUS_META: Record<FillStatus, { label: string; state: StateSemantic }> = {
+  pending: { label: 'pending', state: 'pending' },
   filled: {
     label: 'filled',
-    className: 'border-healthy/40 bg-healthy/10 text-healthy',
+    state: 'healthy',
   },
   flagged: {
     label: 'flagged',
-    className: 'border-degraded/40 bg-degraded/10 text-degraded',
+    state: 'degraded',
   },
   asked: {
     label: 'asked',
-    className: 'border-blue-500/40 bg-running/10 text-running',
+    state: 'running',
   },
   unwritable: {
     label: 'FIELD_UNWRITABLE',
-    className: 'border-failed/40 bg-failed/10 text-failed',
+    state: 'failed',
   },
   unknown: {
     label: 'unknown',
-    className: 'border-border bg-muted/40 text-muted-foreground',
+    state: 'unknown',
   },
   sensitive: {
     label: 'sensitive',
-    className: 'border-failed/40 bg-failed/10 text-failed',
+    state: 'failed',
   },
   upload: {
     label: 'upload',
-    className: 'border-pending/40 bg-pending/10 text-pending',
+    state: 'pending',
   },
 };
 
 const SOURCE_CHIP: Record<string, string> = {
   stored: 'border-healthy/40 bg-healthy/10 text-healthy',
   deterministic:
-    'border-sky-500/40 bg-sky-500/10 text-running',
+    'border-running/40 bg-running/10 text-running',
   llm: 'border-pending/40 bg-pending/10 text-pending',
   manual: 'border-degraded/40 bg-degraded/10 text-degraded',
 };
@@ -177,16 +179,14 @@ const INITIAL_STATE: PanelState = {
 // ─── Small presentational pieces ───────────────────────────────────────────
 
 function StateBadge({ state }: { state: string | undefined }) {
-  const meta: Record<string, string> = {
-    opened: 'border-healthy/40 bg-healthy/10 text-healthy',
-    taken_over:
-      'border-degraded/40 bg-degraded/10 text-degraded',
-    aborted: 'border-failed/40 bg-failed/10 text-failed',
+  const meta: Record<string, StateSemantic> = {
+    opened: 'healthy',
+    taken_over: 'degraded',
+    aborted: 'failed',
   };
+  const semantic = (state ?? 'unknown') as StateSemantic;
   return (
-    <Badge variant="outline" className={meta[state ?? ''] ?? 'border-border text-muted-foreground'}>
-      {browserStateLabel(state)}
-    </Badge>
+    <StateMarker state={meta[state ?? ''] ?? semantic} label={browserStateLabel(state)} />
   );
 }
 
@@ -208,10 +208,10 @@ function ConfidenceBar({ value }: { value: number | null }) {
           value == null
             ? 'bg-muted-foreground/30'
             : pct >= 95
-              ? 'bg-emerald-500'
+              ? 'bg-healthy'
               : pct >= 80
-                ? 'bg-amber-500'
-                : 'bg-sky-500',
+                ? 'bg-degraded'
+                : 'bg-running',
         )}
         style={{ width: `${pct}%` }}
       />
@@ -479,9 +479,7 @@ function FieldRow({
             </span>
           ) : null}
         </p>
-        <Badge variant="outline" className={cn('shrink-0', meta.className)}>
-          {meta.label}
-        </Badge>
+        <StateMarker state={meta.state} label={meta.label} />
         {fill ? <SourceChip source={fill.source} /> : null}
       </div>
       <div className="flex items-center gap-2">
@@ -523,9 +521,9 @@ function FieldRow({
           <label htmlFor={`edit-${field.field_id}`} className="sr-only">
             Value for {field.label}
           </label>
-          <input
+          <Input
             id={`edit-${field.field_id}`}
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-8 px-2 text-xs"
             value={editValue}
             onChange={(e) => onEditChange(e.target.value)}
             autoFocus
@@ -953,7 +951,10 @@ export default function Assistant() {
   return (
     <div className="space-y-4 p-4 lg:p-6">
       <header className="flex flex-wrap items-center gap-2">
-        <h1 className="text-emphasis text-foreground font-semibold tracking-tight">Form-Fill Assistant</h1>
+        <h1 className="text-emphasis text-foreground font-semibold tracking-tight flex items-baseline gap-3">
+          <span className="font-mono text-[10px] tracking-[0.1em] text-faint select-none" aria-hidden="true">03 · ASSISTANT</span>
+          Form-Fill Assistant
+        </h1>
         <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
           {sessionId}
         </code>

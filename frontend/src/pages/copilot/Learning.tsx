@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { RelativeTime } from '@/components/RelativeTime';
 import { StatusBadge } from '@/components/StatusBadge';
 import { confirmAnswer, lockAnswer, switchProfile } from '@/lib/api/copilot';
@@ -36,14 +37,6 @@ const PROFILES = [
 
 const STATUSES = ['auto', 'confirm', 'confirmed', 'locked', 'superseded'] as const;
 const PROFILE_STORAGE_KEY = 'cw-copilot-profile';
-
-// StatusBadge color overrides — global semantics (emerald=confirmed,
-// amber=needs-confirm, blue=locked; auto/superseded keep neutral gray).
-const STATUS_STYLE: Record<string, string> = {
-  confirm: 'bg-degraded/10 text-degraded',
-  confirmed: 'bg-healthy/10 text-healthy',
-  locked: 'bg-running/10 text-running',
-};
 
 // CP-7-03 frozen constants — deterministic display only (no fetch).
 const MAX_BIAS = 1.0;
@@ -207,7 +200,7 @@ export default function Learning() {
               </span>
             </p>
           </div>
-          <StatusBadge status={a.status} className={STATUS_STYLE[a.status]} />
+          <StatusBadge status={a.status} />
         </div>
 
         {editing ? (
@@ -355,7 +348,7 @@ export default function Learning() {
                     profileRefs.current[next.id]?.focus();
                   }
                 }}
-                className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-1 gap-1"
+                className="inline-flex rounded-md border border-border/60 bg-muted/30 p-1 gap-1"
               >
                 {PROFILES.map((p) => (
                   <button
@@ -408,13 +401,13 @@ export default function Learning() {
                       className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <input
+                    <Input
                       id="answer-search"
                       type="search"
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                       placeholder="e.g. experience.rag_years"
-                      className="w-full rounded-md border border-input bg-background pl-8 pr-3 py-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="pl-8"
                     />
                   </div>
                 </div>
@@ -573,7 +566,7 @@ export default function Learning() {
                   bounded EMA — explore early, exploit later, zero randomness (D-028).
                 </p>
                 <div className="grid sm:grid-cols-3 gap-2 pt-1">
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Gate
                     </p>
@@ -585,7 +578,7 @@ export default function Learning() {
                       — rollback is flag-off → identical to today.
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Max bias
                     </p>
@@ -594,7 +587,7 @@ export default function Learning() {
                       EMA clamp bound — engine also clamps providers to the same range.
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-2.5">
+                  <div className="rounded-md border border-border/60 p-2.5">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                       Brief probability adjust
                     </p>
@@ -637,7 +630,7 @@ function SectionCard({
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border/60 p-3 bg-muted/20">
+    <div className="rounded-md border border-border/60 p-3 bg-muted/20">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </p>
@@ -648,7 +641,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 
 function PendingPh8Card({ title, body, next }: { title: string; body: string; next: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 p-3.5 space-y-1.5">
+    <div className="rounded-md border border-dashed border-border/70 p-3.5 space-y-1.5">
       <div className="flex items-center gap-2">
         <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
         <p className="text-xs font-semibold">{title}</p>

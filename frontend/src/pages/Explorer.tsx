@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 import { EmptyState } from '@/components/operations/EmptyState';
 
 function formatBytes(bytes: number) {
@@ -25,7 +26,7 @@ function FileIcon({ name }: { name: string }) {
 }
 
 export default function Artifacts() {
-  const { data: artifacts = [], isLoading } = useArtifacts();
+  const { data: artifacts = [], isLoading, isError, refetch } = useArtifacts();
   const { theme } = usePreferences();
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -61,8 +62,12 @@ export default function Artifacts() {
               <Database className="w-3.5 h-3.5 text-muted-foreground mr-2" />
               <span className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Runs ({artifacts.length})</span>
             </div>
-            <ScrollArea className="flex-1 custom-scrollbar">
-              {isLoading ? (
+            <ScrollArea className="flex-1">
+              {isError ? (
+                <div className="p-2">
+                  <ErrorState message="Run artifact list could not be loaded." onRetry={() => refetch()} />
+                </div>
+              ) : isLoading ? (
                 <div className="p-2">
                   <GridSkeleton rows={6} className="border-0" />
                 </div>

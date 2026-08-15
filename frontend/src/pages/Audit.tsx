@@ -3,22 +3,23 @@ import { useAuditPipeline, useAuditFilters, useAuditRanking, useAuditSystem } fr
 import { FileJson } from 'lucide-react';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 type AuditTab = 'pipeline' | 'filters' | 'ranking' | 'system';
 
 export default function Audit() {
   const [activeTab, setActiveTab] = useState<AuditTab>('pipeline');
 
-  const { data: pipelineData, isLoading: pipelineLoading } = useAuditPipeline();
-  const { data: filtersData, isLoading: filtersLoading } = useAuditFilters();
-  const { data: rankingData, isLoading: rankingLoading } = useAuditRanking();
-  const { data: systemData, isLoading: systemLoading } = useAuditSystem();
+  const { data: pipelineData, isLoading: pipelineLoading, isError: pipelineError, refetch: pipelineRefetch } = useAuditPipeline();
+  const { data: filtersData, isLoading: filtersLoading, isError: filtersError, refetch: filtersRefetch } = useAuditFilters();
+  const { data: rankingData, isLoading: rankingLoading, isError: rankingError, refetch: rankingRefetch } = useAuditRanking();
+  const { data: systemData, isLoading: systemLoading, isError: systemError, refetch: systemRefetch } = useAuditSystem();
 
-  const tabs: Array<{ id: AuditTab; label: string; data: any; loading: boolean }> = [
-    { id: 'pipeline', label: 'Pipeline', data: pipelineData, loading: pipelineLoading },
-    { id: 'filters', label: 'Filters', data: filtersData, loading: filtersLoading },
-    { id: 'ranking', label: 'Ranking', data: rankingData, loading: rankingLoading },
-    { id: 'system', label: 'System State', data: systemData, loading: systemLoading },
+  const tabs: Array<{ id: AuditTab; label: string; data: any; loading: boolean; error: boolean; refetch: () => void }> = [
+    { id: 'pipeline', label: 'Pipeline', data: pipelineData, loading: pipelineLoading, error: pipelineError, refetch: pipelineRefetch },
+    { id: 'filters', label: 'Filters', data: filtersData, loading: filtersLoading, error: filtersError, refetch: filtersRefetch },
+    { id: 'ranking', label: 'Ranking', data: rankingData, loading: rankingLoading, error: rankingError, refetch: rankingRefetch },
+    { id: 'system', label: 'System State', data: systemData, loading: systemLoading, error: systemError, refetch: systemRefetch },
   ];
 
   const activeTabData = tabs.find(t => t.id === activeTab);
@@ -31,7 +32,7 @@ export default function Audit() {
         subtitle="Read-only operational view of system configurations, ranking logic, and pipeline rules."
       />
 
-      <div role="tablist" aria-label="Audit surfaces" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0">
+      <div role="tablist" aria-label="Audit surfaces" className="flex items-center border-b border-border px-4 bg-background/80 shrink-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -66,8 +67,10 @@ export default function Audit() {
             </span>
           </div>
           
-          <div className="bg-surface border border-border/50 rounded-lg p-4 overflow-auto">
-            {activeTabData?.loading ? (
+          <div className="bg-surface border border-border/50 rounded-md p-4 overflow-auto">
+            {activeTabData?.error ? (
+              <ErrorState message={`${activeTabData.label} configuration could not be loaded.`} onRetry={activeTabData.refetch} />
+            ) : activeTabData?.loading ? (
               <GridSkeleton rows={3} />
             ) : (
               <pre className="text-[11px] font-mono leading-relaxed text-foreground/90">

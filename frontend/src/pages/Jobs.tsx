@@ -35,6 +35,7 @@ import { useJobStore } from '@/store/jobs';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
 import { EmptyState } from '@/components/operations/EmptyState';
+import { ErrorState } from '@/components/operations/ErrorState';
 import {
   Copy, X, Settings2, EyeOff, ExternalLink, CheckCircle,
   SkipForward, FolderOpen, RefreshCw, Filter,
@@ -86,7 +87,7 @@ const COLUMN_LABELS: Record<string, string> = {
 
 export default function Jobs() {
   const queryClient = useQueryClient();
-  const { data: jobs = [], isLoading, refetch, isFetching } = useJobs();
+  const { data: jobs = [], isLoading, isError, refetch, isFetching } = useJobs();
 
   // Persisted state
   const { sorting, columnVisibility, setSorting, setColumnVisibility } = useJobStore();
@@ -360,10 +361,10 @@ export default function Jobs() {
       />
 
       {/* Saved Views + Filter Row */}
-      <div className="flex items-center gap-0 border-b border-border/40 shrink-0 bg-background/80 px-4">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border/40 shrink-0 bg-background/80 px-4">
         {/* Saved view tabs */}
-        <Tabs value={activeView} onValueChange={v => applyView(v as ViewId)} className="mr-4">
-          <TabsList className="border-0 gap-0">
+        <Tabs value={activeView} onValueChange={v => applyView(v as ViewId)} className="mr-4 min-w-0 max-w-full">
+          <TabsList className="border-0 gap-0 overflow-x-auto max-w-full">
             {SAVED_VIEWS.map(view => (
               <TabsTrigger
                 key={view.id}
@@ -404,7 +405,7 @@ export default function Jobs() {
         )}
 
         {/* Search — pushes to the right */}
-        <div className="flex items-center gap-2 ml-auto py-1.5">
+        <div className="flex items-center gap-2 ml-auto py-1.5 min-w-0 flex-1 sm:flex-none">
           <Filter className="w-3 h-3 text-muted-foreground" />
           <Input
             placeholder="Filter…"
@@ -420,9 +421,13 @@ export default function Jobs() {
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
           {/* Data Grid */}
-          <ResizablePanel defaultSize={selectedJobId ? 58 : 100} minSize={30} className="relative flex flex-col bg-surface">
-            <div ref={parentRef} className="flex-1 overflow-auto relative">
-              {rows.length === 0 && !isLoading ? (
+          <ResizablePanel defaultSize={selectedJobId ? 58 : 100} minSize={30} className="relative flex flex-col bg-surface min-w-0 overflow-hidden">
+            <div ref={parentRef} className="flex-1 overflow-auto relative min-w-0">
+              {isError ? (
+                <div className="p-4">
+                  <ErrorState message="Job data could not be loaded." onRetry={() => refetch()} />
+                </div>
+              ) : rows.length === 0 && !isLoading ? (
                 <EmptyState
                   title="No jobs match this filter"
                   description="Try adjusting the filter or switching views."
@@ -665,7 +670,7 @@ function JobDetailContent({
 
       {/* AI Assessment — elevated to top */}
       {(ov.reasoning || ov.notes || ov.ai_reason) && (
-        <div className="bg-secondary/40 border border-border rounded-lg p-4">
+        <div className="bg-secondary/40 border border-border rounded-md p-4">
           <p className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">AI Assessment</p>
           <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
             {ov.reasoning ?? ov.ai_reason ?? ov.notes}

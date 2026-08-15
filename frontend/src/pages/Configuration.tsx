@@ -4,14 +4,19 @@ import { Moon, Sun } from 'lucide-react';
 import { usePreferences } from '@/store/preferences';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 export default function Configuration() {
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading, isError, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: fetchSettings,
   });
 
   const { theme, setTheme } = usePreferences();
+
+  if (isError) {
+    return <div className="p-4 max-w-4xl"><ErrorState message="Configuration could not be loaded." onRetry={() => refetch()} /></div>;
+  }
 
   if (isLoading) {
     return <div className="p-4 max-w-4xl"><GridSkeleton rows={5} /></div>;
@@ -27,7 +32,7 @@ export default function Configuration() {
 
       <div className="space-y-6">
         {/* Appearance Settings */}
-        <section className="space-y-4 bg-surface border border-border/40 rounded-lg p-5">
+        <section className="space-y-4 bg-surface border border-border/40 rounded-md p-5">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             Appearance
           </h2>
@@ -56,7 +61,7 @@ export default function Configuration() {
         </section>
 
         {/* Backend Configuration */}
-        <section className="space-y-4 bg-surface border border-border/40 rounded-lg p-5">
+        <section className="space-y-4 bg-surface border border-border/40 rounded-md p-5">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             Backend Settings
           </h2>

@@ -46,7 +46,7 @@ export default function About() {
               href="https://github.com/areddy1805/career-workflow-next"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors p-2 bg-secondary/30 rounded-lg hover:bg-secondary/50"
+              className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors p-2 bg-secondary/30 rounded-md hover:bg-secondary/50"
             >
               <Code className="w-4 h-4" /> GitHub Repository{" "}
               <ExternalLink className="w-3 h-3 opacity-50" />

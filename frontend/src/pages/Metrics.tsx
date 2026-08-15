@@ -16,6 +16,7 @@ import {
 import { TrendingUp, Activity, CheckCircle2, Layers, Target } from 'lucide-react';
 import { PageHeader } from '@/components/operations/PageHeader';
 import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { ErrorState } from '@/components/operations/ErrorState';
 
 // ─── Label Maps ──────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ function KpiCard({
   label, value, sub, icon: Icon, color = 'text-primary',
 }: { label: string; value: string | number; sub?: string; icon: any; color?: string }) {
   return (
-    <div className="bg-surface border border-border/50 rounded-lg p-4 flex items-start gap-3">
+    <div className="bg-surface border border-border/50 rounded-md p-4 flex items-start gap-3">
       <div className={`mt-0.5 p-2 rounded-md bg-current/10 ${color}`}>
         <Icon className="w-3.5 h-3.5" />
       </div>
@@ -70,10 +71,18 @@ function KpiCard({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
-  const { data: runs = [], isLoading: runsLoading } = useRuns();
-  const { data: dashboard, isLoading: dashLoading } = useDashboard();
+  const { data: runs = [], isLoading: runsLoading, isError: runsError, refetch: runsRefetch } = useRuns();
+  const { data: dashboard, isLoading: dashLoading, isError: dashError, refetch: dashRefetch } = useDashboard();
 
   const isLoading = runsLoading || dashLoading;
+
+  if (runsError || dashError) {
+    return (
+      <div className="h-full flex flex-col bg-background p-6">
+        <ErrorState message="Runtime metrics could not be loaded." onRetry={() => { runsRefetch(); dashRefetch(); }} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -143,7 +152,7 @@ export default function Analytics() {
         {/* Charts Row */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           {/* Lifecycle Distribution — 2 cols */}
-          <div className="xl:col-span-2 bg-surface border border-border/50 rounded-lg p-4">
+          <div className="xl:col-span-2 bg-surface border border-border/50 rounded-md p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Application Lifecycle Distribution</span>
             </div>
@@ -192,7 +201,7 @@ export default function Analytics() {
           </div>
 
           {/* Pipeline Yield Trend — 3 cols */}
-          <div className="xl:col-span-3 bg-surface border border-border/50 rounded-lg p-4">
+          <div className="xl:col-span-3 bg-surface border border-border/50 rounded-md p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-3 h-3 text-muted-foreground" />
               <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Pipeline Yield Trend — Last {recentRuns.length} Runs</span>
@@ -225,7 +234,7 @@ export default function Analytics() {
         </div>
 
         {/* Outcomes Row */}
-        <div className="bg-surface border border-border/50 rounded-lg p-4">
+        <div className="bg-surface border border-border/50 rounded-md p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground">Application Outcomes per Run — Last {recentRuns.length} Runs</span>
           </div>
