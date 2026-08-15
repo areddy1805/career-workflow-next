@@ -1,249 +1,254 @@
 # DESIGN — Career Workflow Next
 
-**Mode: Operate.** This is a replacement visual world for an existing, working product (redesign, not polish). Product truth lives in `PRODUCT.md`; incumbent UI is evidence and anti-reference (`UI_AUDIT.md`). Companion docs: `UI_INVENTORY.md`, `UI_ROUTES.md`, `UI_COMPONENTS.md`.
+**Mode: Operate.** This is a replacement visual world for an existing, working product (redesign, not polish). Product truth lives in `PRODUCT.md` and in `README.md` (the product authority). Incumbent UI is evidence and anti-reference (`UI_AUDIT.md`). Companion docs: `UI_INVENTORY.md`, `UI_ROUTES.md`, `UI_COMPONENTS.md`.
+
+> **DIRECTION: GRID CONTROL — SCADA / EMS DISPATCH ROOM. HUMAN-SELECTED (2026-08-15).**
+> The operator explicitly chose this direction after a full Impeccable direction roll. It supersedes all earlier direction documentation, including the previous "Signal Desk" contract that this file once held. Signal Desk and every other candidate are **rejected** and retained only as historical exploration (§17). This file is the authoritative visual contract.
 
 ## 0. Identity independence (binding)
 
-Career Workflow Next has an **independent visual identity**. It must not inherit, borrow, or echo the Pramya project's visual language, layout grammar, typography, colors, grid treatment, component styling, or aesthetic. It must also not converge on: a generic SaaS dashboard, a generic admin panel, a job-board clone, a Linear clone, a Notion clone, a generic AI dashboard, a glassmorphism template, or a gradient-heavy AI landing page. The identity below was derived from this product's own operating context (see `PRODUCT.md`), not from any sibling project.
+Career Workflow Next has an **independent visual identity**. It must not inherit, borrow, or echo the Pramya project's visual language, layout grammar, typography, colors, grid treatment, component styling, or aesthetic. It must also not converge on: a generic SaaS dashboard, a generic admin panel, a job-board clone, a Linear clone, a Notion clone, a generic AI dashboard, a glassmorphism template, a gradient-heavy AI landing page, or a cyberpunk/neon rendering of a control room. The identity below is derived from this product's own operating context (README.md §§1–10), not from any sibling project.
 
----
+## 1. Visual thesis
 
-## 1. Design principles
+Career Workflow is a **closed-loop AI job-operations control plane** — a dispatch/control system, not a dashboard of widgets. The UI must make **system topology, flow, state, capacity, faults, and decisions legible** the way a SCADA/EMS control room makes a power grid legible: the operator sees the whole system as a diagram, sees what is live, what is loaded, what is gated, what is degraded, and where the evidence points.
 
-1. **Operational truth over decoration.** Every visual decision must make automation state more legible. If a style choice cannot be justified by legibility, it is not made.
-2. **State is line, not hue.** Status semantics are encoded in line form and line weight first (solid = live, dashed = pending, half-height = stale, doubled = outranks); spectral hue is the second channel, never the only one.
-3. **One way to express each structure.** One badge, one card, one table, one loading idiom, one empty state, one error state. Pages compose; they never re-implement chrome.
-4. **Density is a feature; legibility is the discipline.** The operator works with high-volume tabular data. 10px mono labels are an accent for data, not the default voice for controls.
-5. **Stable state language.** A daily-use console must be learnable once and stay stable. Nothing about the interface may mutate per-run, per-refresh, or per-data-state (see §9, "no parametric identity drift").
-6. **Safety rails are visible.** Dry-run vs live, destructive confirmation, running indicators: primary UI signals, never afterthoughts.
-7. **Two themes, both first-class.** Dark is the default operating environment; light must be designed, not inherited.
+The system's real structure (README §5, §6.7) is: **Providers → Acquisition → Classification → Scoring → Policy/Diversity → Selection → Application Routing → Execution → Decision Ledger → Lifecycle/Analytics → evidence-driven strategy**, with a documented evidence-gated feedback loop. The interface renders *that* topology — never an invented one.
 
----
+**Positioning statement:** observation surfaces read like the control-room wall (system truth at a glance); action surfaces read like the dispatch desk (deliberate, gated, confirmable). The console is ~70% observation / 30% action; the design honors that ratio in chrome weight, density, and interaction depth.
 
-## 2. Visual direction — selection
+## 2. Visual identity
 
-Per the design-direction process (Impeccable new-work), a direction roll assigned **generative parametric identity** (a seed-derived, self-recomputing brand system) and dealt challengers: orizuru fold-sequence, tensegrity breathing column, stitched-leather studio, **emission-line spectrograph rail**, film cutting bench, and the seeded-identity system itself. Verdicts, on exactly two axes — **audience identification** (does the world resonate with who operates this product) and **product clarity** (does its grammar carry the product's truth):
+Unmistakably different from Pramya and from every rejected direction. Explicit non-negotiables:
 
-| Direction | Audience id | Product clarity | Verdict |
-|---|---|---|---|
-| **Emission-line rail (spectrograph)** | Strong — a technical operator reading instruments is this audience's own culture | Strong — state-as-line-form is exactly "operational truth"; spectral legend replaces the audit's status-color chaos (C1) | **WINS → build candidate** |
-| Generative parametric identity (assigned) | Medium — "brand that reseeds itself" fits reproducible run artifacts | Weak — a self-mutating identity violates principles 1 & 5 (state language must be stable and learnable) | Competitive alternate |
-| Film cutting bench | Medium | Medium — superb for run timelines + copilot wizard steps; weaker for ledger/metrics density | Competitive alternate |
-| Tensegrity column | Low | Low-medium — constraint-as-tension is poetic but abstract for daily ops | Declined (donates: constraint states rendered as distinct structural states, not badges) |
-| Orizuru folds | Low | Medium — step-state visualization maps to the copilot wizard | Declined (donates: wizard step completion states — flat/creased/folded = pending/partial/complete) |
-| Leather studio | Low | Low — skeuomorphic warmth conflicts with restraint and no-decoration mandates | Declined |
+- **No Pramya inheritance:** no Drawing Sheet, no drafting-grid treatment, no sheet metaphor, no engineering-drawing aesthetics, no drafting typography.
+- **No paper/ledger-page aesthetic:** no ruled-book columns, no bookkeeping voice, no paper textures (this was "The Ledger" direction — rejected).
+- **No emission-spectrum aesthetic:** no seven-wavelength legend, no spectral line set, no doubled sodium line, no wavelength tokens, no instrument-plate imitation (this was "Signal Desk" — rejected).
+- **No cyberpunk/neon SCADA:** no glowing edges, no neon circuit lines, no sci-fi HUD. The control room is *restrained*, modern, and legible first.
 
-**Build direction: "Signal Desk"** — the emission-line world, raised by the systems it beat:
+The identity: a **calm, modern control room**. Dark = the dispatch environment (near-black, low-glare, cool neutral charcoal). Light = the designed **schematic print mode** — the same diagram on white, the way an engineering office prints a single-line diagram. Same symbols, same grammar, two faithful renditions of one world.
 
-- *Raise — parametric token discipline (from the assigned generative identity):* every color, radius, and spacing value derives from one token graph in `index.css`; no literal values in components. The system is parametric in its tokens, not in its identity.
-- *Raise — rail grammar (from the cutting bench):* progress and sequence surfaces (pipeline tracker, run timeline, wizard steps) are ticks on a single rail with a position marker.
-- *Raise — step-state machine (from orizuru):* the copilot 5-step wizard renders fold-states (pending/partial/complete) instead of active/inactive coloring.
-- *Raise — constraint-state rendering (from tensegrity):* policy caps, cooldowns, and dry-run suppression are shown as structural states of the affected rows/cards (struck/dashed/compressed), not as badges on otherwise-normal content.
+## 3. Control-room language
 
-### The world, in one paragraph
+A restrained modern SCADA/EMS vocabulary. **Each term is a visual/interaction primitive AND a real data anchor** — a term is used only where the underlying backend actually provides the data. Where data is absent, the primitive renders an honest absent state (§10 of UI_AUDIT.md: no silent empties).
 
-A glass spectrograph on a low viewing bench at 3am: a charcoal continuum crossed by needle-thin spectral lines, every legend at the same tiny size, one sodium pair doubled and standing brighter than anything near it. Career Workflow's console is that instrument: the operator reads pipeline state the way a physicist reads an emission spectrum — line position, line form, line brightness — instead of parsing colored chips. The interface is a calibrated plate: a single off-center rail (navigation), hairline rules, mono annotations, and color that exists only as spectral status lines at seven fixed wavelengths. Nothing glows that isn't a signal. Nothing shadows anything — elevation is line weight and surface step, not drop shadow. "Wow" comes from the density of legible signal, not decoration.
-
----
-
-## 3. Typography
-
-- **UI + display: Archivo** (variable, 400–700; grotesque with mechanical, instrument-grade structure; not on the default-face list — chosen for its technical grotesque character and strong tabular numerics). Fallback stack: system grotesques.
-- **Data + labels + status: JetBrains Mono** (already in the codebase; ligatures off, tabular figures). Keep.
-- Faces load self-hosted (fontsource or local `@font-face` with `font-display: swap`) — removes the Google Fonts `@import` first-paint block (audit T1).
-- **Type scale (rem-based):**
-
-| Token | Size / weight / case | Use |
+| Term | Real product anchor (README / API) | Rendered as |
 |---|---|---|
-| `text-index` | 10px mono, uppercase, tracked +10% | Rail indices, coordinate labels, legend |
-| `text-label` | 10px mono, uppercase, tracked +8% | Data labels, card indices — accent only, never buttons |
-| `text-meta` | 12px | Secondary info, timestamps |
-| `text-body` | 13px (base) | UI text, table cells, descriptions |
-| `text-emphasis` | 14px, 500–600 | Row titles, list emphasis |
-| `text-section` | 16px, 600, tracking -0.01em | Section headers, panel titles |
-| `text-page` | 20px, 650, tracking -0.02em | Page titles (replaces text-lg SectionTitle) |
-| `text-surface` | 28px, 650, tracking -0.03em | Reserved: metric hero values (Dashboard), never body copy |
+| **Station** | A pipeline stage — preflight, acquisition, classification, selection, application, reconciliation, strategy, report (`latest_run.stages`, `timeline.json`, `/pipeline/state`) | Labeled unit on the topology conductor; per-stage state from run artifacts |
+| **Feeder** | One provider's acquisition stream: Naukri API, JobSpy (Indeed / LinkedIn / Google) (`provider_health` in `/api/dashboard`; `/providers`) | Upstream feed lines entering the acquisition station; health from provider data |
+| **Bus** | The aggregated flow conductor connecting stations (the documented pipeline spine) | One horizontal conductor in the topology strip; hairline, never decorative |
+| **Node** | A job/application record moving through the pipeline (ledger rows, queue rows, jobs table) | Row/card carrying a state marker + score + lifecycle |
+| **Breaker** | A gate that opens/closes flow: the policy chain of README §6.3 (min score → already-applied → company cap → role-family cap → run limit), challenge cooldown (§6.1), posting-age policy, dry-run isolation | Open/closed/tagged symbol on a flow segment; state derived from pipeline state, run artifacts, config |
+| **Tag** | A hold: manual-review / external-apply / other-action queues, copilot answer locks, dry-run suppression, cooldown tags | Tag plate attached to a node or station; count + reason label |
+| **Dispatch lane** | The application router's execution lanes — Naukri Native, ATS Handler, External Engine (README §5 "Application Execution Engines") — plus the manual-review lane (`applied_jobs.json`, `external_apply.json`, `manual_review.json`, queue endpoints) | Lane strip showing routed counts per lane |
+| **Load trace** | Application throughput vs run limits and budget; provider query load vs cooldown (run counts, config ceilings, queue lengths) | Filled trace with operating-envelope bound |
+| **State marker** | The single status glyph grammar (§4) | Symbol + line form + label; color only confirms |
+| **Fault isolation** | Provider degraded → remaining queries for that site skipped (README §9: 3 consecutive failures → degraded); retry budget; terminal-state accounting | Isolated segment shown open + tagged, with the cause labeled |
+| **Operating envelope** | Policy bounds: max applications per run, per-company cap, role-family cap, min score, posting-age threshold (config values, README §14) | Shaded bound region on load traces; config readout |
 
-- Global: line-height 1.5, letter-spacing -0.01em (relaxed from the current "extremely tight" -0.015em; audit T2). Uppercase is an accent for data labels and indices, not the default voice (audit T5).
+**Three kinds of truth** (README §8) map onto control-room records and stay visually distinct:
+- **PROCESS STATE** = live telemetry (what the launcher/scheduler is doing now) — from `/api/runtime`, `/api/pipeline/state`.
+- **ARTIFACT STATE** = the event recorder (what the latest immutable run artifact records) — from `/api/runs/*`, artifact endpoints.
+- **PORTFOLIO STATE** = the historian (what the Decision Ledger records over time) — from `/api/ledger/*`, `/api/dashboard` lifecycle.
 
----
+These three never share one visual treatment. Telemetry reads live (markers, traces, lamps), artifacts read recorded (timeline strips, manifest facts), ledger reads authoritative (rows, tables, totals).
 
-## 4. Color strategy — "Spectral Continuum" (Restrained; dark-first)
+## 4. Status grammar
 
-**Physical scene:** one operator, dim room, screen-lit, late-night and early-morning sessions; light mode for daytime use. Dark is default; both themes are designed.
+**One semantic state system, product-supported states only.** Status is never communicated by color alone: every status is **symbol shape + line form + text label**, with hue as a confirming second channel. This satisfies WCAG AA and the audit's C1 (status-color chaos) with one grammar.
 
-### 4.1 Continuum (neutrals) — dark theme
+### Semantic states (each maps to real backend states)
 
-| Token | Value | Role |
+| State | Product truth (backend supports) | Line form / glyph |
 |---|---|---|
-| `--background` | `0 0% 5%` | App ground (charcoal continuum) |
-| `--surface` | `0 0% 7%` | Panels, cards |
-| `--surface-raised` | `0 0% 9%` | Dialogs, sheets, tooltips, hover |
-| `--foreground` | `0 0% 93%` | Ink (bone) |
-| `--muted-foreground` | `0 0% 60%` | Secondary ink |
-| `--faint-foreground` | `0 0% 42%` | Disabled, indices at rest |
-| `--border` | `0 0% 16%` | Hairline default |
-| `--border-strong` | `0 0% 26%` | Active/emphasized hairline |
-| `--primary` | `0 0% 93%` (ink as action) | Primary buttons, active text |
-| `--primary-foreground` | `0 0% 5%` | Text on primary |
+| **HEALTHY** | `system_health: HEALTHY`; provider healthy; run completed; lifecycle in good standing (Applied/Shortlisted/Interview) | Closed breaker, solid line, filled glyph |
+| **RUNNING** | Scheduler `RUNNING`; `pipeline_running`; stage in progress; run active | Closed breaker, solid line, live glyph (pulses only while live) |
+| **DEGRADED** | `system_health: WARNING`; provider `degraded`; partial results; recoverable failure | Half-open breaker, half-height line |
+| **BLOCKED** | Policy gate opened (below min score, cap exceeded, duplicate, age-rejected); challenge cooldown active; dry-run suppressing live; lock held | Open breaker, dashed line |
+| **PENDING** | Scheduled execution, upcoming run, scheduled stage, queued work | Open breaker, dotted line |
+| **MANUAL-REVIEW** | manual-review / external-apply / other-action queues; unresolved questionnaire; opportunity needing action | Tagged breaker (tag plate attached) |
+| **FAILED** | Recoverable failure, run failure, transition error, pipeline error | Faulted glyph (struck line), cause label |
+| **TERMINAL** | Terminal failure accounting; terminal lifecycle (Rejected / Offer); archived runs | Closed-and-latched glyph (double-struck), recorded tone |
 
-Light theme mirrors the continuum (background `0 0% 97%`, surface white, ink `0 0% 9%`, borders `0 0% 88%`/`78%`) with status hues adjusted to AA.
+**Idle/absent:** scheduler `STOPPED`/`IDLE`, no run on record — rendered as an unlit bus with a neutral label. **Never** an always-green "Operational" pill (audit A7): health derives from `/api/runtime` + `/api/copilot/health` truthfully, with an explicit "unreachable" state on fetch failure.
 
-### 4.2 Spectral status lines (the fixed 7-wavelength legend)
+**One primitive:** `StateMarker` renders every status above (glyph + line + label + optional hue). It replaces both incumbent StatusBadge systems (audit X1) and the shadcn badge. The lifecycle set (Acquired/Submitted/Viewed/Shortlisted/Interview/Rejected/Offer) and pipeline stage states map through the same marker grammar.
 
-One legend, used identically across badges, dots, charts, and hairlines. State is **line form first** (§1.2): solid = live, dashed = pending/scheduled, half-height = stale/archived, struck = disabled/blocked, doubled = outranks (single top-priority item on screen).
+## 5. Topology
 
-| Token | λ (nm) | Hue | Semantic |
-|---|---|---|---|
-| `--spectral-violet` | 405 | `270 84% 66%` | Manual review |
-| `--spectral-blue` | 436 | `224 90% 64%` | Info, in-flight |
-| `--spectral-cyan` | 486 | `192 92% 56%` | Running / in-progress |
-| `--spectral-green` | 546 | `142 71% 45%` | Success, healthy, applied |
-| `--spectral-sodium` | 589 | `42 100% 55%` | Warning, pending, priority (doubled form = top priority) |
-| `--spectral-orange` | 615 | `24 92% 55%` | Degraded, stale, cooldown |
-| `--spectral-red` | 656 | `0 84% 60%` | Error, failed, destructive |
+The real pipeline (README §5) becomes the visual spine. **No invented relationships** — every line drawn between components corresponds to a documented data flow.
 
-Legacy `--success/--warning/--error/--info` tokens are superseded by the spectral set (mapped in tailwind config as `success/warning/error/info/manual/priority/degraded`). **The ~380 hardcoded `emerald/amber/red/blue/purple` classes in pages are deleted; no raw palette status colors remain** (audit C1). The brand's signature accent is the **doubled sodium line**, used only for the single top-priority item on screen (e.g., the running run, next scheduled execution, high-priority inbox row) — one doubled line per viewport, at most.
+- **The topology conductor:** stations in pipeline order on one bus, upstream **provider feeders** fanning into acquisition, downstream **dispatch lanes** (native / ATS / external) leaving the router, **Decision Ledger** as the sink, and the **evidence-driven strategy** loop drawn as a labeled return path (README §6.7 — real feedback, rendered as a labeled dashed return, never as decorative circuitry).
+- **Live state per station:** each station carries a state marker from real run/pipeline data; an active run lights stations in sequence (dispatch progress).
+- **Breakers on flow segments:** policy gates (README §6.3 chain), cooldowns, dry-run, and holds render as breaker symbols on the segments they gate — with the config value or reason labeled.
+- **Where topology data is absent** (e.g., no active run), the conductor renders empty with an honest idle label; stations that have no data are dimmed, never invented.
+- **Topology is a component, not a wallpaper:** `StationTopology` is used on Overview, Pipeline, Runs, and Explorer — everywhere pipeline state is inspected. It is not repeated decoratively elsewhere.
 
-### 4.3 Chart palette
+## 6. Dashboard composition (Overview)
 
-`--chart-1..5` become real tokens (defined in `index.css`, mapped in tailwind config — audit C5): spectral-derived sequence for categorical series: 486 cyan, 546 green, 615 orange, 436 blue, 405 violet. No chart colors outside this set. Tooltips render as `--surface-raised` hairline panels (standardize the current per-chart `TOOLTIP_STYLE` into a shared chart tooltip token set).
+The Overview is a **system-level dispatch view**, not a grid of metric cards. It composes five zones, in reading order, each from real data:
+
+1. **Topology strip** — the pipeline conductor with live station state, provider-feeder health, and active-run progress (`/api/dashboard` `latest_run`, `system_health`, `provider_health`; `/api/runtime`).
+2. **Operating state bar** — scheduler state, pipeline state, and the three kinds of truth (process / artifact / portfolio) each in its own labeled strip with truthful markers (`/api/runtime`; audit A7).
+3. **Attention / fault conditions** — real items only: manual-review / external-apply / other-action queue counts, degraded providers, latest run failure. Honest quiet state when clear ("no attention items"), never fabricated rows.
+4. **Execution activity** — latest run (id, mode, status, stages, counts) + recent lifecycle movement from the ledger. Honest idle state when no run is on record.
+5. **Key readings** — a compact instrument row of the few numbers that matter (acquired, submitted, submit-success rate, routed, selected), rendered as labeled readings with load/envelope context — **not** a clickable-looking card grid (audit H4 dead affordance).
+
+Loading = one structural skeleton; empty = one honest EmptyState; error = one ErrorState with refetch (audit F2/F3/F4).
+
+## 7. Page composition (24 routes)
+
+Route contracts, functionality, and data wiring are **preserved unchanged** (UI_ROUTES.md is the route authority). Pages share the Grid Control identity via the shared grammar; they never re-implement chrome.
+
+Page types (each with a consistent internal rhythm):
+
+- **Dispatch surfaces** — `/pipeline`, `/` (Overview): topology + breakers + launch controls. The only action-heavy surfaces.
+- **Inspection surfaces** — `/runs`, `/explorer`, `/ledger`, `/logs`, `/audit`, `/system`, `/developer`: recorded truth; read-only; high density; artifact/event vocabulary.
+- **Workspace surfaces** — `/jobs`, `/applications`, `/copilot/inbox`, `/copilot/apply/:id`, `/copilot/assistant/:sessionId`, `/copilot/brief/:id`: row-level operations; dispatch-lane and tag vocabulary; the copilot wizard keeps its 5-step semantics (brief → answers → resume → assistant → submit).
+- **Intelligence surfaces** — `/metrics`, `/intelligence`, `/copilot/analytics`, `/copilot/history`, `/copilot/learning`: traces, tables, funnel; the "historian" register.
+- **Configuration surfaces** — `/configuration`, `/copilot/settings`, `/providers`, `/about`: envelopes, config readouts, provider health.
+
+Shared chrome rules: one page header (index + title + actions), one panel, one state-marker grammar, one table grammar (TanStack primitives everywhere; Ledger migrates from raw `<table>` — audit X2), one tab grammar (rebuilt `ui/tabs` replaces custom bars + the Pipeline segmented toggle becomes a radiogroup-style ToggleGroup — audit A3/X4), one toast channel (sonner, already a dependency — audit F1), one EmptyState, one ErrorState (audit F3/F4), one command palette (delete the duplicate — audit X3).
+
+## 8. Data visualization
+
+Only where backed by real data:
+
+- **Topology diagrams** — the real pipeline (§5), per-station real state.
+- **Load/capacity traces** — throughput vs run limit / budget; provider load vs cooldown. Envelope bound drawn from config ceilings; series from run/queue counts.
+- **Stage progression** — per-run stage timeline from `latest_run.stages` / `timeline.json`: stations lit in sequence with stage durations.
+- **Event/state timelines** — ledger status events, run timelines, copilot sessions: one timeline primitive (ticks on a conductor, current position marked).
+- **Operational tables** — jobs, ledger, queues, applications: one table grammar (TanStack), `SortableHeader` with `aria-sort` (audit A4), keyboard row activation (audit A5), sticky-first-column + horizontal scroll instead of truncation (audit R2).
+- **Ledger views** — ledger search/stats with decision, score, and audit-trail columns; the sheet detail keeps AI-analysis, event timeline, and raw JSON (restyled, one terminal token — audit C4).
+
+Chart rules: Recharts retained; all series colors from the token set (fix audit C5 — `--chart-1..5` become real tokens); hairline grids at emphasized ticks; mono axis labels; tooltips as flat hairline panels; no gradients, no 3D, no gauge chrome (a gauge is only drawn when it reads a real number).
+
+## 9. Interaction
+
+**Observation dominates.** Inspection surfaces are read-only with minimal chrome; their density and legibility are the design priority.
+
+**Operator actions stay deliberately gated** (behavior unchanged — the backend contract is frozen):
+
+- Pipeline launch: dry-run default; live requires the existing ConfirmDialog + the confirm-token semantics preserved (`--confirm-live` affordance stays explicit in the UI).
+- Destructive/live operations: gated behind confirm, clearly labeled LIVE vs DRY, with a running indicator while in flight.
+- Queue transitions, copilot answer locks, and browser actions: keep their existing direct `fetchApi` behavior; all get toast feedback (audit F1) — no optimistic updates until the backend supports idempotent replay (out of scope; contract frozen).
+- Breakers and tags are clickable *only where a real backend action exists* (e.g., opening a held queue item, releasing a dry-run hold). A breaker with no action renders as a static state, never as a dead affordance (audit H4 rule: no fake clickability).
+
+Interaction states: focus = visible ring on every interactive element (audit AX2); hover = surface step + border strength, never color-only; disabled = struck/tagged forms; touch targets ≥ 36px.
+
+## 10. Responsive
+
+| Width | Behavior |
+|---|---|
+| **1440** | Full dispatch board: topology strip at full width, side panels for attention + readings, tables at full density |
+| **1024** | Rail condenses (icon rail); panels stack to one column; topology strip stays horizontal but panels move below |
+| **768** | Drawer navigation (rail → off-canvas with scrim); topology reflows to a vertical station flow; tables scroll horizontally with sticky first column; fixed heights become viewport-flexible (audit R3) |
+| **375** | Single column; drawer nav; vertical topology; dispatch lanes stack; key action controls stay reachable; touch targets ≥ 36px |
+
+No mobile nav breakage (audit R1): the rail becomes a drawer below `lg`; ⌘K persists; breadcrumb becomes coordinates.
+
+## 11. Dark + light
+
+- **Dark (default):** the dispatch environment — near-black cool charcoal ground, low glare, hairline separations, restrained single-accent operational colors. The operator's physical scene: one person, dim room, screen-lit, late-night and early-morning sessions.
+- **Light:** the **schematic print mode** — a designed white diagram ground with the same symbols, line grammar, and markers, printed with higher ink contrast. It is a faithful second rendition of the same control room (the way SCADA prints to white), **not an inverted dark theme** (audit C2) and **not** a paper/ledger-page aesthetic (§2). Both themes pass AA contrast at every type size.
+
+## 12. Motion
+
+Only operationally meaningful motion. A closed set:
+
+1. **State transition snap** — breaker/station state changes flip crisply (150–200ms, no bounce).
+2. **Live trace** — load/activity traces advance while live; running markers pulse only while live.
+3. **Dispatch progress** — an active run lights stations in sequence along the topology (the one authored moment).
+4. **Fault/change indication** — a new fault/change flashes once and **persists as a labeled marker until acknowledged** (unacknowledged-alarm principle), with text, never hue-only.
+
+`prefers-reduced-motion`: all motion off; states remain distinct via line form and labels. No decorative animation, no entrance staggers on data (5s polls must not re-animate), no parallax, no infinite spinners.
+
+## 13. Accessibility
+
+- WCAG 2.1 AA in both themes; status never hue-only (symbol + line + label, §4).
+- Skip-link to `#main-content` (audit AX4); `aria-current` on active nav; `aria-live="polite"` on polling regions (log, metrics, attention panel — audit AX3).
+- Keyboard: full shell navigation (rail + drawer), Enter/Space row activation (audit A5), radiogroup semantics on the dry/live toggle (audit A3), `aria-sort` on sortable headers (audit A4), arrow-key tabs, preserved ⌘K + inbox j/k.
+- `aria-label` on every icon-only control (audit A2); focus-visible rings on custom controls (audit AX2).
+- Dialog/sheet focus traps via existing Radix primitives; reduced-motion honored.
+
+## 14. Anti-patterns (explicit prohibitions)
+
+- Cyberpunk neon, glowing sci-fi dashboards, HUD effects, neon circuit lines.
+- Fake network topology: nodes/lines/links with no backend data behind them (the topology is §5's real pipeline only).
+- Decorative circuit traces, "signal" squiggles, ornamental schematics.
+- Excessive status colors, alarm-wall red (unbounded simultaneous red), rainbow status legend.
+- Card-grid SaaS layouts, decorative card grids, generic admin panels, job-board clones, Linear/Notion clones, generic AI dashboards.
+- Glassmorphism / backdrop-blur surfaces, gradients (any), drop shadows (elevation = surface step + hairline + scrim only).
+- Gratuitous gauges: circular dials/knobs that read no real number.
+- Fake telemetry, invented metrics, decorative readouts (every number traces to an endpoint or config).
+- Aviation / photography / ledger metaphors: boarding passes, gate boards, darkrooms, film, double-entry bookkeeping.
+- Signal Desk language: spectral legend, wavelength tokens, doubled sodium line, instrument-plate imitation.
+- Pramya / Drawing Sheet inheritance: drafting grid, sheet metaphor, engineering-drawing aesthetic.
+- Emoji, mascots, illustration, decorative photography, ornamental icons.
+- Per-page dialects: one badge, one card, one table, one loading idiom, one empty state, one error state (the audit's core failure mode).
+
+## 15. Signature elements (survive all 24 pages, never decoration)
+
+1. **The Station Topology Strip** — the real pipeline as stations on one conductor with live breakers and dispatch progress. Appears on Overview, Pipeline, Runs, Explorer; on every other page a compact one-line conductor sits in the page header, keeping the system in view without decoration.
+2. **The Breaker/State glyph grammar** — open/closed/tagged breaker symbols + state markers (§4). Every status in the app speaks this one vocabulary.
+3. **Dispatch Lane strips** — the router's execution lanes (native / ATS / external) plus the manual-review lane, shown as labeled lane counts wherever routing/queues appear (Overview attention, Applications, Inbox).
+4. **The Envelope/Load readout** — capacity vs budget as a filled trace with a labeled operating-envelope bound (Overview readings, Pipeline ceiling, Metrics).
+
+## 16. Redesign order
+
+1. **Design tokens** — rewrite `index.css` (control-room continuum, breaker/state token set, real `--chart-1..5`, spacing/radius scales, terminal token — fixes C4/C5/D1), `tailwind.config.js` (map state + chart + type-scale tokens), self-host fonts (kills the Google `@import` first-paint block — audit T1), delete `App.css` duplicate scrollbar + `shadow-card` no-op.
+2. **Shell / navigation** — rail with group indices, coordinate breadcrumb, truthful runtime status (audit A7), mobile drawer (audit R1), skip link, single command palette.
+3. **Shared primitives** — StateMarker (kills both badge systems — X1), Panel/PanelHeader (kills the 12-file card idiom), Button, Table grammar (X2), Tabs/ToggleGroup (X4/A3), Select/Input/Label (A1), Skeleton, EmptyState, ErrorState, Toast (F1), Timeline, StationTopology, Envelope/load trace, ConfirmDialog restyle.
+4. **Overview representative implementation** — the dispatch view (§6) establishes the language end-to-end; becomes the visual validation target.
+5. **Visual validation** — batched screenshot round (desktop + mobile, dark + light) + `npm run gate` (typecheck/lint/build) green; one fix batch max.
+6. **Remaining pages**, in dependency order: Ledger (table + sheet) → Jobs (virtualized table) → Pipeline (dispatch + gating) → copilot wizard (Apply, Assistant, Brief, Inbox) → Intelligence/Metrics → Runs/Explorer → Applications/History/Learning → System/Providers/Logs/Audit/Developer/Configuration/Settings/About.
+7. **Responsive pass** — drawer, sticky columns, viewport-flexible heights, touch targets (§10).
+8. **Accessibility pass** — every audit AX/A item (§13).
+9. **Motion pass** — the §12 closed set + reduced-motion.
+10. **Final audit** — Impeccable mechanical detector + finish review; then the shipped documenter records the system; cleanup dead files (CommandMenu duplicate, CopilotPlaceholder, keyword StatusBadge).
+
+**Known frontend-test gap (pre-existing, not fixed here):** the only frontend test (`src/__tests__/sort.test.ts`) targets vitest, but vitest is not in `package.json` and there is no test script; adding the dependency is out of scope (backend suite: 524 passing). Validation uses `tsc -b` + `build` + `oxlint` + the screenshot/overflow matrix.
+
+## 17. Rejected directions (historical exploration only)
+
+Both Impeccable direction rolls are recorded here for history. **None of these is selected; none may be revived as the world.** Grid Control was chosen by the operator.
+
+### Roll 1 (discovery pass, 2026-08-15) — previously documented as "Signal Desk"
+
+Assigned: generative parametric identity. Challengers: orizuru fold-sequence, tensegrity breathing column, stitched-leather studio, **emission-line spectrograph rail**, film cutting bench.
+
+| Direction | Verdict (roll 1) | Status now |
+|---|---|---|
+| Emission-line spectrograph ("Signal Desk") | Won roll 1; previously documented in this file | **Rejected** — superseded by human selection; its aesthetic (spectral legend, wavelength tokens) is explicitly banned (§2, §14) |
+| Generative parametric identity | Competitive alternate | Rejected |
+| Film cutting bench | Competitive alternate | Rejected |
+| Tensegrity column | Declined (donated constraint-state idea) | Rejected |
+| Orizuru folds | Declined (donated step-state idea) | Rejected |
+| Leather studio | Declined | Rejected |
+
+### Roll 2 (direction exploration, 2026-08-15, seed key `fb42c0bb`)
+
+Challengers dealt: printing darkroom safelight bay, HyperCard shoebox stack, theater cyclorama dawn, cloud quarry, dark-first developer console, boarding-pass + gate board. Grounded candidates authored from the operator's cultural world (mission control, double-entry ledger, gate boards, instrument benches, CI/CD boards, SCADA/grid dispatch, field notebooks).
+
+| Direction | Axis read (audience id / product clarity) | Status now |
+|---|---|---|
+| **Grid Control — SCADA dispatch room** | Strong / medium-strong | **HUMAN-SELECTED → the build direction** |
+| Safelight Darkroom | Medium-strong / strong | Rejected (boldest alternate) |
+| The Gate Board | Strong / strong | Rejected |
+| The Ledger (double-entry) | Strong / strong | Rejected |
+| Cyclorama | Competitive on boldness / weak clarity | Rejected |
+| Cloud Quarry | Low audience id | Rejected |
+| HyperCard | Seductive one-bit / conflicts with status legibility | Rejected |
+| Developer Console | Strong clarity / weakest identity | Rejected |
+
+**Selection rationale (operator, verbatim intent):** Grid Control represents the actual system topology — provider health/degradation, pipeline stages, runtime monitoring, application routing, run limits, policy/diversity controls, Decision Ledger, Pipeline Explorer, System Health, Runtime, Analytics, scheduler/recovery — rather than decorating the product with an unrelated metaphor.
 
 ---
 
-## 5. Surfaces, borders, spacing, radii, elevation
+## Appendix A — Carried factual findings
 
-- **Surfaces:** exactly three steps — `background` (ground) → `surface` (panels) → `surface-raised` (overlays/hover). Navigation rail sits on `background` with hairline border; panels on `surface`; dialogs/sheets/tooltips on `surface-raised`.
-- **Borders:** hairlines only, 1px, `--border` default / `--border-strong` for active. Opacity dialects (`/40 /50 /60`) collapse to two tokens. No dashed borders except designated empty-state and pending-line states.
-- **Spacing:** 4px base grid; container padding 24px (32px ≥1280px); panel padding 16px (20px for detail surfaces); section gap 24px; control gap 8px; table cell padding `10px 16px`. Compact mode (existing `density` setting, currently unused — audit D1) tightens panel padding to 12px and table cells to `8px 12px`; it finally becomes a real setting.
-- **Radii:** 4px controls, 6px panels, 8px dialogs/sheets (audit: current global 6px is flattened into a real scale; `--radius` tokens).
-- **Elevation: none.** No drop shadows anywhere (formalizes the existing `shadow-card: none` decision). Depth = surface step + border strength + scrim (overlays dim the continuum 40% + blur 2px max). The `shadow-card` no-op utility is deleted.
-
----
-
-## 6. Component grammar
-
-Full inventory in `UI_COMPONENTS.md`. Grammar rules:
-
-1. **One primitive per structure.** Button, Panel (+PanelHeader), StatusLamp, Table, Tabs, Select, Input, Label, Skeleton→`Scanline`, EmptyState, ErrorState, Toast, Tooltip, Dialog, Sheet, DropdownMenu, ContextMenu (Jobs-only), Checkbox, Command, ScrollArea, Resizable (Jobs-only).
-2. **StatusLamp replaces both badge systems** (audit X1): single component, `status` enum → spectral line + label; props `{status, label, line?: 'solid'|'dashed'|'half'|'struck'|'doubled', pulse?}`.
-3. **Panel replaces the hand-rolled card idiom** (audit: 12+ files): `Panel` = surface + hairline + 6px; `PanelHeader` = index label (mono) + title + actions; body.
-4. **Button variants** become: `primary` (ink), `ghost`, `hairline` (outline), `danger` (656nm). Sizes `sm 28 / md 36 / lg 44`. Live-run CTA: `danger`; dry-run: `primary`; the doubled-sodium form is reserved for priority signals, not buttons.
-5. **Tabs** (rebuilt) replace both custom bars and the Pipeline segmented toggle; the toggle becomes a proper radiogroup-style `ToggleGroup` built on Tabs semantics.
-6. **Table grammar**: TanStack primitives everywhere (Ledger migrates from raw `<table>` — audit X2); `SortableHeader` gains `aria-sort` and visible sort state; shared density tokens; Jobs keeps virtualization + resizable panels.
-7. **Toast** (sonner, already a dependency): single feedback channel for all mutations — launch result, queue transitions, answer locks, copy actions (audit F1).
-8. **ConfirmDialog** stays as the only destructive-confirmation wrapper, restyled; all live/destructive mutations route through it (currently only Pipeline does).
-
----
-
-## 7. Navigation grammar
-
-- **Rail, not list.** The sidebar is the instrument rail: group indices (mono: `01 OPERATIONS`, `02 WORKFLOWS`, `03 COPILOT`, `04 INTELLIGENCE`, `05 TELEMETRY`, `06 DIAGNOSTICS`), items as hairline ticks with labels; active item = full-height ink tick on the rail's left edge (2px, solid) + ink text (replaces the current 0.5px bar + bg-secondary pill). Collapsed = 56px icon rail with tooltips; badge dots use spectral semantics (queue count = sodium, health = cyan/green per state).
-- **Breadcrumb = coordinate.** Topbar breadcrumb becomes mono coordinates (`01.03 — PIPELINE`) + page name; keeps the live-state dot (now truthful: spectral line for actual health state, not an always-green pill — audit A7) + ⌘K trigger.
-- **Command palette:** keep ⌘K; add actions beyond navigation (launch dry run, open manual-review queue, copy latest run ID). One implementation — delete `components/CommandMenu.tsx` duplicate (audit X3).
-- **Mobile (< 900px):** the rail becomes an off-canvas drawer with scrim; topbar gets a menu button; ⌘K remains. Fixes audit R1.
-- **Page indices:** every page header carries its mono index (`01 OVERVIEW`) — the coordinate system makes the 24-route surface teachable and gives the instrument identity its spine.
-
----
-
-## 8. Data visualization grammar
-
-- Charts are instruments: hairline CartesianGrid (only at emphasized ticks), mono axis labels (10px), series = spectral lines (solid primary, dashed secondary), bars with 2px radius and spectral fills, tooltips = `surface-raised` hairline panels. Zero gradients, zero 3D, no decorative chart chrome.
-- **PipelineTracker → the Stage Rail:** the signature component. 8 stages as ticks on one hairline rail with a position marker (sodium-doubled when RUNNING); stage state via line form (solid done / half stale / dashed pending / struck failed) + spectral dot. Fixes the three-hue running state (audit C3).
-- **Timeline primitive** (shared by Ledger trace, run timeline, copilot session): same rail grammar — events as ticks, current = doubled.
-- MetricCard → instrument readout: index label (mono), value in mono tabular numerics at `text-surface`, trend as spectral arrow; no fake click affordance (audit H4).
-- Funnel/analytics keep Recharts but all colors from `--chart-1..5`.
-
----
-
-## 9. Interaction states
-
-- **Focus:** 2px spectral ring (cyan 486) on every interactive element, visible in both themes (audit AX2).
-- **Hover:** surface step (raised) + border-strong; never color-only; no scale/translate hover on data.
-- **Active/pressed:** 1px ink compression; no bounce.
-- **Disabled:** struck form — half-height ink + struck-through where meaningful (live controls while running); plain faint otherwise.
-- **Selection:** spectral-green tick (Jobs rows), sodium for priority rows.
-- **Drag/resize** (Jobs panels/columns): hairline guides, spectral-green drop indicator.
-- **Every icon-only control requires `aria-label`** (audit A2); every clickable row gains keyboard activation (Enter/Space — audit A5); toggle groups expose radiogroup semantics (audit A3).
-
----
-
-## 10. Loading / empty / error states
-
-- **Loading — `Scanline`:** panels render a hairline skeleton with one horizontal scan-line shimmer (motion grammar, §13); tables render real header + hairline rows with mono "reading…" footer. **No overlay-blur pills** (audit F2); no per-query full-page skeletons except Dashboard's first paint. One primitive replaces all four current idioms.
-- **Empty — `EmptyState`:** spectral-dim glyph (single spectral dot at 405 violet or continuum), one-line title, optional single action. Same component on every surface (audit F3).
-- **Error — `ErrorState`:** 656nm line + message + retry; page-level boundaries around the 4 mutating/streaming surfaces (Pipeline, Jobs, copilot wizard, Inbox); global boundary restyled. Silent-empty pages get a real error state (audit F4).
-- **Mutation feedback:** Toast on completion/failure (§6.8); no optimistic updates until the backend contract supports idempotent replay (out of scope — backend contract frozen).
-
----
-
-## 11. Responsive rules
-
-- Breakpoints: `sm 640 / md 768 / lg 1024 / xl 1280` (existing Tailwind set). Layout reflow: `900px` nav breakpoint (drawer rail), `1200px` container cap stays `max-w-7xl`.
-- Fixed heights removed: Pipeline log and chart panels flex to viewport (audit R3); `h-[520px]`/`h-[240px]` become `h-[clamp(...)]` with the log panel's scroll area owned by the panel.
-- Tables: horizontal scroll containers with sticky first column on Jobs/Ledger/Inbox; cell truncation only inside scroll, never data-loss clipping (audit R2).
-- Touch targets ≥ 36px minimum (dense tables may use 28px with spacing compensation); badges/labels are non-interactive.
-- Light theme verified at all breakpoints (both themes must render, not just collapse).
-
----
-
-## 12. Accessibility rules
-
-- WCAG 2.1 AA in both themes; status never communicated by hue alone (line form + text label always) — the spectral grammar is inherently dual-channel (audit C1).
-- Landmarks kept and completed: skip-link to `#main-content` (audit AX4), `aria-current` on active nav, `aria-live="polite"` on log stream and polling metric regions (audit AX3), `aria-sort` on sortable headers, radiogroup on toggle groups, `aria-label` on all icon-only controls.
-- Keyboard: full shell navigation (rail + drawer), row actions via Enter/Space, existing j/k inbox + ⌘K preserved and extended.
-- Focus order follows the rail; dialog/sheet focus traps via existing Radix primitives.
-
----
-
-## 13. Motion rules
-
-Signal language, deliberately small (audit M1 — framer-motion already a dependency, now used):
-
-1. **Scan** — the loading shimmer: one 1.2s horizontal line sweep per panel, `prefers-reduced-motion` → static hairline. 
-2. **Pulse** — live-data only: running dot, stage rail position marker (existing `pulse-green` generalized to spectral, audit M2).
-3. **Rail slide** — nav active tick and drawer slide: 200ms spring, one overshoot damped (the emission line "landing").
-4. **Reveal** — route change only: content fades + 4px rise, 120ms, once per navigation; **no per-item entrance animations on data**, no stagger on tables (data must not re-animate on 5s polls).
-5. **Dim** — sheets behind content dim one step (continuum dim + 2px max blur).
-- `prefers-reduced-motion`: all motion off (static states remain distinct via line form, not animation).
-- No hover animations on data rows, no parallax, no auto-playing charts, no infinite spinners (only pulsing dots for live state).
-
----
-
-## 14. What NOT to introduce
-
-- No gradients (except the scan shimmer), no glassmorphism/backdrop-blur surfaces beyond the topbar's existing subtle blur (kept optional), no drop shadows, no glow.
-- No emoji, no mascots, no illustration, no decorative photography, no ornamental icons.
-- No new visual families for status: the 7-wavelength legend is closed; any new state maps into it.
-- No parametric identity drift: no per-run or per-data brand mutation (see §1.5; the seeded-identity direction was declined for this reason).
-- No new dependencies beyond what `package.json` already declares (sonner, framer-motion, zod, react-hook-form are available); the backend/API contract is frozen — the UI is a pure consumer (no endpoint, schema, or state-management changes).
-- No dark-only: light is first-class.
-- No per-page redesigns that introduce their own header/table/badge dialects (the audit's core failure mode).
-
----
-
-## 15. Primitives ↔ page composition
-
-- `components/ui/*` — rebuild the 16 primitives per §6 (delete/rebuild the 4 dead ones: label, select, skeleton, tabs; keep button, checkbox, command, context-menu, dialog, dropdown-menu, input, resizable, scroll-area, sheet, table, tooltip).
-- `components/operations/*` — the shared "instrument kit": SectionTitle (→ page header w/ index), MetricCard/MetricGrid (→ readouts), StatRow, StatusLamp.
-- `components/domain/*` (new) — page-specific composites built from primitives: `PipelineStageRail`, `Timeline`, `CoverageMatrix`, `WizardSteps`, `JobTable`, `QueueTable`, `BriefView`, `AssistantPanel`, `AnswerBankTable`.
-- Pages import only primitives + kits + domain composites; page files shrink (Apply 1515 lines and Assistant 1110 lines get decomposed into domain composites — behavior-preserving extraction).
-- Composition rule: a page may define layout and page-specific data logic, but **no chrome** (headers, badges, loading, empty, error, borders) inline.
-
----
-
-## 16. Redesign implementation order
-
-1. **Design tokens** — rewrite `index.css` (spectral tokens, type scale, spacing, radii, elevation-null), `tailwind.config.js` (map spectral + chart + size tokens), delete `App.css` duplicate scrollbar + `shadow-card` no-op; self-host fonts.
-2. **Application shell** — `Layout`, `Sidebar` (rail grammar + indices), `Topbar` (coordinates + truthful live state), `ThemeProvider` (both themes), mobile drawer.
-3. **Navigation** — nav indices, collapsed rail, drawer, ⌘K actions; delete duplicate CommandMenu.
-4. **Shared primitives** — Button, Panel/PanelHeader, StatusLamp (kills both badges), Table grammar, Tabs/ToggleGroup, Select/Input/Label, Scanline, EmptyState, ErrorState, Toast, ConfirmDialog restyle.
-5. **Representative page: Dashboard (Overview)** — establishes the language end-to-end: page header/index, stage rail, metric readouts, funnel chart, activity feed, Scanline, EmptyState, live-state dot. This page exercises every token class and becomes the visual validation target.
-6. **Visual validation** — screenshot round (desktop + mobile) against this contract; run `npm run gate` (typecheck/lint/build) green; one fix batch max.
-7. **Remaining pages**, in dependency order: Ledger (table+sheet grammar) → Jobs (virtualized table, context menu, resizable) → Pipeline (action surface, ToggleGroup, ConfirmDialog, log panel) → copilot Brief + Inbox (evidence dossier + triage rail) → Intelligence, Metrics, Applications, Runs, System, Providers → Logs, Explorer, Audit, Configuration, Developer, About → copilot Apply + Assistant (wizard + assistant panels, largest, last).
-8. **Responsive pass** — drawer nav, table sticky columns/scroll, viewport-flexible heights, touch targets.
-9. **Accessibility pass** — resolve every audit AX item (skip link, aria-sort, radiogroups, live regions, icon labels, row keyboard access).
-10. **Motion pass** — signal grammar (§13) + reduced-motion.
-11. **Final Impeccable audit** — mechanical detector (`detect.mjs`) + critique against this contract; fix batch; document the shipped system (finish review per Impeccable flow), then cleanup dead files (CommandMenu dup, CopilotPlaceholder, keyword StatusBadge).
-
-**Non-goals for this redesign:** backend/API/data-model/state changes (frozen contract); new features; dependency changes; performance work beyond what the token/font changes touch.
+- **Audit standing:** P0 none; P1×11 (T1, C1, C2, A1, A2, A6-partial, F1, F2-partial, R1, X1, X2); P2×21; P3×12 — full register in `UI_AUDIT.md` (unchanged; referenced by code above).
+- **Terminology preserved:** Decision Ledger, run artifacts, dry-run vs live, pipeline stages (preflight, acquisition, classification, selection, application, reconciliation, strategy, report), lifecycle stages (Acquired/Submitted/Viewed/Shortlisted/Interview/Rejected/Offer), manual-review/external-apply/other-action queues, copilot workspace.
+- **Stack (UI_INVENTORY.md, unchanged):** React 19.2 / Vite 8 / TS ~6 / Tailwind 3.4 (class dark) / shadcn `ui/*` 16 primitives (4 dead: label, select, skeleton, tabs) / TanStack Query + Table + Virtual / Recharts 3.9 / Zustand 3 stores / lucide / date-fns; declared-but-unused: sonner, framer-motion, react-hook-form, zod.
+- **Data layer:** single `fetchApi` (relative `/api`, 90s timeout, 3-envelope error parsing); ~30 `useQuery` hooks, polling 1s–30s; mutations only in Pipeline (`launchPipeline`); queue/copilot writes direct `fetchApi`, no invalidation.
+- **Backend contract:** frozen; UI is a pure consumer; `system_health` returns HEALTHY/WARNING with `scheduler_running`/`pipeline_running`; `/api/runtime` returns scheduler RUNNING/IDLE/STOPPED/STALE/ORPHANED + pipeline + latest_run_details; queue endpoints return `{items}`; `upcoming_executions` is a backend placeholder returning `[]` — the UI renders honest idle, never invented entries.
