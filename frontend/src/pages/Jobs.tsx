@@ -27,10 +27,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/StatusBadge';
 import { CopyButton } from '@/components/CopyButton';
 import { RelativeTime } from '@/components/RelativeTime';
 import { useJobStore } from '@/store/jobs';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState } from '@/components/operations/EmptyState';
 import {
   Copy, X, Settings2, EyeOff, ExternalLink, CheckCircle,
   SkipForward, FolderOpen, RefreshCw, Filter,
@@ -58,9 +62,9 @@ const openExternalUrl = (url: string | undefined) => {
 
 function scoreColor(score: number | null | undefined) {
   if (score == null) return 'text-muted-foreground';
-  if (score >= 70) return 'text-emerald-500';
-  if (score >= 40) return 'text-amber-500';
-  return 'text-red-400';
+  if (score >= 70) return 'text-healthy';
+  if (score >= 40) return 'text-degraded';
+  return 'text-failed';
 }
 
 // ─── Column human-readable names ──────────────────────────────────────────────
@@ -309,81 +313,77 @@ export default function Jobs() {
   return (
     <div className="h-full flex flex-col bg-background text-sm">
 
-      {/* Page Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Jobs</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Review, filter, and manage discovered opportunities.
-            {totalVisible < totalAll && (
-              <span className="ml-1 text-primary font-medium">{totalVisible.toLocaleString()} of {totalAll.toLocaleString()} shown</span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1.5 text-muted-foreground"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            aria-label="Refresh jobs"
-          >
-            <RefreshCw className={cn('w-3 h-3', isFetching && 'animate-spin')} />
-            Refresh
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
-                <Settings2 className="h-3 w-3" /> Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 text-xs">
-              {table.getAllLeafColumns()
-                .filter(c => c.id !== 'select' && c.id !== 'actions')
-                .map(column => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={column.getIsVisible()}
-                    onCheckedChange={v => column.toggleVisibility(!!v)}
-                    className="text-xs"
-                  >
-                    {COLUMN_LABELS[column.id] ?? column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <PageHeader
+        coordinate="02 · 01"
+        title="Jobs"
+        subtitle={
+          totalVisible < totalAll
+            ? `Review, filter, and manage discovered opportunities. ${totalVisible.toLocaleString()} of ${totalAll.toLocaleString()} shown.`
+            : 'Review, filter, and manage discovered opportunities.'
+        }
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1.5 text-muted-foreground"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              aria-label="Refresh jobs"
+            >
+              <RefreshCw className={cn('w-3 h-3', isFetching && 'animate-spin')} />
+              Refresh
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+                  <Settings2 className="h-3 w-3" /> Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 text-xs">
+                {table.getAllLeafColumns()
+                  .filter(c => c.id !== 'select' && c.id !== 'actions')
+                  .map(column => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={column.getIsVisible()}
+                      onCheckedChange={v => column.toggleVisibility(!!v)}
+                      className="text-xs"
+                    >
+                      {COLUMN_LABELS[column.id] ?? column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
       {/* Saved Views + Filter Row */}
       <div className="flex items-center gap-0 border-b border-border/40 shrink-0 bg-background/80 px-4">
         {/* Saved view tabs */}
-        <div className="flex items-center gap-0 mr-4 -mb-px">
-          {SAVED_VIEWS.map(view => (
-            <button
-              key={view.id}
-              onClick={() => applyView(view.id)}
-              className={cn(
-                'px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap',
-                activeView === view.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
-              )}
-            >
-              {view.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={activeView} onValueChange={v => applyView(v as ViewId)} className="mr-4">
+          <TabsList className="border-0 gap-0">
+            {SAVED_VIEWS.map(view => (
+              <TabsTrigger
+                key={view.id}
+                value={view.id}
+                className="px-3 py-2.5 text-xs whitespace-nowrap"
+              >
+                {view.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {/* Bulk actions when rows selected */}
         {selectedCount > 0 && (
           <div className="flex items-center gap-2 py-1.5 ml-2 border-l border-border/40 pl-4">
             <span className="text-xs font-medium text-muted-foreground">{selectedCount} selected</span>
-            <Button variant="outline" size="sm" className="h-7 text-xs text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10" onClick={() => handleBulkAction('APPLIED')}>
+            <Button variant="outline" size="sm" className="h-7 text-xs text-healthy border-healthy/40 hover:bg-healthy/10" onClick={() => handleBulkAction('APPLIED')}>
               <CheckCircle className="w-3 h-3 mr-1" /> Mark Applied
             </Button>
-            <Button variant="outline" size="sm" className="h-7 text-xs text-red-500 border-red-500/30 hover:bg-red-500/10" onClick={() => handleBulkAction('REJECTED')}>
+            <Button variant="outline" size="sm" className="h-7 text-xs text-failed border-failed/40 hover:bg-failed/10" onClick={() => handleBulkAction('REJECTED')}>
               <SkipForward className="w-3 h-3 mr-1" /> Reject
             </Button>
             <DropdownMenu>
@@ -422,18 +422,19 @@ export default function Jobs() {
           <ResizablePanel defaultSize={selectedJobId ? 58 : 100} minSize={30} className="relative flex flex-col bg-card">
             <div ref={parentRef} className="flex-1 overflow-auto relative">
               {rows.length === 0 && !isLoading ? (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-muted-foreground">
-                  <Briefcase className="w-8 h-8 mb-3 opacity-20" />
-                  <p className="text-sm font-medium">No jobs match this filter</p>
-                  <p className="text-xs mt-1">Try adjusting the filter or switching views</p>
-                  <Button variant="ghost" size="sm" className="mt-4 text-xs" onClick={() => { setGlobalFilter(''); setActiveView('all'); }}>
-                    Clear filter
-                  </Button>
-                </div>
+                <EmptyState
+                  title="No jobs match this filter"
+                  description="Try adjusting the filter or switching views."
+                  action={
+                    <Button variant="ghost" size="sm" className="mt-4 text-xs" onClick={() => { setGlobalFilter(''); setActiveView('all'); }}>
+                      Clear filter
+                    </Button>
+                  }
+                />
               ) : (
                 <div style={{ height: `${virtualizer.getTotalSize()}px`, width: table.getTotalSize(), position: 'relative' }}>
                   {/* Sticky header */}
-                  <div className="sticky top-0 z-20 bg-background border-b border-border/40 flex text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="sticky top-0 z-20 bg-background border-b border-border/40 flex font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     {table.getHeaderGroups().map(hg => (
                       <div key={hg.id} className="flex w-full">
                         {hg.headers.map(header => (
@@ -488,8 +489,10 @@ export default function Jobs() {
                             }}
                             role="row"
                             aria-selected={isSelected}
+                            tabIndex={0}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedJobId((row.original as any).job_id); } }}
                             className={cn(
-                              'flex border-b border-border/20 transition-colors cursor-default',
+                              'flex border-b border-border/20 transition-colors cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                               isSelected  ? 'bg-secondary'  : 'hover:bg-muted/50',
                               isChecked   ? 'bg-muted'   : '',
                             )}
@@ -557,13 +560,10 @@ export default function Jobs() {
               )}
             </div>
 
-            {/* Loading overlay */}
-            {isLoading && (
-              <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono bg-card px-4 py-2 border border-border/50 rounded-full shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                  Loading jobs…
-                </div>
+            {/* Loading state — initial load */}
+            {isLoading && rows.length === 0 && (
+              <div className="absolute inset-0 z-40">
+                <GridSkeleton rows={6} className="h-full border-0" />
               </div>
             )}
           </ResizablePanel>
@@ -580,7 +580,7 @@ export default function Jobs() {
               >
                 {/* Detail Header */}
                 <div className="h-11 border-b border-border/40 flex items-center justify-between px-4 bg-secondary/20 shrink-0">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Job Details</span>
+                  <span className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Job Details</span>
                   <div className="flex items-center gap-1">
                     <CopyButton value={selectedJobId} />
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedJobId(null)} aria-label="Close detail panel">
@@ -591,14 +591,7 @@ export default function Jobs() {
 
                 <ScrollArea className="flex-1">
                   {detailsLoading ? (
-                    <div className="p-5 space-y-4 animate-pulse">
-                      <div className="h-5 w-3/4 bg-muted rounded" />
-                      <div className="h-3 w-1/2 bg-muted rounded" />
-                      <div className="h-24 bg-muted rounded" />
-                      <div className="grid grid-cols-2 gap-3">
-                        {[1,2,3,4].map(i => <div key={i} className="h-12 bg-muted rounded" />)}
-                      </div>
-                    </div>
+                    <GridSkeleton rows={5} className="m-4" />
                   ) : jobDetails ? (
                     <JobDetailContent
                       jobDetails={jobDetails}
@@ -624,7 +617,7 @@ export default function Jobs() {
           <DialogHeader>
             <DialogTitle className="text-sm">Job Data</DialogTitle>
           </DialogHeader>
-          <pre className="text-[11px] font-mono bg-muted/40 p-4 rounded-md overflow-auto leading-relaxed">
+          <pre className="text-[11px] font-mono bg-console text-console-foreground/75 p-4 rounded-md overflow-auto leading-relaxed">
             {JSON.stringify(jsonDialogData, null, 2)}
           </pre>
         </DialogContent>
@@ -671,8 +664,8 @@ function JobDetailContent({
 
       {/* AI Assessment — elevated to top */}
       {(ov.reasoning || ov.notes || ov.ai_reason) && (
-        <div className="bg-primary/5 border border-primary/15 rounded-lg p-4">
-          <p className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-2">AI Assessment</p>
+        <div className="bg-secondary/40 border border-border rounded-lg p-4">
+          <p className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">AI Assessment</p>
           <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
             {ov.reasoning ?? ov.ai_reason ?? ov.notes}
           </p>
@@ -683,7 +676,7 @@ function JobDetailContent({
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+          className="h-8 text-xs bg-healthy text-background border-0 hover:bg-healthy/90"
           onClick={async () => {
             await transitionQueueJob(selectedJobId, 'APPLIED', 'Manual APPLIED');
             queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -694,7 +687,7 @@ function JobDetailContent({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 text-xs text-red-500 border-red-500/30 hover:bg-red-500/10"
+          className="h-8 text-xs text-failed border-failed/40 hover:bg-failed/10"
           onClick={async () => {
             await transitionQueueJob(selectedJobId, 'REJECTED', 'Manual REJECTED');
             queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -765,16 +758,5 @@ function JobDetailContent({
         </div>
       )}
     </div>
-  );
-}
-
-// ─── Inline icon for empty state ──────────────────────────────────────────────
-function Briefcase({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" />
-      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-      <line x1="12" y1="12" x2="12" y2="12" />
-    </svg>
   );
 }

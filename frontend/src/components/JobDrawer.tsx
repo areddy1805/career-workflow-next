@@ -18,9 +18,9 @@ interface JobDrawerProps {
 
 function scoreColor(score: number | null | undefined) {
   if (score == null) return 'text-muted-foreground';
-  if (score >= 70) return 'text-emerald-500';
-  if (score >= 40) return 'text-amber-500';
-  return 'text-red-400';
+  if (score >= 70) return 'text-healthy';
+  if (score >= 40) return 'text-degraded';
+  return 'text-failed';
 }
 
 export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDrawerProps) {
@@ -109,10 +109,10 @@ export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDraw
 
                 {/* AI Assessment — elevated to the top */}
                 {(data.overview?.reasoning || data.overview?.notes || data.overview?.ai_reason) && (
-                  <div className="bg-primary/5 border border-primary/15 rounded-lg p-4">
+                  <div className="bg-secondary/40 border border-border rounded-lg p-4">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <Brain className="w-3.5 h-3.5 text-primary" />
-                      <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">AI Assessment</p>
+                      <Brain className="w-3.5 h-3.5 text-muted-foreground" />
+                      <p className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">AI Assessment</p>
                     </div>
                     <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
                       {data.overview.reasoning ?? data.overview.ai_reason ?? data.overview.notes}
@@ -129,7 +129,7 @@ export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDraw
                   )}
                   <Button
                     size="sm"
-                    className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                    className="h-8 text-xs gap-1.5 bg-healthy text-background border-0 hover:bg-healthy/90"
                     onClick={() => handleTransition('APPLIED')}
                     disabled={!!transitioning}
                   >
@@ -138,7 +138,7 @@ export function JobDrawer({ jobId, open, onOpenChange, onTransitioned }: JobDraw
                   </Button>
                   <Button
                     variant="outline" size="sm"
-                    className="h-8 text-xs gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/10"
+                    className="h-8 text-xs gap-1.5 text-failed border-failed/40 hover:bg-failed/10"
                     onClick={() => handleTransition('REJECTED')}
                     disabled={!!transitioning}
                   >

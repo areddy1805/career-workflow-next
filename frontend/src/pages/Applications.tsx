@@ -7,13 +7,17 @@ import {
 import { cn, formatSalary } from '@/lib/utils';
 import { StatusBadge } from '@/components/StatusBadge';
 import { JobDrawer } from '@/components/JobDrawer';
-import { ExternalLink, CheckCircle } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { useSortable, sortData } from '@/hooks/useSortable';
 import { SortableHeader } from '@/components/SortableHeader';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState } from '@/components/operations/EmptyState';
 
 type TabId = 'manual-review' | 'external-apply' | 'other-action';
 
@@ -47,34 +51,20 @@ function QueueTable({
   );
 
   if (data.isLoading) {
-    return (
-      <div className="bg-background border border-border/50 rounded-lg overflow-hidden">
-        {[1, 2, 3, 4, 5].map(i => (
-          <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-border/30 last:border-0 animate-pulse">
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3.5 w-1/3 bg-muted rounded" />
-              <div className="h-3 w-1/4 bg-muted rounded" />
-            </div>
-            <div className="h-5 w-16 bg-muted rounded" />
-            <div className="h-5 w-24 bg-muted rounded" />
-          </div>
-        ))}
-      </div>
-    );
+    return <GridSkeleton rows={5} className="flex-1" />;
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-border/50 rounded-lg bg-background">
-        <CheckCircle className="w-8 h-8 mb-3 opacity-20" />
-        <p className="text-sm font-medium">Inbox zero</p>
-        <p className="text-xs mt-1 opacity-70">You're all caught up in this queue.</p>
-      </div>
+      <EmptyState
+        title="Queue clear"
+        description="You're all caught up in this queue."
+      />
     );
   }
 
   return (
-    <div className="bg-background border border-border/50 rounded-lg overflow-hidden">
+    <div className="rounded-md border border-border bg-surface overflow-hidden">
       <Table>
         <TableHeader className="bg-muted/30">
           <TableRow className="hover:bg-transparent border-b border-border/40">
@@ -89,13 +79,15 @@ function QueueTable({
         <TableBody>
           {sortedItems.map((item: any) => {
             const score = Number(item.ai_score ?? item.score ?? 0);
-            const scoreClass = score >= 70 ? 'text-emerald-500' : score >= 40 ? 'text-amber-500' : 'text-red-400';
+            const scoreClass = score >= 70 ? 'text-healthy' : score >= 40 ? 'text-degraded' : 'text-failed';
 
             return (
               <TableRow
                 key={item.job_id}
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(item.job_id); } }}
                 onClick={() => onRowClick(item.job_id)}
-                className="hover:bg-muted/20 cursor-pointer transition-colors group border-b border-border/30"
+                className="hover:bg-muted/20 cursor-pointer transition-colors group border-b border-border/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               >
                 <TableCell className="align-top">
                   <div className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors leading-tight">
@@ -168,54 +160,38 @@ export default function Applications() {
   const totalCount = Object.values(counts).reduce<number>((acc, v) => acc + (v ?? 0), 0);
 
   return (
-    <div className="h-full flex flex-col bg-background text-sm">
-      {/* Page Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Inbox</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Jobs that require your attention before the pipeline continues.
-            {totalCount > 0 && (
-              <span className="ml-1 text-primary font-medium">{totalCount} item{totalCount !== 1 ? 's' : ''} pending</span>
-            )}
-          </p>
-        </div>
-      </div>
+    <div className="h-full flex flex-col">
+      <PageHeader
+        coordinate="02 · 02"
+        title="Inbox"
+        subtitle={`Jobs that require your attention before the pipeline continues.${totalCount > 0 ? ` ${totalCount} item${totalCount !== 1 ? 's' : ''} pending.` : ''}`}
+      />
 
-      {/* Tab Navigation */}
-      <div className="flex items-center border-b border-border/40 px-6 bg-background/80">
-        {TABS.map(tab => {
-          const count = counts[tab.id];
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                'flex items-center gap-2 px-0 py-3 mr-6 text-xs font-medium border-b-2 transition-colors',
-                activeTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/50'
-              )}
-            >
-              {tab.label}
-              {count != null && (
-                <span className={cn(
-                  'text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none',
-                  count > 0
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-muted/60 text-muted-foreground'
-                )}>
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)}>
+        <TabsList className="w-full justify-start px-1">
+          {TABS.map(tab => {
+            const count = counts[tab.id];
+            return (
+              <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
+                {tab.label}
+                {count != null && (
+                  <span className={cn(
+                    'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none',
+                    count > 0
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted/60 text-muted-foreground'
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-auto bg-muted/5">
-        <div className="max-w-[1400px] mx-auto p-6">
+      <div className="flex-1 overflow-auto py-4">
+        <div className="max-w-[1400px]">
           {activeTab === 'manual-review'  && <QueueTable data={mrData} onRowClick={setSelectedJobId} />}
           {activeTab === 'external-apply' && <QueueTable data={eaData} onRowClick={setSelectedJobId} />}
           {activeTab === 'other-action'   && <QueueTable data={oaData} onRowClick={setSelectedJobId} />}
