@@ -18,11 +18,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { GridSkeleton } from '@/components/operations/GridSkeleton';
+import { EmptyState as SharedEmptyState } from '@/components/operations/EmptyState';
+import { ErrorState as SharedErrorState } from '@/components/operations/ErrorState';
 import {
-  Inbox as InboxIcon, Search, Loader2, CheckCircle, SkipForward, XCircle,
-  ExternalLink, AlertTriangle, Brain, RefreshCw, Briefcase, ArrowUpDown, Settings2, Lock,
+  Search, Loader2, CheckCircle, SkipForward, XCircle,
+  ExternalLink, AlertTriangle, Brain, RefreshCw, ArrowUpDown, Settings2, Lock,
 } from 'lucide-react';
 
 // ─── Client-side Skip/Dismiss (backend has no endpoint yet) ─────────────────
@@ -62,9 +69,9 @@ const SORT_TYPES: Record<string, SortType> = {
 // from the application strategy: auto=Low, ats=Medium, manual/unsupported=High.
 function effortFor(strategy: string) {
   const s = (strategy || '').toLowerCase();
-  if (s === 'auto') return { label: 'Low', cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
-  if (s === 'ats') return { label: 'Medium', cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' };
-  return { label: 'High', cls: 'bg-red-500/10 text-red-600 dark:text-red-400' };
+  if (s === 'auto') return { label: 'Low', cls: 'bg-healthy/10 text-healthy' };
+  if (s === 'ats') return { label: 'Medium', cls: 'bg-degraded/10 text-degraded' };
+  return { label: 'High', cls: 'bg-failed/10 text-failed' };
 }
 
 // Risk flag: manual/unsupported strategies or REVIEW status need human eyes.
@@ -80,10 +87,10 @@ function salaryText(o: CopilotOpportunity): string {
 
 function verdictClass(cls: string | undefined): string {
   switch ((cls || '').toLowerCase()) {
-    case 'success': return 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
-    case 'warning': return 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400';
-    case 'danger': return 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400';
-    default: return 'bg-primary/5 border-primary/15 text-foreground/80';
+    case 'success': return 'bg-healthy/10 border-healthy/40 text-healthy';
+    case 'warning': return 'bg-degraded/10 border-degraded/40 text-degraded';
+    case 'danger': return 'bg-failed/10 border-failed/40 text-failed';
+    default: return 'bg-secondary/40 border-border text-foreground/80';
   }
 }
 
@@ -116,7 +123,7 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
         {opportunity && (
           <>
             {/* Header */}
-            <SheetHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-muted/10">
+            <SheetHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-surface/80">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <SheetTitle className="text-base font-bold leading-snug truncate">{opportunity.title}</SheetTitle>
@@ -130,7 +137,7 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
                   {isRisky(opportunity) && (
                     <span title="Manual or unsupported application flow — review before applying">
                       <AlertTriangle
-                        className="w-4 h-4 text-amber-500"
+                        className="w-4 h-4 text-degraded"
                         aria-label="Risk: manual or unsupported application flow"
                       />
                     </span>
@@ -143,7 +150,7 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
             <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-border/40">
               <Button
                 size="sm"
-                className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                className="h-8 text-xs gap-1.5 bg-healthy text-background border-0 hover:bg-healthy/90"
                 onClick={onApply}
                 disabled={applying || (opportunity.status_view || '').toUpperCase() === 'CLOSED'}
               >
@@ -165,7 +172,7 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
                 </Button>
               )}
               <Button
-                variant="outline" size="sm" className="h-8 text-xs gap-1.5 text-amber-500 border-amber-500/30 hover:bg-amber-500/10"
+                variant="outline" size="sm" className="h-8 text-xs gap-1.5 text-degraded border-degraded/40 hover:bg-degraded/10"
                 onClick={onSkip}
               >
                 <SkipForward className="w-3 h-3" /> Skip
@@ -201,11 +208,11 @@ function BriefSheet({ opportunity, applying, onApply, onSkip, onDismiss, onOpenC
                     </div>
                   ) : null}
                   {brief.sections.map(section => (
-                    <div key={section.key} className="bg-muted/20 border border-border/30 rounded-lg p-4">
+                    <div key={section.key} className="bg-surface border border-border rounded-md p-4">
                       <div className="flex items-center gap-2 mb-2">
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{section.title}</p>
                         {section.llm_augmented && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-primary bg-primary/10 rounded px-1.5 py-0.5">
+                          <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-pending bg-pending/10 rounded px-1.5 py-0.5">
                             <Brain className="w-2.5 h-2.5" /> LLM
                           </span>
                         )}
@@ -403,7 +410,7 @@ export default function Inbox() {
         isRisky(row.original) ? (
           <span title="Manual or unsupported application flow — review before applying">
             <AlertTriangle
-              className="w-3.5 h-3.5 text-amber-500"
+              className="w-3.5 h-3.5 text-degraded"
               aria-label="Risk: manual or unsupported application flow"
             />
           </span>
@@ -421,7 +428,7 @@ export default function Inbox() {
           <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
             <Button
               variant="ghost" size="icon"
-              className="h-6 w-6 text-emerald-600 hover:bg-emerald-500/10"
+              className="h-6 w-6 text-healthy hover:bg-healthy/10"
               title="Apply (a)"
               aria-label={`Apply to ${o.title}`}
               aria-keyshortcuts="a"
@@ -432,7 +439,7 @@ export default function Inbox() {
             </Button>
             <Button
               variant="ghost" size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-amber-500"
+              className="h-6 w-6 text-muted-foreground hover:text-degraded"
               title="Skip (s)"
               aria-label={`Skip ${o.title}`}
               aria-keyshortcuts="s"
@@ -442,7 +449,7 @@ export default function Inbox() {
             </Button>
             <Button
               variant="ghost" size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-red-500"
+              className="h-6 w-6 text-muted-foreground hover:text-failed"
               title="Dismiss (d)"
               aria-label={`Dismiss ${o.title}`}
               aria-keyshortcuts="d"
@@ -514,28 +521,25 @@ export default function Inbox() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      {/* Page header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <InboxIcon className="w-4 h-4 text-primary" /> Inbox
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Unified triage of every normalized opportunity.
-            {rows.length !== opps.length && (
-              <span className="ml-1 text-primary font-medium">{rows.length} of {opps.length} shown</span>
+      <PageHeader
+        coordinate="03 · 01"
+        title="Inbox"
+        subtitle={
+          rows.length !== opps.length
+            ? `Unified triage of every normalized opportunity. ${rows.length} of ${opps.length} shown.`
+            : 'Unified triage of every normalized opportunity.'
+        }
+        actions={
+          <span className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+            {query.isFetching ? (
+              <Loader2 className="w-3 h-3 animate-spin" aria-label="Refreshing" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-healthy/70 pulse-live" aria-hidden="true" />
             )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-          {query.isFetching ? (
-            <Loader2 className="w-3 h-3 animate-spin" aria-label="Refreshing" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-emerald-500/70" aria-hidden="true" />
-          )}
-          <span>polls every 30s</span>
-        </div>
-      </div>
+            <span>polls every 30s</span>
+          </span>
+        }
+      />
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-2.5 border-b border-border/40 shrink-0 bg-background/80 flex-wrap">
@@ -549,24 +553,24 @@ export default function Inbox() {
             className="h-8 w-56 pl-8 text-xs"
           />
         </div>
-        <select
-          aria-label="Filter by source"
-          value={sourceFilter}
-          onChange={e => setSourceFilter(e.target.value)}
-          className="h-8 rounded-md border border-border/60 bg-background px-2 pr-6 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All sources</option>
-          {sourceOptions.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select
-          aria-label="Filter by status"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="h-8 rounded-md border border-border/60 bg-background px-2 pr-6 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All statuses</option>
-          {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+          <SelectTrigger aria-label="Filter by source" className="h-8 w-auto min-w-[130px] text-xs">
+            <SelectValue placeholder="All sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All sources</SelectItem>
+            {sourceOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger aria-label="Filter by status" className="h-8 w-auto min-w-[130px] text-xs">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All statuses</SelectItem>
+            {statusOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
         {hasActiveFilter && (
           <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={clearFilters}>
             Clear filters
@@ -611,58 +615,45 @@ export default function Inbox() {
       <div className="flex-1 overflow-hidden">
         <div ref={parentRef} className="h-full overflow-auto relative">
           {query.isLoading ? (
-            <div className="p-6 space-y-3 animate-pulse" aria-busy="true">
-              <p className="sr-only" role="status">Loading opportunities…</p>
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="h-4 w-1/3 bg-muted rounded" />
-                  <div className="h-4 w-28 bg-muted rounded" />
-                  <div className="h-4 w-16 bg-muted rounded" />
-                  <div className="h-4 w-24 bg-muted rounded" />
-                </div>
-              ))}
-            </div>
+            <GridSkeleton rows={5} className="m-4" />
           ) : query.isError && rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-center text-muted-foreground px-6">
-              <AlertTriangle className="w-8 h-8 mb-3 opacity-40" />
-              <p className="text-sm font-medium">Couldn't load opportunities</p>
-              <p className="text-xs mt-1 opacity-70 max-w-xs">
-                {query.error instanceof Error ? query.error.message : 'Something went wrong while fetching the inbox.'}
-              </p>
-              <Button variant="outline" size="sm" className="mt-4 h-8 text-xs" onClick={() => void query.refetch()}>
-                <RefreshCw className="w-3 h-3 mr-1.5" /> Retry
-              </Button>
-            </div>
+            <SharedErrorState
+              title="Couldn't load opportunities"
+              message={query.error instanceof Error ? query.error.message : 'Something went wrong while fetching the inbox.'}
+              onRetry={() => void query.refetch()}
+              className="m-4"
+            />
           ) : rows.length === 0 ? (
             hasActiveFilter ? (
-              <div className="flex flex-col items-center justify-center h-full py-20 text-center text-muted-foreground px-6">
-                <Search className="w-8 h-8 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No opportunities match</p>
-                <p className="text-xs mt-1 opacity-70">Try adjusting the search or filters.</p>
-                <Button variant="ghost" size="sm" className="mt-4 h-8 text-xs" onClick={clearFilters}>
-                  Clear filters
-                </Button>
-              </div>
+              <SharedEmptyState
+                title="No opportunities match"
+                description="Try adjusting the search or filters."
+                action={
+                  <Button variant="ghost" size="sm" className="mt-4 h-8 text-xs" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                }
+              />
             ) : dismissed.length > 0 ? (
-              <div className="flex flex-col items-center justify-center h-full py-20 text-center text-muted-foreground px-6">
-                <CheckCircle className="w-8 h-8 mb-3 opacity-20" />
-                <p className="text-sm font-medium">All caught up</p>
-                <p className="text-xs mt-1 opacity-70">
-                  You've dismissed {dismissed.length} opportunit{dismissed.length === 1 ? 'y' : 'ies'} on this browser.
-                </p>
-                <Button variant="ghost" size="sm" className="mt-4 h-8 text-xs" onClick={clearDismissed}>
-                  Restore dismissed
-                </Button>
-              </div>
+              <SharedEmptyState
+                title="All caught up"
+                description={`You've dismissed ${dismissed.length} opportunit${dismissed.length === 1 ? 'y' : 'ies'} on this browser.`}
+                action={
+                  <Button variant="ghost" size="sm" className="mt-4 h-8 text-xs" onClick={clearDismissed}>
+                    Restore dismissed
+                  </Button>
+                }
+              />
             ) : (
-              <div className="flex flex-col items-center justify-center h-full py-20 text-center text-muted-foreground px-6">
-                <Briefcase className="w-8 h-8 mb-3 opacity-20" />
-                <p className="text-sm font-medium">Inbox zero</p>
-                <p className="text-xs mt-1 opacity-70">No opportunities yet — ingest a source to start triaging.</p>
-                <Button variant="outline" size="sm" className="mt-4 h-8 text-xs" onClick={() => navigate('/copilot/settings')}>
-                  <Settings2 className="w-3 h-3 mr-1.5" /> Manage sources
-                </Button>
-              </div>
+              <SharedEmptyState
+                title="Inbox zero"
+                description="No opportunities yet — ingest a source to start triaging."
+                action={
+                  <Button variant="outline" size="sm" className="mt-4 h-8 text-xs" onClick={() => navigate('/copilot/settings')}>
+                    <Settings2 className="w-3 h-3 mr-1.5" /> Manage sources
+                  </Button>
+                }
+              />
             )
           ) : (
             <div
@@ -671,7 +662,7 @@ export default function Inbox() {
               aria-label="Opportunity inbox"
             >
               {/* Sticky header */}
-              <div className="sticky top-0 z-20 bg-background border-b border-border/40 flex text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="sticky top-0 z-20 bg-background border-b border-border/40 flex font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 {table.getHeaderGroups().map(hg => (
                   <div key={hg.id} className="flex w-full">
                     {hg.headers.map(header => {

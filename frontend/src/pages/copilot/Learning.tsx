@@ -5,7 +5,6 @@ import {
   Check,
   Database,
   Eye,
-  GraduationCap,
   Loader2,
   Lock,
   Pencil,
@@ -22,6 +21,8 @@ import { confirmAnswer, lockAnswer, switchProfile } from '@/lib/api/copilot';
 import { useAnswers } from '@/lib/hooks';
 import type { StoredAnswer } from '@/lib/types/copilot';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/operations/PageHeader';
+import { Panel, PanelHeader } from '@/components/operations/Panel';
 
 // ─── Frozen constants (docs/application_copilot) ─────────────────────────────
 // Profile set (06_ANSWER_BANK.md §5), AnswerStatus vocabulary (§3/§6),
@@ -38,9 +39,9 @@ const PROFILE_STORAGE_KEY = 'cw-copilot-profile';
 // StatusBadge color overrides — global semantics (emerald=confirmed,
 // amber=needs-confirm, blue=locked; auto/superseded keep neutral gray).
 const STATUS_STYLE: Record<string, string> = {
-  confirm: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  confirmed: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  locked: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  confirm: 'bg-degraded/10 text-degraded',
+  confirmed: 'bg-healthy/10 text-healthy',
+  locked: 'bg-running/10 text-running',
 };
 
 // CP-7-03 frozen constants — deterministic display only (no fetch).
@@ -184,7 +185,7 @@ export default function Learning() {
         key={a.question_fp}
         tabIndex={0}
         aria-label={`Answer ${label}, status ${a.status}`}
-        className="rounded-xl border border-border/60 bg-card p-4 space-y-2.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-md border border-border/60 bg-surface p-4 space-y-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -320,18 +321,13 @@ export default function Learning() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-primary" /> Learning
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Answer bank editor, profiles, evidence, and signals.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        coordinate="03 · 04"
+        title="Learning"
+        subtitle="Answer bank editor, profiles, evidence, and signals."
+      />
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto pb-8">
         <div className="max-w-5xl mx-auto space-y-5 pb-8">
           {/* ── Profile switcher (atomic namespace swap, 06 §5) ── */}
           <SectionCard
@@ -375,7 +371,7 @@ export default function Learning() {
                       'px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       profileId === p.id
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
@@ -454,7 +450,7 @@ export default function Learning() {
               {actionError && (
                 <p
                   role="alert"
-                  className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400"
+                  className="flex items-center gap-1.5 text-xs text-failed"
                 >
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                   {actionError}
@@ -464,14 +460,14 @@ export default function Learning() {
               {answersQ.isLoading && (
                 <div className="space-y-3" aria-label="Loading answers">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-24 bg-muted/50 rounded-xl animate-pulse" />
+                    <div key={i} className="h-24 bg-muted/50 rounded-md animate-pulse" />
                   ))}
                 </div>
               )}
 
               {answersQ.isError && (
-                <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
-                  <AlertCircle className="w-8 h-8 text-red-500/70 mx-auto" aria-hidden="true" />
+                <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
+                  <AlertCircle className="w-8 h-8 text-failed/70 mx-auto" aria-hidden="true" />
                   <p className="text-sm font-medium">Could not load answers</p>
                   <p className="text-xs text-muted-foreground break-words">
                     {answersQ.error?.message ?? 'Unknown error.'}
@@ -483,7 +479,7 @@ export default function Learning() {
               )}
 
               {!answersQ.isLoading && !answersQ.isError && answers.length === 0 && (
-                <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
+                <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
                   <Database className="w-8 h-8 text-muted-foreground/40 mx-auto" aria-hidden="true" />
                   <p className="text-sm font-medium">No answers</p>
                   <p className="text-xs text-muted-foreground">
@@ -630,15 +626,13 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border/60 rounded-xl shadow-sm">
-      <div className="px-4 py-3 border-b border-border/50">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        )}
-      </div>
+    <Panel>
+      <PanelHeader title={title} />
+      {description && (
+        <p className="text-meta text-muted-foreground px-4 pt-3 max-w-[65ch]">{description}</p>
+      )}
       <div className="p-4">{children}</div>
-    </section>
+    </Panel>
   );
 }
 

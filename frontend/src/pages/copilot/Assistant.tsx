@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   AlertTriangle,
-  Bot,
   CheckCircle2,
   ExternalLink,
   Eye,
@@ -88,19 +87,19 @@ const STATUS_META: Record<FillStatus, { label: string; className: string }> = {
   pending: { label: 'pending', className: 'border-border text-muted-foreground' },
   filled: {
     label: 'filled',
-    className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    className: 'border-healthy/40 bg-healthy/10 text-healthy',
   },
   flagged: {
     label: 'flagged',
-    className: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    className: 'border-degraded/40 bg-degraded/10 text-degraded',
   },
   asked: {
     label: 'asked',
-    className: 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    className: 'border-blue-500/40 bg-running/10 text-running',
   },
   unwritable: {
     label: 'FIELD_UNWRITABLE',
-    className: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
+    className: 'border-failed/40 bg-failed/10 text-failed',
   },
   unknown: {
     label: 'unknown',
@@ -112,16 +111,16 @@ const STATUS_META: Record<FillStatus, { label: string; className: string }> = {
   },
   upload: {
     label: 'upload',
-    className: 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    className: 'border-pending/40 bg-pending/10 text-pending',
   },
 };
 
 const SOURCE_CHIP: Record<string, string> = {
-  stored: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  stored: 'border-healthy/40 bg-healthy/10 text-healthy',
   deterministic:
-    'border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400',
-  llm: 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  manual: 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    'border-sky-500/40 bg-sky-500/10 text-running',
+  llm: 'border-pending/40 bg-pending/10 text-pending',
+  manual: 'border-degraded/40 bg-degraded/10 text-degraded',
 };
 
 const CHECKPOINT_META: Record<string, { label: string; icon: typeof Flag }> = {
@@ -179,10 +178,10 @@ const INITIAL_STATE: PanelState = {
 
 function StateBadge({ state }: { state: string | undefined }) {
   const meta: Record<string, string> = {
-    opened: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    opened: 'border-healthy/40 bg-healthy/10 text-healthy',
     taken_over:
-      'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    aborted: 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400',
+      'border-degraded/40 bg-degraded/10 text-degraded',
+    aborted: 'border-failed/40 bg-failed/10 text-failed',
   };
   return (
     <Badge variant="outline" className={meta[state ?? ''] ?? 'border-border text-muted-foreground'}>
@@ -245,7 +244,7 @@ function ErrorBanner({
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/5 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+      className="flex items-start gap-2 rounded-md border border-failed/40 bg-failed/5 px-3 py-2 text-xs text-failed"
     >
       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <p className="flex-1">{message}</p>
@@ -364,10 +363,10 @@ function CheckpointBanner({
   return (
     <section
       aria-label="Checkpoint"
-      className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3"
+      className="rounded-md border border-degraded/40 bg-degraded/5 p-3"
     >
       <div className="flex items-center gap-2">
-        <ShieldAlert className="h-4 w-4 text-amber-500" aria-hidden="true" />
+        <ShieldAlert className="h-4 w-4 text-degraded" aria-hidden="true" />
         <h3 className="text-sm font-semibold">
           {submitGate
             ? 'Checkpoint: submit gate'
@@ -474,7 +473,7 @@ function FieldRow({
         <p className="min-w-0 flex-1 truncate text-xs font-medium" title={field.label}>
           {field.label}
           {field.required ? (
-            <span className="text-red-500" aria-hidden="true">
+            <span className="text-failed" aria-hidden="true">
               {' '}
               *
             </span>
@@ -558,14 +557,14 @@ function FieldRow({
 // ─── Audit feed ────────────────────────────────────────────────────────────
 
 const ACTION_COLOR: Record<string, string> = {
-  fill: 'text-emerald-600 dark:text-emerald-400',
-  checkpoint: 'text-amber-600 dark:text-amber-400',
-  confirm_checkpoint: 'text-emerald-600 dark:text-emerald-400',
-  open: 'text-sky-600 dark:text-sky-400',
-  form: 'text-sky-600 dark:text-sky-400',
-  guidance: 'text-violet-600 dark:text-violet-400',
+  fill: 'text-healthy',
+  checkpoint: 'text-degraded',
+  confirm_checkpoint: 'text-healthy',
+  open: 'text-running',
+  form: 'text-running',
+  guidance: 'text-pending',
   submit: 'text-rose-600 dark:text-rose-400',
-  abort: 'text-red-600 dark:text-red-400',
+  abort: 'text-failed',
 };
 
 function AuditFeed({ actions }: { actions: AuditAction[] }) {
@@ -617,7 +616,7 @@ function GuidanceCard({ plan }: { plan: GuidancePlan | null }) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Eye className="h-4 w-4 text-amber-500" aria-hidden="true" />
+          <Eye className="h-4 w-4 text-degraded" aria-hidden="true" />
           Human in control — guidance only
         </CardTitle>
         <CardDescription>
@@ -954,9 +953,8 @@ export default function Assistant() {
   return (
     <div className="space-y-4 p-4 lg:p-6">
       <header className="flex flex-wrap items-center gap-2">
-        <Bot className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h1 className="text-lg font-semibold tracking-tight">Form-Fill Assistant</h1>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+        <h1 className="text-emphasis text-foreground font-semibold tracking-tight">Form-Fill Assistant</h1>
+        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
           {sessionId}
         </code>
         {state.browser ? (
@@ -992,12 +990,12 @@ export default function Assistant() {
         <Card>
           <CardContent className="p-6 text-sm">
             {session?.state === 'SUBMITTED' ? (
-              <p className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <p className="flex items-center gap-2 text-healthy">
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Session submitted —
                 the application workflow is complete.
               </p>
             ) : (
-              <p className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <p className="flex items-center gap-2 text-failed">
                 <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Session aborted — no
                 further assistant actions.
               </p>
@@ -1036,7 +1034,7 @@ export default function Assistant() {
             {notAutoFillable ? (
               <div
                 role="status"
-                className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+                className="rounded-md border border-degraded/40 bg-degraded/5 px-3 py-2 text-xs text-degraded"
               >
                 This ATS form is not auto-fillable — the assistant cannot drive it.
                 Fill the form manually in the visible browser, or use the guidance
@@ -1047,7 +1045,7 @@ export default function Assistant() {
             {state.phase === 'done' ? (
               <div
                 role="status"
-                className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400"
+                className="flex items-center gap-2 rounded-md border border-healthy/40 bg-healthy/5 px-3 py-2 text-xs text-healthy"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 Form filled and gates confirmed — the workspace wizard's submit

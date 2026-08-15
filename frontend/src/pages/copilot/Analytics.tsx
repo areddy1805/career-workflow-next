@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAnalytics } from '@/lib/hooks';
+import { PageHeader } from '@/components/operations/PageHeader';
 import type {
   AnalyticsData,
   FunnelConversions,
@@ -69,30 +70,25 @@ export default function Analytics() {
 
   return (
     <div className="h-full flex flex-col bg-background text-sm">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0 bg-background/95 backdrop-blur z-10">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-primary" /> Analytics
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Funnel, conversion, effort, answer-bank health, and learning calibration.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        coordinate="03 · 03"
+        title="Analytics"
+        subtitle="Funnel, conversion, effort, answer-bank health, and learning calibration."
+      />
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto pb-8">
         <div className="max-w-5xl mx-auto space-y-5 pb-8">
           {analytics.isLoading && (
             <div className="space-y-5" aria-label="Loading analytics">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-36 bg-muted/50 rounded-xl animate-pulse" />
+                <div key={i} className="h-36 bg-muted/50 rounded-md animate-pulse" />
               ))}
             </div>
           )}
 
           {analytics.isError && (
-            <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
-              <AlertCircle className="w-8 h-8 text-red-500/70 mx-auto" aria-hidden="true" />
+            <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-failed/70 mx-auto" aria-hidden="true" />
               <p className="text-sm font-medium">Could not load analytics</p>
               <p className="text-xs text-muted-foreground break-words">
                 {analytics.error?.message ?? 'Unknown error.'}
@@ -104,7 +100,7 @@ export default function Analytics() {
           )}
 
           {data && data.funnel.stages.ingested === 0 && (
-            <div className="bg-card border border-border/60 rounded-xl p-8 text-center space-y-3 shadow-sm">
+            <div className="bg-surface border border-border/60 rounded-md p-8 text-center space-y-3">
               <Database className="w-8 h-8 text-muted-foreground/40 mx-auto" aria-hidden="true" />
               <p className="text-sm font-medium">No pipeline data yet</p>
               <p className="text-xs text-muted-foreground">
@@ -146,7 +142,7 @@ export default function Analytics() {
                     label="Assisted (median)"
                     value={data.effort.assisted_estimate_min}
                     max={data.effort.manual_estimate_min}
-                    color="bg-emerald-500/70"
+                    color="bg-healthy/70"
                   />
                 </div>
               </SectionCard>
@@ -401,7 +397,7 @@ function CalibrationBars({ data }: { data: AnalyticsData }) {
           className="h-2.5 w-full rounded-full bg-muted/50 overflow-hidden"
         >
           <div
-            className="h-full rounded-full bg-emerald-500/70"
+            className="h-full rounded-full bg-healthy/70"
             style={{ width: `${Math.min(actualRate * 100, 100)}%` }}
           />
         </div>
@@ -443,7 +439,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border/60 rounded-xl shadow-sm">
+    <section className="bg-surface border border-border/60 rounded-md">
       <div className="px-4 py-3 border-b border-border/50">
         <h2 className="text-sm font-semibold">{title}</h2>
         {description && (
