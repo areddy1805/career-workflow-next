@@ -169,37 +169,40 @@ export default function Applications() {
   const totalCount = Object.values(counts).reduce<number>((acc, v) => acc + (v ?? 0), 0);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       <PageHeader
         coordinate="02 · 02"
         title="Inbox"
         subtitle={`Jobs that require your attention before the pipeline continues.${totalCount > 0 ? ` ${totalCount} item${totalCount !== 1 ? 's' : ''} pending.` : ''}`}
+        className="shrink-0"
       />
 
-      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)}>
-        <TabsList className="w-full justify-start px-1 overflow-x-auto">
-          {TABS.map(tab => {
-            const count = counts[tab.id];
-            return (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
-                {tab.label}
-                {count != null && (
-                  <span className={cn(
-                    'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none',
-                    count > 0
-                      ? 'bg-primary/15 text-primary'
-                      : 'bg-muted/60 text-muted-foreground'
-                  )}>
-                    {count}
-                  </span>
-                )}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-      </Tabs>
+      <div className="shrink-0">
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)}>
+          <TabsList className="w-full justify-start px-1 flex-wrap">
+            {TABS.map(tab => {
+              const count = counts[tab.id];
+              return (
+                <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
+                  {tab.label}
+                  {count != null && (
+                    <span className={cn(
+                      'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none',
+                      count > 0
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-muted/60 text-muted-foreground'
+                    )}>
+                      {count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
+      </div>
 
-      <div className="flex-1 overflow-auto py-4">
+      <div className="flex-1 min-h-0 overflow-auto py-4">
         <div className="max-w-[1400px] min-w-0">
           {activeTab === 'manual-review'  && <QueueTable data={mrData} onRowClick={setSelectedJobId} />}
           {activeTab === 'external-apply' && <QueueTable data={eaData} onRowClick={setSelectedJobId} />}

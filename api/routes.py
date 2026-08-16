@@ -186,13 +186,27 @@ def get_job_details(job_id: str) -> dict[str, Any]:
     try:
         df = read_applications()
     except Exception:
-        raise HTTPException(status_code=503, detail="Application ledger unavailable")
+        df = None
 
-    if df.empty or "job_id" not in df.columns:
-        raise HTTPException(status_code=404, detail="Job not found")
+    job_df = (
+        df[df["job_id"] == job_id]
+        if df is not None and not df.empty and "job_id" in df.columns
+        else None
+    )
 
-    job_df = df[df["job_id"] == job_id]
-    if job_df.empty:
+    # Read-only decision-support payload: merges lifecycle record, score
+    # cache, copilot opportunity data, questionnaire telemetry and manual
+    # queue entries — all from existing storage, never mutating state.
+    try:
+        from control_center.job_inspector import build_job_inspection
+
+        details = build_job_inspection(job_id)
+    except Exception:
+        details = {}
+
+    # A job is known to the pipeline when ANY store has it (the ledger only
+    # tracks apply-relevant rows).
+    if (job_df is None or job_df.empty) and not details:
         raise HTTPException(status_code=404, detail="Job not found")
 
     try:
@@ -200,9 +214,9 @@ def get_job_details(job_id: str) -> dict[str, Any]:
     except Exception:
         events_df = pd.DataFrame()
 
-    cache_dict = get_job_cache_dict()
-    enriched_job = df_to_dict(job_df)[0]
+    enriched_job = df_to_dict(job_df)[0] if job_df is not None and not job_df.empty else {"job_id": job_id}
 
+    cache_dict = get_job_cache_dict()
     if job_id in cache_dict:
         for k, v in cache_dict[job_id].items():
             if k not in enriched_job or not enriched_job[k]:
@@ -210,7 +224,11 @@ def get_job_details(job_id: str) -> dict[str, Any]:
 
     _ensure_api_contract(enriched_job)
 
-    return {"overview": enriched_job, "events": df_to_dict(events_df)}
+    return {
+        "overview": enriched_job,
+        "events": df_to_dict(events_df),
+        "details": details,
+    }
 
 
 @router.get("/runs")

@@ -255,6 +255,10 @@ class PipelineExecutionContext:
     def emit_inference_metrics(self, *, requests: int, total_tokens: int,
                                 total_cost: float, average_latency: float,
                                 fallback_count: int = 0, failed_requests: int = 0) -> None:
+        """Publish whole-run inference metrics.
+
+        ``average_latency`` is in SECONDS (callers convert from the engine's
+        millisecond latency totals)."""
         self.bus.publish(self.event_factory.create("System", "InferenceMetrics", {
             "requests": requests, "total_tokens": total_tokens,
             "total_cost": total_cost, "average_latency": average_latency,

@@ -303,6 +303,9 @@ class CareerWorkflowPipeline:
             "max_applications": (self.context.max_applications),
             "started_at": (self.context.started_at.isoformat()),
             "counts": {
+                # THIS RUN only: lengths of the current run's context
+                # collections (not cumulative lifecycle state).
+                "scope": "this_run",
                 "acquired": len(self.context.acquired_jobs),
                 "classified": len(self.context.classified_jobs),
                 "selected": len(self.context.selected_jobs),
@@ -1531,12 +1534,16 @@ class CareerWorkflowPipeline:
         def _enqueue_external(job: ApplicationOpportunity, **kwargs: Any) -> None:
             """Enqueue a non-AUTO job to the correct queue based on its application mode.
 
-            If the queue write fails, the job is STILL considered routed (its lifecycle
-            state is ROUTED_MANUAL/ATS/EXTERNAL).  The queue is a convenience projection.
+            ``mode`` kwarg (when provided by the scheduler) is authoritative —
+            an AUTO job whose questionnaire requires manual review must land
+            in the MANUAL_REVIEW queue even though its application mode is
+            AUTO.  If the queue write fails, the job is STILL considered
+            routed (its lifecycle state is ROUTED_MANUAL/ATS/EXTERNAL).  The
+            queue is a convenience projection.
             """
             from src.application.capability import ApplicationMode
 
-            app_mode = getattr(job, "application_mode", None)
+            app_mode = kwargs.get("mode") or getattr(job, "application_mode", None)
             score = kwargs.get("score", int(getattr(job, "score", 0)))
             reason = kwargs.get("reason", "External apply")
             run_id = kwargs.get("run_id", self.context.run_id)
@@ -1922,17 +1929,17 @@ class CareerWorkflowPipeline:
             )
 
             try:
+                calls = metrics_snapshot.get("calls", 0)
                 self.exec_context.emit_inference_metrics(
-                    requests=metrics_snapshot.get("calls", 0),
+                    requests=calls,
                     total_tokens=metrics_snapshot.get("prompt_tokens", 0)
                     + metrics_snapshot.get("completion_tokens", 0),
                     total_cost=metrics_snapshot.get("cost_usd", 0.0),
+                    # latency_ms is in MILLISECONDS; the event payload and the
+                    # runtime state projection are in SECONDS.
                     average_latency=(
-                        (
-                            metrics_snapshot.get("latency_ms", 0.0)
-                            / metrics_snapshot.get("calls", 1)
-                        )
-                        if metrics_snapshot.get("calls", 0) > 0
+                        (metrics_snapshot.get("latency_ms", 0.0) / 1000.0 / calls)
+                        if calls > 0
                         else 0.0
                     ),
                     fallback_count=metrics_snapshot.get("fallbacks", 0),
@@ -1946,9 +1953,46 @@ class CareerWorkflowPipeline:
         except Exception as e:
             print(f"Warning: Failed to render Pipeline Explorer visual reports: {e}")
 
-        # Write lifecycle-derived metrics artifact
+        # Write lifecycle-derived metrics artifact.  The top-level counters
+        # are the CUMULATIVE store projection (the store persists across
+        # runs); the "this_run" block is the current run's transitions after
+        # started_at.  Scopes are explicit so no consumer can mistake the
+        # cumulative totals for this run's activity.
+        run_start = self.context.started_at.isoformat()
         lifecycle_metrics = self.context.lifecycle.compute_metrics()
-        self._write_artifact("metrics.json", lifecycle_metrics)
+        from src.orchestration.job_lifecycle import JobState as _JS
+
+        this_run_metrics = {
+            "selected": self.context.lifecycle.count_state_transitions_since(
+                {_JS.SELECTED_AUTO}, run_start
+            ),
+            "submitted": self.context.lifecycle.count_state_transitions_since(
+                {_JS.SUBMITTED}, run_start
+            ),
+            "application_failed": self.context.lifecycle.count_state_transitions_since(
+                {_JS.APPLICATION_FAILED}, run_start
+            ),
+            "already_applied": self.context.lifecycle.count_state_transitions_since(
+                {_JS.ALREADY_APPLIED}, run_start
+            ),
+            "routed_manual_selected": (
+                self.context.lifecycle.count_both_states_since(
+                    _JS.SELECTED_AUTO, _JS.ROUTED_MANUAL, run_start
+                )
+            ),
+            "stuck_selected": self.context.lifecycle.count_stuck_selected_since(
+                run_start
+            ),
+            "deferred": self.context.lifecycle.count_deferred_since(run_start),
+        }
+        self._write_artifact(
+            "metrics.json",
+            {
+                **lifecycle_metrics,
+                "metric_scope": "cumulative",
+                "this_run": this_run_metrics,
+            },
+        )
 
         # Write lifecycle validation
         lifecycle_diagnostics = self.context.lifecycle.validate()
@@ -1983,6 +2027,7 @@ class CareerWorkflowPipeline:
             lifecycle=self.context.lifecycle,
             started_at=self.context.started_at,
             completed_at=completed_at,
+            run_start=self.context.started_at.isoformat(),
             cache_metrics=cache_metrics,
             stage_results={
                 name: status.value for name, status in self.stage_statuses.items()
@@ -2091,13 +2136,17 @@ class CareerWorkflowPipeline:
             #   selected_this_run == submitted_this_run
             #                    + application_failed_this_run
             #                    + already_applied_this_run
+            #                    + routed_manual_selected_this_run
             #                    + stuck_this_run (selected this run, no terminal)
             # Every AUTO-planned job must re-enter SELECTED_AUTO this run
             # (including revisited DEFERRED candidates — see _is_selectable)
-            # and reach a terminal AUTO outcome by run end.  Historical
-            # records from earlier runs are excluded: a fresh run must not
-            # fail because a legacy job was consumed before SELECTED_AUTO
-            # existed or was interrupted mid-run.
+            # and reach a terminal AUTO outcome by run end.  AUTO jobs whose
+            # questionnaire requires manual review are routed to the
+            # MANUAL_REVIEW queue (ROUTED_MANUAL) as a first-class outcome,
+            # so the identity credits those too.  Historical records from
+            # earlier runs are excluded: a fresh run must not fail because a
+            # legacy job was consumed before SELECTED_AUTO existed or was
+            # interrupted mid-run.
             run_start = self.context.started_at.isoformat()
             selected_this_run = self.context.lifecycle.count_state_transitions_since(
                 {JobState.SELECTED_AUTO}, run_start
@@ -2110,15 +2159,29 @@ class CareerWorkflowPipeline:
                 },
                 run_start,
             )
+            routed_manual_selected_this_run = (
+                self.context.lifecycle.count_both_states_since(
+                    JobState.SELECTED_AUTO, JobState.ROUTED_MANUAL, run_start
+                )
+            )
             stuck_this_run = self.context.lifecycle.count_stuck_selected_since(
                 run_start
             )
-            if selected_this_run != terminal_this_run + stuck_this_run:
+            if (
+                selected_this_run
+                != terminal_this_run
+                + routed_manual_selected_this_run
+                + stuck_this_run
+            ):
                 diagnostics.append(
                     f"AUTO accounting mismatch: selected_this_run({selected_this_run}) "
-                    f"!= submitted+application_failed+already_applied+stuck_selected"
-                    f"({terminal_this_run}+{stuck_this_run}={
-                        terminal_this_run + stuck_this_run
+                    f"!= submitted+application_failed+already_applied+"
+                    f"routed_manual_selected+stuck_selected"
+                    f"({terminal_this_run}+{routed_manual_selected_this_run}+"
+                    f"{stuck_this_run}={
+                        terminal_this_run
+                        + routed_manual_selected_this_run
+                        + stuck_this_run
                     })"
                 )
             # At run end, no jobs should remain in SELECTED_AUTO (this run's
@@ -2194,8 +2257,11 @@ class CareerWorkflowPipeline:
                 main_model_name = main_p.model
 
             # --- Phase 4: Observability Report UI ---
+            # NOTE: total_latency/average_latency/maximum_latency are stored
+            # in MILLISECONDS (InferenceCompletedEvent.latency_ms) — divide by
+            # 1000 when presenting seconds.
             print("\n" + "═" * 54)
-            print("Inference Platform")
+            print("Inference Platform (whole run)")
             print(f"Provider        : {main_provider_name.capitalize()}")
             print(f"Model           : {main_model_name}")
             print(f"Requests        : {global_metrics.requests}")
@@ -2205,8 +2271,11 @@ class CareerWorkflowPipeline:
             print(f"Completion      : {global_metrics.completion_tokens:,}")
             print(f"Reasoning       : {global_metrics.reasoning_tokens:,}")
             print(f"Total Tokens    : {global_metrics.total_tokens:,}")
-            print(f"Average Latency : {global_metrics.average_latency:.2f} s")
-            print(f"Total Cost      : ${global_metrics.total_cost:.6f}")
+            print(f"Average Latency : {global_metrics.average_latency / 1000.0:.2f} s")
+            print(
+                f"Total Cost      : ${global_metrics.total_cost:.6f} "
+                f"(all {global_metrics.successful_requests} requests this run)"
+            )
             print("═" * 54)
 
             # --- Phase 5: Cost Analytics ---
@@ -2223,7 +2292,7 @@ class CareerWorkflowPipeline:
                     total_jobs=classified_count, bypassed_jobs=0, metrics=global_metrics
                 )
 
-            print("\nCost Analytics")
+            print("\nCost Analytics (classification stage only)")
             print(f"Cloud Cost")
             print(f"{main_provider_name.capitalize()}")
             print(f"${cost_report.actual_cost_usd:.6f}")
@@ -2300,9 +2369,9 @@ class CareerWorkflowPipeline:
             mins = int(runtime.total_runtime // 60)
             secs = int(runtime.total_runtime % 60)
             print(f"Pipeline Runtime\n{mins}m {secs}s")
-            print(f"Inference Time\n{global_metrics.total_latency:.1f} s")
-            print(f"Average Request\n{global_metrics.average_latency:.2f} s")
-            print(f"Maximum Request\n{global_metrics.maximum_latency:.2f} s")
+            print(f"Inference Time\n{global_metrics.total_latency / 1000.0:.1f} s")
+            print(f"Average Request\n{global_metrics.average_latency / 1000.0:.2f} s")
+            print(f"Maximum Request\n{global_metrics.maximum_latency / 1000.0:.2f} s")
             print(f"Cache Savings\n{global_metrics.cache_hits}")
             print(f"Network Retries\n{global_metrics.retry_count}")
             print(f"Fallbacks\n{global_metrics.fallback_count}")
@@ -2331,7 +2400,7 @@ class CareerWorkflowPipeline:
                     print(f"{p_name.capitalize()}")
                     print(f"Requests\n{p_metrics.requests}")
                     print(f"Cost\n${p_metrics.total_cost:.4f}")
-                    print(f"Latency\n{p_metrics.average_latency:.1f} s")
+                    print(f"Latency\n{p_metrics.average_latency / 1000.0:.1f} s")
 
                 if global_metrics.fallback_count > 0:
                     print(f"Reason\nAutomatic Failover")
@@ -2345,10 +2414,13 @@ class CareerWorkflowPipeline:
             print(f"{mins}m {secs}s")
             print("Jobs Discovered")
             print(f"{projection.get('acquired', 0)}")
-            print("Qualified")
-            print(f"{result.selected}")
-            print("Submitted")
-            print(f"{result.submitted}")
+            # Cumulative lifecycle projections vs this-run counters: the
+            # result fields WITHOUT the suffix are cumulative across all
+            # runs; the *_this_run fields are this run only.
+            print("Qualified (this run)")
+            print(f"{result.selected_this_run}")
+            print("Submitted (this run)")
+            print(f"{result.submitted_this_run}")
             print("Provider")
             print(f"{main_provider_name.capitalize()}")
             print("Model")
@@ -2361,6 +2433,6 @@ class CareerWorkflowPipeline:
             print(f"{global_metrics.failed_requests}")
             print("Total Tokens")
             print(f"{global_metrics.total_tokens:,}")
-            print("Cloud Cost")
+            print("Cloud Cost (whole run)")
             print(f"${global_metrics.total_cost:.6f}")
             print("=" * 54 + "\n")

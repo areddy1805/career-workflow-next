@@ -15,7 +15,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem,
   ContextMenuTrigger, ContextMenuSeparator,
@@ -41,6 +40,7 @@ import {
   SkipForward, FolderOpen, RefreshCw, Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { JobInspectorContent } from '@/components/JobInspector';
 
 // ─── Saved Views ──────────────────────────────────────────────────────────────
 // Predefined filter presets — power user feature, zero configuration required.
@@ -364,7 +364,7 @@ export default function Jobs() {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border/40 shrink-0 bg-background/80 px-4">
         {/* Saved view tabs */}
         <Tabs value={activeView} onValueChange={v => applyView(v as ViewId)} className="mr-4 min-w-0 max-w-full">
-          <TabsList className="border-0 gap-0 overflow-x-auto max-w-full">
+          <TabsList className="border-0 gap-0 flex-wrap max-w-full">
             {SAVED_VIEWS.map(view => (
               <TabsTrigger
                 key={view.id}
@@ -595,22 +595,23 @@ export default function Jobs() {
                   </div>
                 </div>
 
-                <ScrollArea className="flex-1">
+                <div className="flex-1 min-h-0">
                   {detailsLoading ? (
                     <GridSkeleton rows={5} className="m-4" />
                   ) : jobDetails ? (
-                    <JobDetailContent
-                      jobDetails={jobDetails}
-                      selectedJobId={selectedJobId}
-                      onOpenJson={() => { setJsonDialogData(jobDetails.overview); setJsonDialogOpen(true); }}
-                      queryClient={queryClient}
+                    <JobInspectorContent
+                      data={jobDetails}
+                      jobId={selectedJobId}
+                      variant="jobs"
+                      onOpenJson={() => { setJsonDialogData(jobDetails); setJsonDialogOpen(true); }}
+                      onTransitioned={() => queryClient.invalidateQueries({ queryKey: ['jobs'] })}
                     />
                   ) : (
                     <div className="p-6 text-center text-sm text-muted-foreground">
                       Failed to load job details.
                     </div>
                   )}
-                </ScrollArea>
+                </div>
               </ResizablePanel>
             </>
           )}
@@ -628,141 +629,6 @@ export default function Jobs() {
           </pre>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-// ─── Job Detail Content ───────────────────────────────────────────────────────
-// Order: Header → AI Assessment → Actions → Metadata → Timeline
-
-function JobDetailContent({
-  jobDetails,
-  selectedJobId,
-  onOpenJson,
-  queryClient,
-}: {
-  jobDetails: any;
-  selectedJobId: string;
-  onOpenJson: () => void;
-  queryClient: any;
-}) {
-  const ov = jobDetails.overview;
-
-  return (
-    <div className="p-5 space-y-5">
-
-      {/* Header */}
-      <div>
-        <h2 className="text-base font-bold tracking-tight leading-snug">{ov.title}</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          <span className="font-medium text-foreground">{ov.company}</span>
-          {ov.location && <> · <span>{ov.location}</span></>}
-        </p>
-        <div className="flex items-center gap-2 mt-2">
-          <StatusBadge status={ov.status ?? ov.workflow_status ?? 'UNKNOWN'} />
-          {ov.score != null && (
-            <span className={cn('text-xs font-mono font-semibold', scoreColor(ov.score))}>
-              {ov.score} / 100
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* AI Assessment — elevated to top */}
-      {(ov.reasoning || ov.notes || ov.ai_reason) && (
-        <div className="bg-secondary/40 border border-border rounded-md p-4">
-          <p className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">AI Assessment</p>
-          <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
-            {ov.reasoning ?? ov.ai_reason ?? ov.notes}
-          </p>
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          className="h-8 text-xs bg-healthy text-background border-0 hover:bg-healthy/90"
-          onClick={async () => {
-            await transitionQueueJob(selectedJobId, 'APPLIED', 'Manual APPLIED');
-            queryClient.invalidateQueries({ queryKey: ['jobs'] });
-          }}
-        >
-          <CheckCircle className="w-3 h-3 mr-1.5" /> Mark Applied
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs text-failed border-failed/40 hover:bg-failed/10"
-          onClick={async () => {
-            await transitionQueueJob(selectedJobId, 'REJECTED', 'Manual REJECTED');
-            queryClient.invalidateQueries({ queryKey: ['jobs'] });
-          }}
-        >
-          <SkipForward className="w-3 h-3 mr-1.5" /> Reject
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8 text-xs">
-              <FolderOpen className="w-3 h-3 mr-1.5" /> Move To
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="text-xs">
-            <DropdownMenuItem onSelect={async () => { await moveQueueJob(selectedJobId, 'manual_review'); queryClient.invalidateQueries({ queryKey: ['jobs'] }); }}>
-              Manual Review Queue
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={async () => { await moveQueueJob(selectedJobId, 'external_apply'); queryClient.invalidateQueries({ queryKey: ['jobs'] }); }}>
-              ATS Queue
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {ov.apply_url && (
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => openExternalUrl(ov.apply_url)}>
-            <ExternalLink className="w-3 h-3 mr-1.5" /> Open Job
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={onOpenJson}>
-          View JSON
-        </Button>
-      </div>
-
-      {/* Metadata Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { label: 'Priority',  value: ov.priority },
-          { label: 'Source',    value: ov.source    },
-          { label: 'Experience',value: ov.experience },
-          { label: 'Posted',    value: ov.posted_date },
-        ].filter(m => m.value).map(m => (
-          <div key={m.label} className="bg-muted/30 rounded p-3">
-            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{m.label}</p>
-            <p className="text-xs font-medium truncate">{String(m.value)}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Timeline */}
-      {jobDetails.events?.length > 0 && (
-        <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Application History</p>
-          <div className="space-y-0 relative before:absolute before:left-[5px] before:top-0 before:h-full before:w-px before:bg-border/50">
-            {jobDetails.events.map((evt: any) => (
-              <div key={evt.id ?? evt.created_at} className="flex gap-3 py-2 pl-4">
-                <div className="absolute left-[2px] w-2 h-2 rounded-full bg-border border-2 border-background mt-1 z-10" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={evt.status} />
-                    <RelativeTime date={evt.created_at} className="text-[10px] text-muted-foreground" />
-                  </div>
-                  {evt.detail && (
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{evt.detail}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

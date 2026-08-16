@@ -373,5 +373,139 @@ def render(
     except KeyboardInterrupt:
         pass
 
+
+@app.command()
+def inspect(
+    job_id: str = typer.Argument(..., help="Job ID to inspect (ledger job id, e.g. 140826021935)"),
+    json_output: bool = typer.Option(False, "--json", help="Emit the raw payload as JSON instead of the rich report"),
+):
+    """Inspect a job: full decision-support payload (read-only).
+
+    Merges the ledger row, lifecycle transitions, score/rank evidence, JD,
+    compensation, skills, questionnaire telemetry and manual-queue state for
+    one job.  Never mutates lifecycle state and never consumes application
+    budget.
+    """
+    from control_center.job_inspector import build_job_inspection
+
+    payload = build_job_inspection(job_id)
+    if not payload or not payload.get("title"):
+        console.print(f"[bold red]Job not found: {job_id}[/bold red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        console.print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+        return
+
+    # ── Rich report ──────────────────────────────────────────────────
+    from rich.table import Table
+
+    title = payload.get("title", "?")
+    company = payload.get("company", "?")
+    console.print(
+        Panel(
+            f"[bold]{title}[/bold] @ {company}\n"
+            f"Job ID: {payload.get('job_id')}\n"
+            f"Lifecycle: [cyan]{payload.get('lifecycle', {}).get('current_state')}[/cyan]\n"
+            f"Status: {payload.get('status', {})}",
+            title="Job Inspection",
+        )
+    )
+
+    loc = payload.get("location", {})
+    if loc:
+        console.print(Panel("\n".join(f"{k}: {v}" for k, v in loc.items()), title="Location / Remote"))
+
+    ranking = payload.get("score_and_ranking", {})
+    if ranking:
+        table = Table(title="Score & Ranking Evidence")
+        table.add_column("Field")
+        table.add_column("Value")
+        for k, v in ranking.items():
+            table.add_row(k, str(v))
+        console.print(table)
+
+    classification = payload.get("classification", {})
+    if classification:
+        console.print(
+            Panel("\n".join(f"{k}: {v}" for k, v in classification.items()), title="Classification")
+        )
+
+    jd = payload.get("jd", {})
+    if jd:
+        desc = jd.get("description_plain") or ""
+        jd_lines = [
+            f"{k}: {v}"
+            for k, v in jd.items()
+            if k not in ("description_text", "description_html", "cached_description", "description_plain")
+        ]
+        if desc:
+            jd_lines.append(f"description: {str(desc)[:4000]}")
+        console.print(Panel("\n".join(jd_lines) if jd_lines else "(no JD data stored)", title="Job Details / JD"))
+
+    skills = payload.get("skills", {})
+    if skills:
+        console.print(Panel("\n".join(f"{k}: {v}" for k, v in skills.items()), title="Skills"))
+
+    urls = payload.get("source_and_urls", {})
+    if urls:
+        console.print(Panel("\n".join(f"{k}: {v}" for k, v in urls.items()), title="Source & URLs"))
+
+    q = payload.get("questionnaire", {})
+    unresolved = q.get("unresolved", [])
+    if unresolved:
+        t = Table(title=f"Questionnaire — {len(unresolved)} unresolved")
+        t.add_column("Question")
+        t.add_column("Type")
+        t.add_column("Reason")
+        for row in unresolved:
+            t.add_row(
+                str(row.get("question", "")),
+                str(row.get("question_type", "")),
+                str(row.get("resolution_reasoning", "")),
+            )
+        console.print(t)
+
+    routing = payload.get("routing", {})
+    if routing.get("manual_queue_entries"):
+        console.print(
+            Panel(
+                "\n".join(
+                    f"{e.get('mode')}: {e.get('reason')}" for e in routing["manual_queue_entries"]
+                ),
+                title="Manual Action Queue",
+            )
+        )
+
+    transitions = payload.get("lifecycle", {}).get("transitions", [])
+    if transitions:
+        t = Table(title="Lifecycle Transitions")
+        t.add_column("Timestamp")
+        t.add_column("From")
+        t.add_column("To")
+        t.add_column("Reason")
+        for tr in transitions:
+            t.add_row(
+                str(tr.get("timestamp", "")),
+                str(tr.get("from_state", "")),
+                str(tr.get("to_state", "")),
+                str(tr.get("reason", ""))[:120],
+            )
+        console.print(t)
+
+    events = payload.get("events", [])
+    if events:
+        t = Table(title="Application Events")
+        t.add_column("Time")
+        t.add_column("Status")
+        t.add_column("Detail")
+        for e in events[:20]:
+            t.add_row(
+                str(e.get("created_at", "")),
+                str(e.get("status", "")),
+                str(e.get("detail", ""))[:120],
+            )
+        console.print(t)
+
 if __name__ == "__main__":
     app()
