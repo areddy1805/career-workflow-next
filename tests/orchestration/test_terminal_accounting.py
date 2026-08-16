@@ -194,6 +194,274 @@ def test_missing_terminal_outcome_detection():
     assert "Stuck jobs" in str(exc.value)
 
 
+# ── run-scoped validator (run 20260816T085126789297Z regression) ──────────
+
+
+def _freeze_lifecycle_clock(monkeypatch, timestamp: str):
+    """Pin JobLifecycleStore transition timestamps so tests can place records
+    before/after the run boundary."""
+    import src.orchestration.job_lifecycle as jl_mod
+    state = {"now": timestamp}
+    monkeypatch.setattr(jl_mod, "_utc_now", lambda: state["now"])
+
+    def _set(ts: str) -> None:
+        state["now"] = ts
+
+    return _set
+
+
+def test_validator_ignores_historical_terminal_records(monkeypatch):
+    """Run 20260816T085126789297Z: the store is cumulative across runs, so the
+    AUTO identity must be verified per-run.  A legacy job consumed to
+    SUBMITTED before SELECTED_AUTO existed (231025018557 shape) must not
+    fail a clean current run."""
+    from datetime import datetime, timezone
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+
+    # Historical: legacy deferred job consumed WITHOUT SELECTED_AUTO, and a
+    # normally selected+submitted job — both from a prior run.
+    store.create("legacy_hist")
+    store.transition("legacy_hist", JobState.ELIGIBLE)
+    store.transition("legacy_hist", JobState.DEFERRED)
+    store.transition("legacy_hist", JobState.SUBMITTED)
+    store.create("normal_hist")
+    store.transition("normal_hist", JobState.ELIGIBLE)
+    store.transition("normal_hist", JobState.SELECTED_AUTO)
+    store.transition("normal_hist", JobState.SUBMITTED)
+
+    # This run starts here; the old global identity would already fail
+    # (selected_ever=1 != submitted=2) purely from historical data.
+    run_start = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    pipeline.context.started_at = run_start
+    set_clock("2026-08-16T09:07:36+00:00")
+
+    store.create("fresh")
+    store.transition("fresh", JobState.ELIGIBLE)
+    store.transition("fresh", JobState.SELECTED_AUTO)
+    store.transition("fresh", JobState.SUBMITTED)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    # Global projections still disagree (selected_ever=2 != submitted=3 —
+    # expected on a cumulative store with a legacy pre-SELECTED_AUTO job) —
+    # but the run-scoped validator must pass.
+    assert result.selected == 2
+    assert result.submitted == 3
+    pipeline._validate_artifacts(result)
+
+
+def test_revisited_deferred_without_reselection_fails_validator(monkeypatch):
+    """The pre-fix trail (DEFERRED -> SUBMITTED this run, no SELECTED_AUTO
+    re-entry) must still fail the run-scoped validator — the fix does not
+    weaken validation, it restores the canonical path."""
+    from datetime import datetime, timezone
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+    store.create("rev")
+    store.transition("rev", JobState.ELIGIBLE)
+    store.transition("rev", JobState.DEFERRED)  # deferred in a prior run
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    set_clock("2026-08-16T09:07:36+00:00")
+
+    store.create("fresh")
+    store.transition("fresh", JobState.ELIGIBLE)
+    store.transition("fresh", JobState.SELECTED_AUTO)
+    store.transition("fresh", JobState.SUBMITTED)
+    # Buggy pre-fix consumption of the revisited candidate: no re-entry.
+    store.transition("rev", JobState.SUBMITTED)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    with pytest.raises(RuntimeError) as exc:
+        pipeline._validate_artifacts(result)
+    assert "AUTO accounting mismatch" in str(exc.value)
+
+
+def test_revisited_deferred_reselected_passes_validator(monkeypatch):
+    """Post-fix behavior: a revisited DEFERRED candidate re-enters
+    SELECTED_AUTO before execution (DEFERRED -> SELECTED_AUTO -> SUBMITTED),
+    so the run-scoped identity holds end to end."""
+    from datetime import datetime, timezone
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+    store.create("rev")
+    store.transition("rev", JobState.ELIGIBLE)
+    store.transition("rev", JobState.DEFERRED)
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    set_clock("2026-08-16T09:07:36+00:00")
+
+    store.create("fresh")
+    store.transition("fresh", JobState.ELIGIBLE)
+    store.transition("fresh", JobState.SELECTED_AUTO)
+    store.transition("fresh", JobState.SUBMITTED)
+    # Canonical re-entry for the revisited candidate.
+    store.transition("rev", JobState.SELECTED_AUTO)
+    store.transition("rev", JobState.SUBMITTED)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    pipeline._validate_artifacts(result)
+
+
+def test_previously_failed_reattempt_passes_validator(monkeypatch):
+    """A job that failed APPLICATION_FAILED in a prior run is NOT in the
+    ledger's applied set, so a later run re-plans it AUTO and the scheduler
+    executes it again.  Without a fresh SELECTED_AUTO entry that re-attempt
+    would fail the run-scoped identity on every subsequent run; with the
+    canonical re-entry it passes."""
+    from datetime import datetime, timezone
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+    store.create("retry")
+    store.transition("retry", JobState.ELIGIBLE)
+    store.transition("retry", JobState.SELECTED_AUTO)
+    store.transition("retry", JobState.APPLICATION_FAILED)
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    set_clock("2026-08-16T09:07:36+00:00")
+
+    # Re-attempt: re-enters SELECTED_AUTO, then fails again (canonical trail).
+    store.transition("retry", JobState.SELECTED_AUTO)
+    store.transition("retry", JobState.APPLICATION_FAILED)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    pipeline._validate_artifacts(result)
+
+    # Without the re-entry the identity would break: one this-run terminal
+    # outcome (APPLICATION_FAILED) but no this-run SELECTED_AUTO.
+    assert store.count_state_transitions_since(
+        {JobState.SELECTED_AUTO}, pipeline.context.started_at.isoformat()
+    ) == 1
+    assert store.count_state_transitions_since(
+        {JobState.SUBMITTED, JobState.APPLICATION_FAILED, JobState.ALREADY_APPLIED},
+        pipeline.context.started_at.isoformat(),
+    ) == 1
+
+
+def test_deferred_accounting_excludes_redeferrals(monkeypatch):
+    """Run 20260816T085126789297Z: plan.deferred (878) includes candidates
+    already DEFERRED before the run (re-deferrals — no new transition).  The
+    validator must compare new_deferred (831) against the plan's genuinely
+    NEW deferrals only."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+    # 2 candidates already DEFERRED in a prior run — re-deferrals.
+    for i in range(2):
+        store.create(f"redeferred_{i}")
+        store.transition(f"redeferred_{i}", JobState.ELIGIBLE)
+        store.transition(f"redeferred_{i}", JobState.DEFERRED)
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    set_clock("2026-08-16T09:07:36+00:00")
+    # 3 genuinely NEW deferrals this run.
+    for i in range(3):
+        store.create(f"new_{i}")
+        store.transition(f"new_{i}", JobState.ELIGIBLE)
+        store.transition(f"new_{i}", JobState.DEFERRED)
+
+    # The plan lists all 5; the validator must account for the 2 re-deferrals.
+    plan = SimpleNamespace(
+        deferred=[
+            SimpleNamespace(opportunity=SimpleNamespace(job_id=f"redeferred_{i}"))
+            for i in range(2)
+        ]
+        + [
+            SimpleNamespace(opportunity=SimpleNamespace(job_id=f"new_{i}"))
+            for i in range(3)
+        ]
+    )
+    pipeline.context.application_plan = plan
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    pipeline._validate_artifacts(result)  # new_deferred(3) == plan new (5-2)
+
+    # Sanity: the old comparison (new_deferred vs len(plan.deferred)) fails.
+    assert store.count_deferred_since(
+        pipeline.context.started_at.isoformat()
+    ) == 3
+    assert len(plan.deferred) == 5
+
+
+def test_deferred_accounting_mismatch_still_detected(monkeypatch):
+    """A genuine deferred accounting break (plan says N new deferrals, store
+    recorded fewer) must still fail the validator."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 8, 51, 27, tzinfo=timezone.utc)
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-16T09:07:36+00:00")
+    # Plan says 3 new deferrals; only 2 were actually deferred this run.
+    store.create("new_0")
+    store.transition("new_0", JobState.ELIGIBLE)
+    store.transition("new_0", JobState.DEFERRED)
+    store.create("new_1")
+    store.transition("new_1", JobState.ELIGIBLE)
+    store.transition("new_1", JobState.DEFERRED)
+    store.create("planned_but_lost")
+    store.transition("planned_but_lost", JobState.ELIGIBLE)
+    # no DEFERRED transition — the defer was lost
+
+    plan = SimpleNamespace(
+        deferred=[
+            SimpleNamespace(opportunity=SimpleNamespace(job_id=f"new_{i}"))
+            for i in range(2)
+        ]
+        + [
+            SimpleNamespace(opportunity=SimpleNamespace(job_id="planned_but_lost"))
+        ]
+    )
+    pipeline.context.application_plan = plan
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    with pytest.raises(RuntimeError) as exc:
+        pipeline._validate_artifacts(result)
+    assert "Deferred accounting mismatch" in str(exc.value)
+
+
 class _DictJob(dict):
     """Minimal dict-like job for pipeline helper tests."""
 
