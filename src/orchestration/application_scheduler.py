@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from src.orchestration.capacity_planner import ApplicationPlan, PlannedApplication, DeferredOpportunity
 from src.orchestration.explanation import DecisionExplanation
 from src.orchestration.opportunity_repository import OpportunityRepository
+from src.legacy_apply_agent import ManualReviewRequired
 
 
 @dataclass
@@ -126,6 +127,52 @@ class ApplicationScheduler:
                     summary.ats_queued += 1
                 else:
                     summary.external_queued += 1
+            except ManualReviewRequired as exc:
+                # First-class MANUAL_REVIEW outcome (mirrors the legacy apply
+                # path in legacy_apply_agent.run_application_batch): the
+                # questionnaire needs human attention — route the job to the
+                # manual-review queue instead of counting a failed AUTO
+                # execution.  APPLICATION_FAILED records are re-acquired and
+                # re-planned AUTO on every later run (they are not in the
+                # ledger's applied set), so treating manual review as a
+                # failure created an unbounded re-attempt loop (run
+                # 20260816T101642791102Z: the same 7 jobs failed again).
+                opp = planned.opportunity
+                reason = str(exc)
+                summary.manual_review += 1
+                self._repo.mark_status(
+                    opp.job_id,
+                    "MANUAL_REVIEW",
+                    explanation=reason,
+                )
+                if self._enqueue_fn:
+                    self._enqueue_fn(
+                        job=opp,
+                        score=int(
+                            planned.explanation.final_score
+                            if planned.explanation
+                            else 0
+                        ),
+                        reason=f"Manual review: {reason}",
+                        run_id=run_id,
+                        mode="MANUAL_REVIEW",
+                    )
+                if self._exec_context:
+                    self._exec_context.route(
+                        opp,
+                        strategy="MANUAL_REVIEW",
+                        reason=reason,
+                        lifecycle=self._lifecycle,
+                    )
+                if self._ledger:
+                    self._ledger.record(
+                        opp,
+                        "manual_review",
+                        meta={
+                            "mode": "AUTO_MANUAL_REVIEW",
+                            "reason": reason,
+                        },
+                    )
             except Exception as exc:
                 error = f"Failed to execute {planned.opportunity.job_id}: {exc}"
                 summary.errors.append(error)

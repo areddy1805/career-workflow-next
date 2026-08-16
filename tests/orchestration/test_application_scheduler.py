@@ -13,6 +13,7 @@ from src.orchestration.explanation import DecisionExplanation
 from src.orchestration.opportunity import ApplicationOpportunity
 from src.orchestration.lifecycle import OpportunityStatus
 from src.orchestration.job_lifecycle import JobLifecycleStore, JobState
+from src.legacy_apply_agent import ManualReviewRequired
 from src.orchestration.execution_context import PipelineExecutionContext
 from src.application.ledger import ApplicationLedger
 from src.orchestration.opportunity_repository import OpportunityRepository
@@ -345,3 +346,43 @@ class TestSchedulerAccountingRegression:
         summary = scheduler.execute(_make_plan(planned_jobs=["str1"]))
         assert summary.auto_applied == 0
         assert len(summary.errors) == 1
+        assert lifecycle.current_state("str1") == JobState.APPLICATION_FAILED
+
+    def test_manual_review_required_routes_to_manual_review(self, tmp_path):
+        """Run 20260816T101642791102Z: ManualReviewRequired must be a
+        first-class MANUAL_REVIEW outcome (mirrors the legacy apply path),
+        NOT a failed AUTO execution — APPLICATION_FAILED jobs are re-planned
+        AUTO and re-fail on every later run (the observed 7-job loop)."""
+        lifecycle = JobLifecycleStore(":memory:")
+        lifecycle.create("mr1", title="Engineer", company="Acme")
+
+        enqueued = []
+
+        def _enqueue(job, score, reason, run_id, mode=None):
+            enqueued.append((job.job_id, score, mode))
+
+        ledger = ApplicationLedger(path=":memory:")
+        repo = OpportunityRepository(ledger)
+        exec_ctx = PipelineExecutionContext("test-run", tmp_path)
+        scheduler = ApplicationScheduler(
+            opportunity_repo=repo,
+            process_job_fn=lambda opp: (_ for _ in ()).throw(
+                ManualReviewRequired(
+                    "Questionnaire requires manual review: 2 unresolved question(s)"
+                )
+            ),
+            enqueue_external_fn=_enqueue,
+            exec_context=exec_ctx,
+            ledger=ledger,
+            lifecycle=lifecycle,
+        )
+        summary = scheduler.execute(_make_plan(planned_jobs=["mr1"]))
+
+        assert summary.manual_review == 1
+        assert summary.auto_applied == 0
+        assert summary.errors == []  # first-class outcome, not an error
+        # Routed to the manual-review queue with the explicit mode override.
+        assert enqueued == [("mr1", 80, "MANUAL_REVIEW")]
+        # Lifecycle: SELECTED_AUTO -> ROUTED_MANUAL; nothing failed.
+        assert lifecycle.current_state("mr1") == JobState.ROUTED_MANUAL
+        assert lifecycle.count_by_state(JobState.APPLICATION_FAILED) == 0

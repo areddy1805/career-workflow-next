@@ -419,6 +419,102 @@ def test_deferred_accounting_excludes_redeferrals(monkeypatch):
     assert len(plan.deferred) == 5
 
 
+def test_validator_accepts_auto_job_routed_to_manual_review(monkeypatch):
+    """Run 20260816T101642791102Z: an AUTO job whose questionnaire requires
+    manual review is routed to ROUTED_MANUAL as a first-class outcome.  The
+    run-scoped AUTO identity must credit SELECTED_AUTO -> ROUTED_MANUAL the
+    same way it credits SUBMITTED/APPLICATION_FAILED/ALREADY_APPLIED."""
+    from datetime import datetime, timezone
+
+    pipeline = CareerWorkflowPipeline(dry_run=True, max_applications=100)
+    pipeline.stage_statuses["selection"] = StageStatus.SUCCESS
+    pipeline.stage_statuses["application"] = StageStatus.SUCCESS
+    store = pipeline.context.lifecycle
+
+    pipeline.context.started_at = datetime(2026, 8, 16, 10, 16, 43, tzinfo=timezone.utc)
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-16T10:16:43+00:00")
+
+    # 1 submitted + 1 failed + 1 auto-manual-review (routed this run).
+    store.create("sub")
+    store.transition("sub", JobState.ELIGIBLE)
+    store.transition("sub", JobState.SELECTED_AUTO)
+    store.transition("sub", JobState.SUBMITTED)
+    store.create("failed")
+    store.transition("failed", JobState.ELIGIBLE)
+    store.transition("failed", JobState.SELECTED_AUTO)
+    store.transition("failed", JobState.APPLICATION_FAILED)
+    store.create("manual_review")
+    store.transition("manual_review", JobState.ELIGIBLE)
+    store.transition("manual_review", JobState.SELECTED_AUTO)
+    store.transition("manual_review", JobState.ROUTED_MANUAL)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+    )
+    pipeline._validate_artifacts(result)
+
+    # A planned-MANUAL job (never SELECTED_AUTO) must NOT inflate the term.
+    store.create("planned_manual")
+    store.transition("planned_manual", JobState.ELIGIBLE)
+    store.transition("planned_manual", JobState.ROUTED_MANUAL)
+    assert store.count_both_states_since(
+        JobState.SELECTED_AUTO, JobState.ROUTED_MANUAL,
+        pipeline.context.started_at.isoformat(),
+    ) == 1
+    pipeline._validate_artifacts(
+        PipelineResult.from_lifecycle(run_id="test", status="SUCCESS", lifecycle=store)
+    )
+
+
+def test_result_exposes_explicit_run_scope(monkeypatch):
+    """PipelineResult must expose cumulative (store-wide) AND this-run
+    counters side by side so consumers never mistake one for the other
+    (run 20260816T101642791102Z: result selected=98/submitted=86 are
+    cumulative; this run was selected=8/submitted=1)."""
+    from datetime import datetime, timezone
+    from src.orchestration.job_lifecycle import JobLifecycleStore as _Store
+
+    store = _Store(":memory:")
+    set_clock = _freeze_lifecycle_clock(monkeypatch, "2026-08-13T00:00:00+00:00")
+    store.create("old1")
+    store.transition("old1", JobState.ELIGIBLE)
+    store.transition("old1", JobState.SELECTED_AUTO)
+    store.transition("old1", JobState.SUBMITTED)
+    store.create("old2")
+    store.transition("old2", JobState.ELIGIBLE)
+    store.transition("old2", JobState.SELECTED_AUTO)
+    store.transition("old2", JobState.APPLICATION_FAILED)
+
+    run_start = datetime(2026, 8, 16, 10, 16, 43, tzinfo=timezone.utc)
+    set_clock(run_start.isoformat())
+    store.create("new1")
+    store.transition("new1", JobState.ELIGIBLE)
+    store.transition("new1", JobState.SELECTED_AUTO)
+    store.transition("new1", JobState.SUBMITTED)
+
+    result = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store,
+        run_start=run_start.isoformat(),
+    )
+    # Cumulative (store-wide) projections.
+    assert result.selected == 3  # all three ever passed SELECTED_AUTO
+    assert result.submitted == 2
+    assert result.application_failed == 1
+    assert result.metric_scope == "cumulative"
+    # This-run projections.
+    assert result.selected_this_run == 1
+    assert result.submitted_this_run == 1
+    assert result.application_failed_this_run == 0
+    assert result.stuck_this_run == 0
+
+    # Without run_start the this-run fields stay 0 (explicit, not guessed).
+    bare = PipelineResult.from_lifecycle(
+        run_id="test", status="SUCCESS", lifecycle=store
+    )
+    assert bare.selected_this_run == 0
+    assert bare.metric_scope == "cumulative"
+
+
 def test_deferred_accounting_mismatch_still_detected(monkeypatch):
     """A genuine deferred accounting break (plan says N new deferrals, store
     recorded fewer) must still fail the validator."""

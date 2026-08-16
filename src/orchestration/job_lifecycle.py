@@ -541,6 +541,29 @@ class JobLifecycleStore:
             )
         )
 
+    def count_both_states_since(
+        self, state_a: JobState, state_b: JobState, since: str
+    ) -> int:
+        """Records that reached BOTH ``state_a`` and ``state_b`` at/after
+        ``since`` (each record counted once).
+
+        Used by the AUTO accounting validator to count selected jobs that
+        were routed to MANUAL_REVIEW mid-execution (SELECTED_AUTO +
+        ROUTED_MANUAL in the same run) — a terminal AUTO outcome that is
+        neither SUBMITTED/APPLICATION_FAILED/ALREADY_APPLIED nor stuck."""
+        return sum(
+            1
+            for r in self._records.values()
+            if any(
+                t.to_state == state_a and t.timestamp >= since
+                for t in r.transitions
+            )
+            and any(
+                t.to_state == state_b and t.timestamp >= since
+                for t in r.transitions
+            )
+        )
+
     def find_by_routing_code(self, code: str) -> list[JobLifecycleRecord]:
         state = ROUTING_CODE_TO_STATE.get(code)
         if state is None:
