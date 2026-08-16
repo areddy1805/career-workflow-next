@@ -57,6 +57,21 @@ def _is_pre_commit(lifecycle, job_id: str) -> bool:
     return record is not None and record.current_state in _PRE_COMMIT_STATES
 
 
+def _is_selectable(lifecycle, job_id: str) -> bool:
+    """True when a planned-AUTO job may carry a SELECTED_AUTO entry this run.
+
+    SELECTED_AUTO is the per-run budget-consumption accounting path, not the
+    eligibility pool: the ApplicationScheduler executes EVERY plan.planned
+    AUTO job (fresh, revisited DEFERRED, previously failed re-attempts, ...),
+    so every one of them must record a SELECTED_AUTO transition this run for
+    the run-scoped AUTO identity (selected == terminal + stuck) to hold.  The
+    eligibility-pool guard (_is_pre_commit) still governs classification;
+    committed prior states do not block the audit trail of an actual
+    execution attempt.
+    """
+    return lifecycle.get(job_id) is not None
+
+
 def _mode_to_job_state(mode: str) -> JobState | None:
     """Map a CapacityPlanner mode string to a JobState."""
     mapping = {
@@ -1275,10 +1290,13 @@ class CareerWorkflowPipeline:
             )
 
         # Record SELECTED jobs in exec_context (lifecycle transitions via
-        # exec_context). Only pre-commit jobs may be selected.
+        # exec_context). Only pre-commit jobs may be selected — except
+        # previously DEFERRED candidates, which re-enter SELECTED_AUTO when
+        # this run revisits and plans them as AUTO (canonical budget path;
+        # see _is_selectable).
         for j in selected_jobs:
             job_id = str(j.job_id)
-            if not _is_pre_commit(self.context.lifecycle, job_id):
+            if not _is_selectable(self.context.lifecycle, job_id):
                 continue
             self.exec_context.select(
                 j,
@@ -1711,8 +1729,14 @@ class CareerWorkflowPipeline:
 
     def report(self) -> None:
         rows = self.context.ledger.analytics_rows()
-        # submitted_this_run comes from the lifecycle store — the single source of truth.
-        run_submitted = self.context.lifecycle.count_by_state(JobState.SUBMITTED)
+        # submitted_this_run comes from the lifecycle store — the single
+        # source of truth.  The store is cumulative across runs, so count
+        # SUBMITTED transitions that occurred after THIS run started (a
+        # global count_by_state would report historical submissions too).
+        run_start = self.context.started_at.isoformat()
+        run_submitted = self.context.lifecycle.count_state_transitions_since(
+            {JobState.SUBMITTED}, run_start
+        )
         snapshot = build_report_snapshot(rows, submitted_this_run=run_submitted)
 
         self.context.report_snapshot = snapshot
@@ -2060,45 +2084,82 @@ class CareerWorkflowPipeline:
         diagnostics.extend(lifecycle_diagnostics)
 
         if selection_ok:
-            # V2 accounting: selected (AUTO) must equal submitted + application_failed + already_applied
-            # Both selected and submitted/application_failed/already_applied are DERIVED from
-            # the same JobLifecycleStore — they MUST match by construction.
-            auto_breakdown = (
-                result.submitted + result.application_failed + result.already_applied
+            # ── Run-scoped AUTO accounting (V2) ────────────────────────
+            # The lifecycle store is cumulative across runs, so the identity
+            # is verified per-run on transitions that occurred AFTER the run
+            # started (started_at), never on absolute current-state counts:
+            #   selected_this_run == submitted_this_run
+            #                    + application_failed_this_run
+            #                    + already_applied_this_run
+            #                    + stuck_this_run (selected this run, no terminal)
+            # Every AUTO-planned job must re-enter SELECTED_AUTO this run
+            # (including revisited DEFERRED candidates — see _is_selectable)
+            # and reach a terminal AUTO outcome by run end.  Historical
+            # records from earlier runs are excluded: a fresh run must not
+            # fail because a legacy job was consumed before SELECTED_AUTO
+            # existed or was interrupted mid-run.
+            run_start = self.context.started_at.isoformat()
+            selected_this_run = self.context.lifecycle.count_state_transitions_since(
+                {JobState.SELECTED_AUTO}, run_start
             )
-            # V2 accounting: selected (historical) must equal terminal outcomes
-            # plus jobs still in SELECTED_AUTO (not yet applied).
+            terminal_this_run = self.context.lifecycle.count_state_transitions_since(
+                {
+                    JobState.SUBMITTED,
+                    JobState.APPLICATION_FAILED,
+                    JobState.ALREADY_APPLIED,
+                },
+                run_start,
+            )
+            stuck_this_run = self.context.lifecycle.count_stuck_selected_since(
+                run_start
+            )
+            if selected_this_run != terminal_this_run + stuck_this_run:
+                diagnostics.append(
+                    f"AUTO accounting mismatch: selected_this_run({selected_this_run}) "
+                    f"!= submitted+application_failed+already_applied+stuck_selected"
+                    f"({terminal_this_run}+{stuck_this_run}={
+                        terminal_this_run + stuck_this_run
+                    })"
+                )
+            # At run end, no jobs should remain in SELECTED_AUTO (this run's
+            # or a legacy leftover), unless the pipeline didn't attempt any
+            # applications (e.g. test mode, dry run with no planned jobs).
             stuck_in_selected = self.context.lifecycle.count_by_state(
                 JobState.SELECTED_AUTO
             )
-            if result.selected != auto_breakdown + stuck_in_selected:
-                diagnostics.append(
-                    f"AUTO accounting mismatch: selected({result.selected}) != "
-                    f"submitted+application_failed+already_applied+stuck_selected"
-                    f"({auto_breakdown}+{stuck_in_selected}={(auto_breakdown + stuck_in_selected)})"
-                )
-            # At run end, no jobs should remain in SELECTED_AUTO,
-            # unless the pipeline didn't attempt any applications
-            # (e.g. test mode, dry run with no planned jobs).
-            if stuck_in_selected > 0 and application_ok and auto_breakdown > 0:
+            if stuck_in_selected > 0 and application_ok and terminal_this_run > 0:
                 diagnostics.append(
                     f"Stuck jobs in SELECTED_AUTO: {stuck_in_selected} jobs were "
                     f"selected but never reached a terminal outcome"
                 )
 
-            # V2 accounting: deferred should match plan deferred count. The
-            # lifecycle store is cumulative across runs, so compare this run's
-            # NEW DEFERRED transitions (after the run started) with the plan
-            # instead of the absolute current-state count.
+            # ── Run-scoped deferred accounting (V2) ────────────────────
+            # Compare THIS run's new DEFERRED transitions against the plan's
+            # genuinely-new deferrals.  plan.deferred can also list candidates
+            # that were already committed before the run started (deferred in
+            # an earlier run, already applied, previously failed, ...): the
+            # planner only sees the classified pool and the ledger's applied
+            # set, while the lifecycle pre-commit guard correctly produces no
+            # new transition for them.  Those re-planned committed candidates
+            # are excluded from the expected count.
             plan = getattr(self.context, "application_plan", None)
             if plan is not None:
                 planned_deferred = len(plan.deferred)
-                run_start = self.context.started_at.isoformat()
+                committed_before = sum(
+                    1
+                    for d in plan.deferred
+                    if self.context.lifecycle.committed_before(
+                        d.opportunity.job_id, run_start
+                    )
+                )
+                expected_new_deferred = planned_deferred - committed_before
                 new_deferred = self.context.lifecycle.count_deferred_since(run_start)
-                if new_deferred != planned_deferred:
+                if new_deferred != expected_new_deferred:
                     diagnostics.append(
                         f"Deferred accounting mismatch: new_deferred({new_deferred}) != "
-                        f"plan.deferred({planned_deferred})"
+                        f"plan.deferred_new({expected_new_deferred}) "
+                        f"[plan.deferred total {planned_deferred}, "
+                        f"{committed_before} committed before run]"
                     )
 
         if diagnostics:

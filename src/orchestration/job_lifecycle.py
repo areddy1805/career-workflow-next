@@ -94,6 +94,17 @@ TERMINAL_STATES: frozenset[JobState] = frozenset({
 })
 
 
+# States from which a job may (re)enter the eligibility pool.  Everything
+# else is committed: re-classification must never resurrect a committed job.
+_PRE_COMMIT_STATES: frozenset[JobState] = frozenset(
+    {
+        JobState.ACQUIRED,
+        JobState.CLASSIFYING,
+        JobState.ELIGIBLE,
+    }
+)
+
+
 QUEUED_STATES: frozenset[JobState] = frozenset({
     JobState.ROUTED_MANUAL,
     JobState.ROUTED_ATS,
@@ -462,6 +473,73 @@ class JobLifecycleStore:
                         count += 1
                     break
         return count
+
+    def last_deferred_at(self, job_id: str) -> Optional[str]:
+        """Timestamp of the most recent DEFERRED transition for ``job_id``,
+        or None if the record does not exist or was never deferred.
+
+        Used by the accounting validator to distinguish this run's NEW
+        deferrals (no prior DEFERRED transition) from re-deferrals of
+        candidates already deferred in an earlier run (which correctly
+        produce no new transition)."""
+        record = self._records.get(job_id)
+        if record is None:
+            return None
+        for t in reversed(record.transitions):
+            if t.to_state == JobState.DEFERRED:
+                return t.timestamp
+        return None
+
+    def committed_before(self, job_id: str, since: str) -> bool:
+        """True when the record reached a committed state (anything other
+        than ACQUIRED/CLASSIFYING/ELIGIBLE) before ``since``.
+
+        The planner may re-plan committed candidates (already deferred,
+        already applied, previously failed, ...) as DEFERRED because it only
+        sees the classified pool and the ledger's applied set.  Those
+        candidates correctly produce no new DEFERRED transition (the
+        pre-commit guard in select()), so the deferred validator must
+        exclude them from the plan's expected NEW deferrals."""
+        record = self._records.get(job_id)
+        if record is None:
+            return False
+        return any(
+            t.to_state not in _PRE_COMMIT_STATES and t.timestamp < since
+            for t in record.transitions
+        )
+
+    def count_state_transitions_since(
+        self, states: set[JobState], since: str
+    ) -> int:
+        """Count records that reached any of ``states`` at/after ``since``
+        (ISO timestamp).  Each record is counted at most once regardless of
+        how many matching transitions it carries.
+
+        Run-scoped projection: the store is cumulative across runs, so this
+        method (not ``count_by_state``) is what the per-run accounting
+        validator compares against the per-run plan."""
+        return sum(
+            1
+            for r in self._records.values()
+            if any(
+                t.to_state in states and t.timestamp >= since
+                for t in r.transitions
+            )
+        )
+
+    def count_stuck_selected_since(self, since: str) -> int:
+        """Records still in SELECTED_AUTO whose (most recent) selection
+        happened at/after ``since`` — jobs selected by this run that never
+        reached a terminal AUTO outcome."""
+        return sum(
+            1
+            for r in self._records.values()
+            if r.current_state == JobState.SELECTED_AUTO
+            and any(
+                t.to_state == JobState.SELECTED_AUTO and t.timestamp >= since
+                for t in r.transitions
+            )
+        )
 
     def find_by_routing_code(self, code: str) -> list[JobLifecycleRecord]:
         state = ROUTING_CODE_TO_STATE.get(code)
