@@ -52,6 +52,17 @@ FROZEN_TABLES = {
         "event_id", "event_type", "aggregate_id", "aggregate_type",
         "occurred_at", "payload_json", "trace_id",
     },
+    # SLICE 5 (migration v2): contextual value policy + submitted values.
+    "field_value_policies": {
+        "policy_id", "field_intent", "profile_id", "ground_truth_ref",
+        "rules_json", "stats_json", "status", "created_at", "activated_at",
+    },
+    "application_field_values": {
+        "id", "session_id", "job_id", "field_intent", "recommended_value",
+        "recommendation_source", "confidence", "user_override",
+        "submitted_value", "outcome", "profile_id", "job_context_json",
+        "created_at", "supersedes",
+    },
 }
 
 
@@ -111,7 +122,7 @@ def test_migrate_idempotent(db_path):
 
 def test_version_gate_skips_migrations_when_already_applied(db_path):
     conn = connect(db_path)
-    conn.execute("PRAGMA user_version = 1")
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     migrate(conn)  # no tables exist, but version gate must skip
     assert _tables(conn) == set()
     conn.close()

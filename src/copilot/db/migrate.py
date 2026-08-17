@@ -5,24 +5,34 @@ the frozen table set from 02_ARCHITECTURE.md §7.8 is not polluted by a
 bookkeeping table. Migrations run transactionally: each statement is applied
 inside one transaction, so a broken migration rolls back completely and
 leaves no partial schema and an unchanged version.
+
+Version ladder:
+  v1  schema.sql     — frozen §7.8 table set (CP-0-02)
+  v2  schema_v2.sql  — SLICE 5: field_value_policies + application_field_values
 """
 
 import sqlite3
 
 from src.copilot.exceptions import CopilotError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+#: Migration body filename per schema version; each body is one
+#: transactional apply.
+_MIGRATION_BODIES: dict[int, str] = {1: "schema.sql", 2: "schema_v2.sql"}
 
 
 class MigrationError(CopilotError):
     """Raised when a migration fails to apply; the transaction is rolled back."""
 
 
-def _load_schema_sql() -> str:
-    """Return the body of ``schema.sql`` (migration v1)."""
+def _load_schema_sql(version: int) -> str:
+    """Return the body of the migration SQL file for ``version``."""
     from pathlib import Path
 
-    return (Path(__file__).parent / "schema.sql").read_text(encoding="utf-8")
+    return (Path(__file__).parent / _MIGRATION_BODIES[version]).read_text(
+        encoding="utf-8"
+    )
 
 
 def _split_statements(sql: str) -> list[str]:
@@ -59,9 +69,10 @@ def apply_sql(conn: sqlite3.Connection, sql: str) -> None:
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    """Apply pending migrations; no-op when already at SCHEMA_VERSION."""
+    """Apply pending migrations in order; no-op when already at SCHEMA_VERSION."""
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current >= SCHEMA_VERSION:
         return
-    apply_sql(conn, _load_schema_sql())
+    for version in range(current + 1, SCHEMA_VERSION + 1):
+        apply_sql(conn, _load_schema_sql(version))
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

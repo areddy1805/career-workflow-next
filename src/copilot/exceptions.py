@@ -20,3 +20,10 @@ class ClosedOpportunityError(CopilotError):
 
 class CopilotConfigurationError(CopilotError):
     """Raised when the Copilot configuration file is invalid or unreadable."""
+
+
+class PolicyStateError(CopilotError):
+    """A field-value policy transition is invalid (e.g. activating a non-draft).
+
+    Drafts are never auto-activated; only an explicit user action may move a
+    policy draft -> active (SLICE 5)."""

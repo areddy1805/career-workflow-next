@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.copilot.auth import require_ext_token, require_loopback, pair
 from src.copilot.groundtruth import (
@@ -260,3 +260,152 @@ def ext_answer_lock(question_fp: str, profile_id: str = "ai") -> dict[str, Any]:
 
 
 __all__ = ["router"]
+
+
+# ------------------------------------------------------------------ SLICE 5
+# Contextual value policy + submitted field values. Owned by this slice only:
+# no session/event/ledger endpoints here (parent agent owns those).
+# Idempotency key for submitted values: (session_id, job_id, field_intent).
+
+
+@router.get("/policies", dependencies=[Depends(require_ext_token)])
+def ext_policies(profile_id: str = "ai") -> dict[str, Any]:
+    """List field value policies (active + draft) for a profile (SLICE 5).
+
+    Seed profile policies (config/policy_rules.yaml) are merged in as active;
+    DB rows carry learned drafts and user-activated policies.
+    """
+    from src.copilot.db.db import open_copilot_db
+    from src.copilot.policy.loader import seed_policies
+    from src.copilot.policy.store import list_policies
+
+    conn = open_copilot_db()
+    try:
+        merged: dict[str, dict[str, Any]] = {
+            p.policy_id: p.to_dict() for p in seed_policies(profile_id=profile_id)
+        }
+        for p in list_policies(conn, profile_id=profile_id):
+            merged[p.policy_id] = p.to_dict()
+        ordered = sorted(
+            merged.values(),
+            key=lambda p: (p["status"] != "active", p["created_at"] or ""),
+        )
+        return {"profile_id": profile_id, "policies": ordered}
+    finally:
+        conn.close()
+
+
+@router.get("/policies/recommend", dependencies=[Depends(require_ext_token)])
+def ext_recommend(
+    request: Request, field_intent: str, profile_id: str = "ai"
+) -> dict[str, Any]:
+    """Contextual value recommendation (SLICE 5, resolution layer L4).
+
+    job_context is built from the remaining query params (e.g.
+    job_priority=high, company_type=startup, remote_required=true).
+    """
+    from src.copilot.db.db import open_copilot_db
+    from src.copilot.policy.engine import recommend
+
+    job_context = {
+        k: v
+        for k, v in request.query_params.items()
+        if k not in ("field_intent", "profile_id")
+    }
+    conn = open_copilot_db()
+    try:
+        return recommend(field_intent, profile_id, job_context, conn)
+    finally:
+        conn.close()
+
+
+@router.post(
+    "/policies/{policy_id}/activate", dependencies=[Depends(require_ext_token)]
+)
+def ext_activate_policy(policy_id: str) -> dict[str, Any]:
+    """Explicit user activation of a draft policy: draft -> active only."""
+    from src.copilot.db.db import open_copilot_db
+    from src.copilot.exceptions import PolicyStateError
+    from src.copilot.policy.loader import seed_policies
+    from src.copilot.policy.store import activate_policy
+
+    if any(p.policy_id == policy_id for p in seed_policies()):
+        raise HTTPException(
+            status_code=409, detail=f"seed policy {policy_id} is already active"
+        )
+    conn = open_copilot_db()
+    try:
+        try:
+            updated = activate_policy(conn, policy_id)
+        except PolicyStateError as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        if updated is None:
+            raise HTTPException(status_code=404, detail="policy not found")
+        return {
+            "policy_id": policy_id,
+            "status": updated.status,
+            "activated_at": updated.activated_at,
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/field-values", dependencies=[Depends(require_ext_token)])
+def ext_record_field_value(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record a submitted field value (append-only evidence, idempotent).
+
+    Idempotency key: (session_id, job_id, field_intent). Re-POSTing the same
+    key returns the original row id and inserts nothing.
+    """
+    missing = [
+        k
+        for k in ("session_id", "job_id", "field_intent", "submitted_value")
+        if not payload.get(k)
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=422, detail=f"missing fields: {', '.join(missing)}"
+        )
+    from src.copilot.db.db import open_copilot_db
+    from src.copilot.policy.store import record_submitted
+
+    conn = open_copilot_db()
+    try:
+        row_id = record_submitted(
+            field_intent=payload["field_intent"],
+            profile_id=payload.get("profile_id", "ai"),
+            session_id=payload["session_id"],
+            job_id=payload["job_id"],
+            recommended=payload.get("recommended_value"),
+            source=payload.get("recommendation_source"),
+            confidence=payload.get("confidence"),
+            user_override=payload.get("user_override"),
+            submitted=payload["submitted_value"],
+            outcome=payload.get("outcome"),
+            conn=conn,
+            job_context=payload.get("job_context"),
+        )
+        return {"id": row_id, "field_intent": payload["field_intent"]}
+    finally:
+        conn.close()
+
+
+@router.get(
+    "/field-values/{field_intent}/history", dependencies=[Depends(require_ext_token)]
+)
+def ext_field_value_history(
+    field_intent: str, profile_id: str = "ai"
+) -> dict[str, Any]:
+    """Chronological submitted values for one field intent (append-only evidence)."""
+    from src.copilot.db.db import open_copilot_db
+    from src.copilot.policy.store import history
+
+    conn = open_copilot_db()
+    try:
+        return {
+            "field_intent": field_intent,
+            "profile_id": profile_id,
+            "values": history(conn, field_intent, profile_id),
+        }
+    finally:
+        conn.close()

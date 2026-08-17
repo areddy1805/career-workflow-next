@@ -1,0 +1,28 @@
+# config/policy_rules.yaml — SLICE 5 seed profile policy rules.
+#
+# Loaded by src/copilot/policy/loader.py (env override: POLICY_RULES_CONFIG).
+# Seed policies are always active and runtime-read; the loader never writes
+# them to the DB. Values are NEVER hardcoded here: rules reference the source
+# via `recommended_from` ("profile.<key>" = config/candidate_profile.py,
+# "ground_truth.<field>" = config/ground_truth.yaml) and the engine resolves
+# them at recommend time.
+#
+# Condition syntax: key=value (job_context key), multiple conjuncts joined by
+# "&" (e.g. "job_priority=high&remote_required=true").
+
+policy_rules:
+  - policy_id: "seed_notice_period_high_priority"
+    field_intent: "compensation.notice_period"
+    profile_id: "ai"
+    ground_truth_ref: "notice_period_days"
+    status: "active"
+    rules:
+      - condition: "job_priority=high"
+        recommended_from: "profile.notice_period_days"
+        rationale: >-
+          High-priority applications may recommend the candidate_profile notice
+          period while the contractual ground truth (notice_period_days) stays
+          authoritative and untouched. Value resolved at runtime from
+          candidate_profile — never hardcoded.
+        source: "profile_policy"
+        created_from_override_pattern: false
