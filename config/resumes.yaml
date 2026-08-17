@@ -1,4 +1,9 @@
+# config/resumes.yaml — resume registry (CP-0-03)
+# Single authoritative artifact currently available: Abhilash_Reddy_ResumeU.pdf
+# (generalist: Senior Software Engineer | Applied AI | AI Platforms | Full Stack).
+# Both active profiles (ai, fde) resolve to this artifact until a specialized
+# FDE resume is created. Registry endpoint reports freshness + shared status.
 AI:
-  path: docs/resume/Applied_AI.pdf
+  path: docs/resume/Abhilash_Reddy_ResumeU.pdf
 FDE:
-  path: docs/resume/Forward_Deployed.pdf
+  path: docs/resume/Abhilash_Reddy_ResumeU.pdf

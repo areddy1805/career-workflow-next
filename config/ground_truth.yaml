@@ -1,0 +1,196 @@
+# config/ground_truth.yaml — canonical candidate ground truth (CP-0-02)
+#
+# Every fact carries: value, source, tier, status, sensitivity, conflict.
+# NEVER mutated by code. LLM can never promote facts. Only explicit user
+# verification promotes a fact to TIER_0.
+#
+# Tiers: 0=user_verified, 1=resume_verified (authoritative source),
+# 2=structured_unverified, 3=deterministic_derivation, 4=user_approved_ai,
+# 5=unapproved_ai, 6=unknown.
+#
+# Sensitivities: LOW, NORMAL, STRATEGIC, HIGH_RISK (never from inference).
+#
+# Conflicts are flagged, both values preserved; the authoritative source
+# (resume, tier 1) wins for display/fill until user verification replaces it.
+# Placeholder detection: values matching the original scaffold sample data
+# (ashwini / example.com / 90000 00000) are marked PLACEHOLDER.
+
+source_artifact:
+  path: "docs/resume/Abhilash_Reddy_ResumeU.pdf"
+  title: "Abhilash Reddy — Senior Software Engineer | Applied AI | AI Platforms | Full Stack"
+  sha256: "23742017ec259d3d0cf363c140882612d313e3d98203ddd75c7a0c9c0c09f9ee"
+  extracted_at: "2026-08-17"
+
+facts:
+  first_name:
+    value: "Abhilash"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  last_name:
+    value: "Reddy"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  full_name:
+    value: "Abhilash Reddy"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  email:
+    value: "abhilashrreddy1991@gmail.com"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  phone:
+    value: "+91 78228 50365"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  city:
+    value: "Pune"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+    note: "Role locations on resume list Pune, India"
+  country:
+    value: "India"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "LOW"
+  headline:
+    value: "Senior Software Engineer | Applied AI | AI Platforms | Full Stack"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  total_experience_years:
+    value: "5"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+    note: "Resume states 5+ years; candidate_profile total_experience_years=5 (match)"
+  certification_azure_ai_engineer:
+    value: "Microsoft Certified: Azure AI Engineer Associate (AI-102)"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  education_masters:
+    value: "M.E. Mechanical Engineering — Savitribai Phule Pune University"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+    note: "candidate_profile education_history is None — promotion pending user verification"
+  education_bachelors:
+    value: "B.E. Mechanical Engineering — Savitribai Phule Pune University"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  employer_current:
+    value: "Bajaj Finserv (via Snapwork Technologies), Pune — Senior Software Engineer, Jul 2025–Present"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  employer_prior_1:
+    value: "CloudBolt Software, Pune — Software Engineer, Mar 2023–Jun 2025"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  employer_prior_2:
+    value: "Oerlikon Balzers, Pune — Software Engineer, May 2021–Mar 2023"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  employer_prior_3:
+    value: "Oerlikon Balzers India & Philippines — Business Analyst, Sep 2017–May 2021"
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  projects:
+    value: ["Career Workflow", "Pramya", "AI Customer Support Copilot", "RAG API Assistant"]
+    source: "resume"
+    tier: 1
+    status: "RESUME_VERIFIED"
+    sensitivity: "NORMAL"
+  linkedin_url:
+    value: null
+    source: "unknown"
+    tier: 6
+    status: "UNKNOWN"
+    sensitivity: "LOW"
+    note: "Resume PDF link text mangled during extraction; profile value looks placeholder — USER_VERIFICATION_REQUIRED"
+  github_url:
+    value: null
+    source: "unknown"
+    tier: 6
+    status: "UNKNOWN"
+    sensitivity: "LOW"
+    note: "Resume PDF link text mangled; USER_VERIFICATION_REQUIRED"
+  work_authorization:
+    value: null
+    source: "profile"
+    tier: 2
+    status: "STRUCTURED_UNVERIFIED"
+    sensitivity: "HIGH_RISK"
+    note: "candidate_profile claims 'Indian Citizen' — legal field, never auto-filled from unverified source"
+  visa_status:
+    value: null
+    source: "unknown"
+    tier: 6
+    status: "UNKNOWN"
+    sensitivity: "HIGH_RISK"
+  notice_period_days:
+    value: null
+    source: "unknown"
+    tier: 6
+    status: "UNKNOWN"
+    sensitivity: "STRATEGIC"
+    note: "Resume silent; candidate_profile=30 is TIER_2 STRATEGIC recommendation base, contractual value unknown"
+  current_ctc_inr:
+    value: null
+    source: "profile"
+    tier: 2
+    status: "STRUCTURED_UNVERIFIED"
+    sensitivity: "STRATEGIC"
+    note: "candidate_profile current_ctc_inr=1600000 (16 LPA)"
+  expected_ctc_inr:
+    value: null
+    source: "profile"
+    tier: 2
+    status: "STRUCTURED_UNVERIFIED"
+    sensitivity: "STRATEGIC"
+    note: "CONFLICT: candidate_profile expected_ctc_inr=2600000 (26 LPA) vs user_profile salary_target=3000000 (30 LPA)"
+  date_of_birth:
+    value: null
+    source: "never_store"
+    tier: 6
+    status: "NEVER_STORE"
+    sensitivity: "HIGH_RISK"
+    note: "Resume silent; DOB never stored or auto-filled"
+  pan_number:
+    value: null
+    source: "never_store"
+    tier: 6
+    status: "NEVER_STORE"
+    sensitivity: "HIGH_RISK"
+  aadhaar_number:
+    value: null
+    source: "never_store"
+    tier: 6
+    status: "NEVER_STORE"
+    sensitivity: "HIGH_RISK"

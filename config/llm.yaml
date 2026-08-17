@@ -17,3 +17,28 @@ providers:
     model: qwen3.5-4b
     base_url: http://127.0.0.1:8000/v1
     timeout: 120
+
+# Career Application Copilot logical inference profile (FINAL ADDENDUM):
+# career-copilot -> OMLX provider -> pramya-4b -> qwen3.5-4b.
+# Extension NEVER knows the physical model. Provider/model selection is
+# backend-owned and configuration-driven. No DeepSeek for MVP; escalation
+# only evidence-driven and provider-agnostic.
+copilot:
+  logical_profile: career-copilot
+  provider: omlx
+  model: pramya-4b
+  base_url: http://127.0.0.1:8000/v1
+  temperature: 0
+  thinking: false
+  max_tokens: 512
+  timeout: 120
+  batch:
+    max_llm_calls_per_form: 1
+    retry_on:
+      - schema_validation_failure
+      - incomplete_response
+      - low_confidence
+      - unresolved_ambiguity
+  escalation:
+    enabled: false
+    # future: provider: deepseek, model: deepseek-v4-flash (evidence-driven only)

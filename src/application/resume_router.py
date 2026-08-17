@@ -74,24 +74,21 @@ class ResumeRouter:
         )
 
     def load_resumes(self) -> Dict[str, str]:
+        # Authoritative artifact (CP-0-03): the only real resume on disk.
+        # Fallbacks must never point at files that do not exist.
+        _REAL = "docs/resume/Abhilash_Reddy_ResumeU.pdf"
         config_path = os.environ.get("RESUMES_CONFIG", "config/resumes.yaml")
         if not os.path.exists(config_path):
-            return {
-                "AI": "docs/resume/Applied_AI.pdf",
-                "FDE": "docs/resume/Forward_Deployed.pdf"
-            }
+            return {"AI": _REAL, "FDE": _REAL}
         try:
             with open(config_path, "r") as f:
                 data = yaml.safe_load(f)
                 return {
-                    "AI": data.get("AI", {}).get("path", "docs/resume/Applied_AI.pdf"),
-                    "FDE": data.get("FDE", {}).get("path", "docs/resume/Forward_Deployed.pdf")
+                    "AI": data.get("AI", {}).get("path", _REAL),
+                    "FDE": data.get("FDE", {}).get("path", _REAL),
                 }
         except Exception:
-            return {
-                "AI": "docs/resume/Applied_AI.pdf",
-                "FDE": "docs/resume/Forward_Deployed.pdf"
-            }
+            return {"AI": _REAL, "FDE": _REAL}
 
     def _score_text(self, text: str, keywords: list[str]) -> int:
         if not text:

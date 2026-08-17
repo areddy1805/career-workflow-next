@@ -33,6 +33,9 @@ app.include_router(logs_router, prefix="/api")
 app.include_router(providers_router, prefix="/api")
 app.include_router(developer_router, prefix="/api")
 app.include_router(copilot_router, prefix="/api")
+from api.routers.copilot_ext import router as copilot_ext_router
+
+app.include_router(copilot_ext_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host="127.0.0.1", port=8000, reload=True)
