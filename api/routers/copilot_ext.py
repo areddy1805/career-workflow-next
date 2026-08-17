@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.copilot.auth import require_ext_token, pair
+from src.copilot.auth import require_ext_token, require_loopback, pair
 from src.copilot.groundtruth import (
     is_placeholder,
     resolve_profile,
@@ -19,26 +19,26 @@ from src.copilot.groundtruth import (
     source_artifact,
 )
 
-router = APIRouter(prefix="/v1", tags=["copilot-ext"], dependencies=[Depends(require_ext_token)])
+router = APIRouter(prefix="/v1", tags=["copilot-ext"])
 
 
 def _err(message: str, error_type: str) -> dict[str, Any]:
     return {"error": {"type": error_type, "message": message}}
 
 
-@router.get("/health")
+@router.get("/health", dependencies=[Depends(require_loopback)])
 def ext_health() -> dict[str, Any]:
     return {"status": "ok", "service": "career-application-copilot", "version": "0.1.0"}
 
 
-@router.post("/auth/pair", dependencies=[Depends(require_ext_token)])
+@router.post("/auth/pair", dependencies=[Depends(require_loopback)])
 def ext_pair() -> dict[str, Any]:
     """Pair: returns (or rotates) the bearer token. Called once from the
     extension onboarding flow; token persisted by the extension only."""
     return {"token": pair(), "note": "store locally; never share"}
 
 
-@router.get("/config")
+@router.get("/config", dependencies=[Depends(require_ext_token)])
 def ext_config() -> dict[str, Any]:
     """Runtime config for the extension: fill thresholds, modes, versions."""
     return {
@@ -55,7 +55,7 @@ def ext_config() -> dict[str, Any]:
     }
 
 
-@router.get("/profile")
+@router.get("/profile", dependencies=[Depends(require_ext_token)])
 def ext_profile(profile_id: str = "ai") -> dict[str, Any]:
     """Canonical candidate ground truth view with conflicts + verification gates."""
     if profile_id not in ("ai", "fde", "generic"):
@@ -63,7 +63,7 @@ def ext_profile(profile_id: str = "ai") -> dict[str, Any]:
     return resolve_profile(profile_id=profile_id)
 
 
-@router.get("/evidence")
+@router.get("/evidence", dependencies=[Depends(require_ext_token)])
 def ext_evidence() -> dict[str, Any]:
     """Candidate evidence summary (certifications, projects, guardrails,
     unsupported claims, sensitive policy). Compact, no raw claim dumps."""
@@ -88,7 +88,7 @@ def ext_evidence() -> dict[str, Any]:
         return {"error": "evidence_unavailable", "message": "candidate_evidence shape changed"}
 
 
-@router.get("/resumes")
+@router.get("/resumes", dependencies=[Depends(require_ext_token)])
 def ext_resumes() -> dict[str, Any]:
     """Resume registry with freshness + sha256 per profile."""
     import yaml
@@ -119,7 +119,7 @@ def ext_resumes() -> dict[str, Any]:
     return out
 
 
-@router.post("/resolve")
+@router.post("/resolve", dependencies=[Depends(require_ext_token)])
 def ext_resolve(payload: dict[str, Any]) -> dict[str, Any]:
     """Batch field/question resolution (SLICE 2/3).
 
@@ -177,7 +177,7 @@ def ext_resolve(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-@router.get("/answers")
+@router.get("/answers", dependencies=[Depends(require_ext_token)])
 def ext_answers(profile_id: str = "ai", limit: int = 100) -> dict[str, Any]:
     """Stored answer memory for a profile (SLICE 3)."""
     from src.copilot.answerbank.store import list_answers
@@ -188,7 +188,7 @@ def ext_answers(profile_id: str = "ai", limit: int = 100) -> dict[str, Any]:
     return {"profile_id": profile_id, "answers": [r.to_dict() for r in rows]}
 
 
-@router.put("/answers")
+@router.put("/answers", dependencies=[Depends(require_ext_token)])
 def ext_answer_upsert(payload: dict[str, Any]) -> dict[str, Any]:
     """Save a reusable answer (user-approved only; explicit confirmation by
     the extension before calling this)."""
@@ -225,7 +225,7 @@ def ext_answer_upsert(payload: dict[str, Any]) -> dict[str, Any]:
     return {"question_fp": qfp, "answer": saved.to_dict()}
 
 
-@router.post("/answers/{question_fp}/confirm")
+@router.post("/answers/{question_fp}/confirm", dependencies=[Depends(require_ext_token)])
 def ext_answer_confirm(question_fp: str, profile_id: str = "ai") -> dict[str, Any]:
     """Confirm a stored answer (promotes status -> confirmed)."""
     import dataclasses
@@ -242,7 +242,7 @@ def ext_answer_confirm(question_fp: str, profile_id: str = "ai") -> dict[str, An
     return {"question_fp": question_fp, "status": "confirmed"}
 
 
-@router.post("/answers/{question_fp}/lock")
+@router.post("/answers/{question_fp}/lock", dependencies=[Depends(require_ext_token)])
 def ext_answer_lock(question_fp: str, profile_id: str = "ai") -> dict[str, Any]:
     """Lock a stored answer (pinned; never auto-overwritten)."""
     import dataclasses

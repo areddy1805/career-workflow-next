@@ -167,3 +167,4 @@ class EventNamespace(StrEnum):
     SES = "ses"
     BROWSER = "browser"
     LEARN = "learn"
+    APP = "app"  # Career Application Copilot extension application-session events (CP-0-05)
