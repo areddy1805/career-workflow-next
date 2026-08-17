@@ -15,6 +15,13 @@ from typing import Any
 
 from src.copilot.answerbank.fingerprint import normalize_label
 
+# Deterministic pre-rule: "Years of RAG experience?" -> experience.technology_years
+# (substring aliases cannot express the <tech> <-> years pattern).
+_TECH_YEARS_RE = re.compile(
+    r"years?\s+of\s+(rag|python|angular|typescript|node|sql|genai|llm|"
+    r"agentic|mcp|langchain|langgraph|fastapi|databricks|azure|aws)\s+experience"
+)
+
 
 def _default_path() -> Path:
     here = Path(__file__).resolve()
@@ -59,6 +66,9 @@ def classify(label: str | None, kind: str | None = None) -> dict[str, Any] | Non
         return None
     norm = normalize_label(label)
     intents = load_intents()
+    # Pass 0: deterministic tech-years pre-rule (most specific).
+    if _TECH_YEARS_RE.search(norm):
+        return intents.get("experience.technology_years")
     # Pass 1: alias matches (most specific first by alias length desc).
     ordered = sorted(intents.values(), key=lambda i: -max((len(a) for a in i["aliases"]), default=0))
     for intent in ordered:

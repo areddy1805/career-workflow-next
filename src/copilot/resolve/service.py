@@ -146,6 +146,19 @@ def _resolve_field_l0_l4(
 
     # ---- L3: deterministic profile facts --------------------------------
     if intent:
+        # Unsupported-claim guard runs BEFORE any L3/LLM path: metric/vendor
+        # claims are never invented, never LLM-answered (never-invent list).
+        if _is_unsupported(f.label):
+            return Resolution(
+                field_id=f.field_id,
+                intent_id=intent["id"],
+                value=None,
+                source="L6_human_review",
+                confidence=0.0,
+                status="review",
+                sensitivity="NORMAL",
+                reason="Unsupported claim (never-invent): requires human judgment; never auto-filled",
+            )
         pkey = _PROFILE_KEYS.get(intent["id"])
         if pkey and pkey in profile:
             val = profile[pkey]
@@ -160,6 +173,20 @@ def _resolve_field_l0_l4(
                     status=status,
                     sensitivity=intent["sensitivity"],
                     reason=f"candidate_profile.{pkey} (TIER_2 structured)",
+                )
+        # Per-technology years: "Years of RAG experience?" -> rag_experience_years
+        if intent["id"] == "experience.technology_years":
+            tech_val = _tech_years_value(f.label, profile)
+            if tech_val is not None:
+                return Resolution(
+                    field_id=f.field_id,
+                    intent_id=intent["id"],
+                    value=tech_val,
+                    source="L3_deterministic_tech_years",
+                    confidence=0.95,
+                    status="auto",
+                    sensitivity="NORMAL",
+                    reason="Per-technology years from candidate_profile",
                 )
 
     # ---- L4: contextual policy (SLICE 5 base) ---------------------------
@@ -294,6 +321,52 @@ def _profile_for(profile_id: str) -> dict[str, Any]:
     from config.candidate_profile import CANDIDATE_PROFILE  # type: ignore
 
     return CANDIDATE_PROFILE
+
+
+# Unsupported-claim guard (never-invent): these label patterns must NEVER be
+# answered — not by LLM, not by heuristics. Mirror of
+# candidate_evidence.py unsupported_claims.never_invent (metric claims,
+# vendor-specific tech, etc.).
+_UNSUPPORTED_PATTERNS = (
+    "roi", "% improvement", "percentage", "percent ", "number of users",
+    "user count", "vllm", "fine-tun", "finetun", " dotnet", ".net",
+    "deployed to production? ",
+)
+
+_TECH_YEARS_ALIASES = {
+    # label token -> candidate_profile key (all *_experience_years)
+    "rag": "rag_experience_years",
+    "python": "python_experience_years",
+    "angular": "angular_experience_years",
+    "typescript": "typescript_experience_years",
+    "node": "node_experience_years",
+    "sql": "sql_experience_years",
+    "genai": "genai_experience_years",
+    "llm": "llm_experience_years",
+    "agentic": "agentic_ai_experience_years",
+    "ai": "ai_experience_years",
+    "mcp": "mcp_experience_years",
+    "langchain": "langchain_experience_years",
+    "langgraph": "langgraph_experience_years",
+    "fastapi": "fastapi_experience_years",
+    "databricks": "databricks_experience_years",
+    "azure": "cloud_azure_experience_years",
+    "cloud": "cloud_azure_experience_years",
+    "aws": "aws_experience_years",
+}
+
+
+def _is_unsupported(label: str) -> bool:
+    norm = (label or "").lower()
+    return any(p in norm for p in _UNSUPPORTED_PATTERNS)
+
+
+def _tech_years_value(label: str, profile: dict[str, Any]) -> str | None:
+    norm = (label or "").lower()
+    for token, key in _TECH_YEARS_ALIASES.items():
+        if token in norm and profile.get(key) not in (None, ""):
+            return str(profile[key])
+    return None
 
 
 __all__ = ["Field", "Resolution", "resolve_batch", "TRUSTED_ANSWER_STATUSES"]
