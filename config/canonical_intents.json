@@ -14,60 +14,936 @@
     "question": "recurring application questions with stored answers"
   },
   "intents": [
-    {"id": "identity.first_name", "category": "identity", "sensitivity": "LOW", "kinds": ["text"], "aliases": ["first name", "fname", "given name"], "fill_policy": "auto"},
-    {"id": "identity.last_name", "category": "identity", "sensitivity": "LOW", "kinds": ["text"], "aliases": ["last name", "lname", "surname", "family name"], "fill_policy": "auto"},
-    {"id": "identity.full_name", "category": "identity", "sensitivity": "LOW", "kinds": ["text"], "aliases": ["full name", "candidate name", "applicant name", "your name"], "fill_policy": "auto"},
-    {"id": "identity.current_job_title", "category": "identity", "sensitivity": "NORMAL", "kinds": ["text"], "aliases": ["current job title", "current designation", "current role"], "fill_policy": "auto"},
-    {"id": "contact.email", "category": "contact", "sensitivity": "LOW", "kinds": ["email", "text"], "aliases": ["email", "email id", "e-mail", "email address", "mail id"], "fill_policy": "auto"},
-    {"id": "contact.alternate_email", "category": "contact", "sensitivity": "LOW", "kinds": ["email", "text"], "aliases": ["alternate email", "secondary email", "other email", "another email"], "fill_policy": "confirm"},
-    {"id": "contact.phone", "category": "contact", "sensitivity": "LOW", "kinds": ["tel", "text", "number"], "aliases": ["phone", "mobile", "contact number", "phone number", "mobile number", "telephone", "mobile no"], "fill_policy": "auto"},
-    {"id": "contact.alternate_phone", "category": "contact", "sensitivity": "LOW", "kinds": ["tel", "text"], "aliases": ["alternate phone", "secondary phone", "alternate mobile", "other phone"], "fill_policy": "confirm"},
-    {"id": "contact.whatsapp_number", "category": "contact", "sensitivity": "LOW", "kinds": ["tel", "text"], "aliases": ["whatsapp", "whatsapp number", "whatsapp no"], "fill_policy": "confirm"},
-    {"id": "contact.city", "category": "contact", "sensitivity": "LOW", "kinds": ["text", "select"], "aliases": ["city", "current city", "current location", "location", "present city"], "fill_policy": "auto"},
-    {"id": "contact.current_location", "category": "contact", "sensitivity": "LOW", "kinds": ["text", "select"], "aliases": ["current location", "present address", "current address"], "fill_policy": "auto"},
-    {"id": "contact.country", "category": "contact", "sensitivity": "LOW", "kinds": ["text", "select"], "aliases": ["country", "nationality", "residing country"], "fill_policy": "auto"},
-    {"id": "contact.state", "category": "contact", "sensitivity": "LOW", "kinds": ["text", "select"], "aliases": ["state", "province"], "fill_policy": "auto"},
-    {"id": "contact.zip", "category": "contact", "sensitivity": "LOW", "kinds": ["text", "number"], "aliases": ["zip", "zip code", "postal code", "pincode", "pin code"], "fill_policy": "auto"},
-    {"id": "contact.linkedin_url", "category": "contact", "sensitivity": "LOW", "kinds": ["url", "text"], "aliases": ["linkedin", "linkedin url", "linkedin profile", "linkedin link"], "fill_policy": "confirm"},
-    {"id": "contact.github_url", "category": "contact", "sensitivity": "LOW", "kinds": ["url", "text"], "aliases": ["github", "github url", "github profile", "github link", "git profile"], "fill_policy": "confirm"},
-    {"id": "contact.portfolio_url", "category": "contact", "sensitivity": "LOW", "kinds": ["url", "text"], "aliases": ["portfolio", "portfolio url", "personal website", "personal site"], "fill_policy": "confirm"},
-    {"id": "employment.current_employer", "category": "employment", "sensitivity": "NORMAL", "kinds": ["text"], "aliases": ["current employer", "current company", "present company", "present employer", "current organization"], "fill_policy": "auto"},
-    {"id": "employment.current_designation", "category": "employment", "sensitivity": "NORMAL", "kinds": ["text"], "aliases": ["current designation", "current title", "current role", "position applied", "designation"], "fill_policy": "auto"},
-    {"id": "employment.reason_for_job_change", "category": "employment", "sensitivity": "NORMAL", "kinds": ["textarea", "text"], "aliases": ["why are you looking for", "reason for job change", "reason for change", "reason for leaving", "why do you want to leave", "reason to change", "reason for switching", "looking for a new opportunity", "why are you looking"], "fill_policy": "answer"},
-    {"id": "employment.total_experience_years", "category": "experience", "sensitivity": "NORMAL", "kinds": ["select", "number", "text", "radio"], "aliases": ["total experience", "total years of experience", "years of experience", "overall experience", "work experience", "experience in years", "total work experience"], "fill_policy": "auto"},
-    {"id": "employment.total_experience_months", "category": "experience", "sensitivity": "NORMAL", "kinds": ["select", "number", "text"], "aliases": ["experience months", "total months of experience"], "fill_policy": "auto"},
-    {"id": "experience.technology_years", "category": "experience", "sensitivity": "NORMAL", "kinds": ["select", "number", "text"], "aliases": ["experience in", "years of experience in", "experience with", "expertise in"], "fill_policy": "auto"},
-    {"id": "experience.skills", "category": "experience", "sensitivity": "NORMAL", "kinds": ["textarea", "text", "checkbox"], "aliases": ["skills", "key skills", "technical skills", "skill set", "primary skills"], "fill_policy": "auto"},
-    {"id": "experience.current_project", "category": "experience", "sensitivity": "NORMAL", "kinds": ["textarea", "text"], "aliases": ["current project", "project details", "brief about project"], "fill_policy": "answer"},
-    {"id": "experience.projects", "category": "experience", "sensitivity": "NORMAL", "kinds": ["textarea", "text"], "aliases": ["projects", "project summary", "work highlights"], "fill_policy": "answer"},
-    {"id": "compensation.current_salary", "category": "compensation", "sensitivity": "STRATEGIC", "kinds": ["number", "text", "select"], "aliases": ["current ctc", "current salary", "present ctc", "present salary", "current compensation", "current annual salary", "current package", "fixed salary", "gross salary", "current income"], "fill_policy": "policy"},
-    {"id": "compensation.expected_salary", "category": "compensation", "sensitivity": "STRATEGIC", "kinds": ["number", "text", "select"], "aliases": ["expected ctc", "expected salary", "expected compensation", "expected package", "salary expectation", "salary expectations", "expected annual salary", "desired salary", "current & expected", "what is your expectation"], "fill_policy": "policy"},
-    {"id": "compensation.notice_period", "category": "compensation", "sensitivity": "STRATEGIC", "kinds": ["select", "radio", "number", "text"], "aliases": ["notice period", "notice", "current notice period", "notice period in days", "notice period in months"], "fill_policy": "policy"},
-    {"id": "compensation.notice_period_negotiable", "category": "compensation", "sensitivity": "STRATEGIC", "kinds": ["radio", "select", "checkbox"], "aliases": ["notice negotiable", "negotiable notice period", "can notice be negotiable"], "fill_policy": "policy"},
-    {"id": "availability.joining_date", "category": "availability", "sensitivity": "STRATEGIC", "kinds": ["date", "text", "select"], "aliases": ["joining date", "expected joining date", "date of joining", "availability to join", "when can you join", "joining time"], "fill_policy": "policy"},
-    {"id": "availability.immediate_join", "category": "availability", "sensitivity": "STRATEGIC", "kinds": ["radio", "select", "checkbox"], "aliases": ["immediately available", "immediate joiner", "can join immediately", "available immediately", "ready to join immediately"], "fill_policy": "policy"},
-    {"id": "preferences.remote", "category": "preferences", "sensitivity": "STRATEGIC", "kinds": ["radio", "select", "checkbox"], "aliases": ["work from home", "remote work", "remote", "hybrid work", "work mode"], "fill_policy": "policy"},
-    {"id": "preferences.relocation", "category": "preferences", "sensitivity": "STRATEGIC", "kinds": ["radio", "select", "checkbox"], "aliases": ["relocate", "relocation", "willing to relocate", "ready to relocate", "willing to move"], "fill_policy": "policy"},
-    {"id": "preferences.preferred_location", "category": "preferences", "sensitivity": "STRATEGIC", "kinds": ["text", "select"], "aliases": ["preferred location", "preferred work location", "location preference"], "fill_policy": "policy"},
-    {"id": "preferences.willing_to_travel", "category": "preferences", "sensitivity": "STRATEGIC", "kinds": ["radio", "select", "checkbox"], "aliases": ["travel", "willing to travel", "ready to travel", "travel requirements", "travelling"], "fill_policy": "policy"},
-    {"id": "preferences.work_shift", "category": "preferences", "sensitivity": "NORMAL", "kinds": ["radio", "select"], "aliases": ["shift", "work shift", "day shift", "shift preference"], "fill_policy": "confirm"},
-    {"id": "education.highest_degree", "category": "education", "sensitivity": "NORMAL", "kinds": ["select", "text"], "aliases": ["highest qualification", "highest education", "qualification", "education", "educational qualification", "degree"], "fill_policy": "auto"},
-    {"id": "education.specialization", "category": "education", "sensitivity": "NORMAL", "kinds": ["text", "select"], "aliases": ["specialization", "branch", "field of study", "stream", "discipline"], "fill_policy": "auto"},
-    {"id": "education.institution", "category": "education", "sensitivity": "NORMAL", "kinds": ["text"], "aliases": ["institution", "university", "college", "school name", "institute"], "fill_policy": "auto"},
-    {"id": "education.passing_year", "category": "education", "sensitivity": "NORMAL", "kinds": ["select", "number", "text"], "aliases": ["passing year", "year of passing", "graduation year", "year of graduation", "completed in"], "fill_policy": "auto"},
-    {"id": "education.certifications", "category": "education", "sensitivity": "NORMAL", "kinds": ["textarea", "text", "checkbox"], "aliases": ["certifications", "certificates", "professional certifications"], "fill_policy": "auto"},
-    {"id": "legal.work_authorization", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["radio", "select", "checkbox", "text"], "aliases": ["work authorization", "work authorisation", "authorized to work", "right to work", "legally authorized", "eligible to work"], "fill_policy": "never"},
-    {"id": "legal.visa_status", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["select", "radio", "text"], "aliases": ["visa", "visa status", "work visa", "visa type", "visa sponsorship"], "fill_policy": "never"},
-    {"id": "legal.requires_sponsorship", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["radio", "select", "checkbox"], "aliases": ["sponsorship", "visa sponsorship required", "need sponsorship", "require sponsorship"], "fill_policy": "never"},
-    {"id": "legal.declaration", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["checkbox", "radio"], "aliases": ["declare", "declaration", "confirm the information", "information provided is", "i agree", "consent", "terms and conditions", "authorize"], "fill_policy": "never"},
-    {"id": "legal.dob", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["date", "text"], "aliases": ["date of birth", "dob", "birth date", "birthday"], "fill_policy": "never"},
-    {"id": "legal.pan", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["text"], "aliases": ["pan", "pan number", "pan card"], "fill_policy": "never"},
-    {"id": "legal.aadhaar", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["text", "number"], "aliases": ["aadhaar", "aadhar", "aadhaar number"], "fill_policy": "never"},
-    {"id": "legal.gender", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["select", "radio"], "aliases": ["gender", "sex"], "fill_policy": "never"},
-    {"id": "legal.nationality", "category": "legal", "sensitivity": "HIGH_RISK", "kinds": ["text", "select"], "aliases": ["nationality", "citizenship"], "fill_policy": "never"},
-    {"id": "question.open_ended", "category": "question", "sensitivity": "NORMAL", "kinds": ["textarea", "text"], "aliases": [], "fill_policy": "answer"},
-    {"id": "question.why_us", "category": "question", "sensitivity": "NORMAL", "kinds": ["textarea", "text"], "aliases": ["why do you want to join", "why this company", "why should we hire", "why are you interested in this", "why us", "why our company"], "fill_policy": "answer"},
-    {"id": "question.availability_screening", "category": "question", "sensitivity": "NORMAL", "kinds": ["radio", "select", "checkbox"], "aliases": ["available to join", "can you join", "when can you start", "are you available", "ready to join"], "fill_policy": "answer"},
-    {"id": "question.yes_no", "category": "question", "sensitivity": "NORMAL", "kinds": ["radio", "select", "checkbox"], "aliases": [], "fill_policy": "answer"}
+    {
+      "id": "identity.first_name",
+      "category": "identity",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "first name",
+        "fname",
+        "given name"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "identity.last_name",
+      "category": "identity",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "last name",
+        "lname",
+        "surname",
+        "family name"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "identity.full_name",
+      "category": "identity",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "full name",
+        "candidate name",
+        "applicant name",
+        "your name"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "identity.current_job_title",
+      "category": "identity",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "current job title",
+        "current designation",
+        "current role"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.email",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "email",
+        "text"
+      ],
+      "aliases": [
+        "email",
+        "email id",
+        "e-mail",
+        "email address",
+        "mail id"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.alternate_email",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "email",
+        "text"
+      ],
+      "aliases": [
+        "alternate email",
+        "secondary email",
+        "other email",
+        "another email"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "contact.phone",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "tel",
+        "text",
+        "number"
+      ],
+      "aliases": [
+        "phone",
+        "mobile",
+        "contact number",
+        "phone number",
+        "mobile number",
+        "telephone",
+        "mobile no"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.alternate_phone",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "tel",
+        "text"
+      ],
+      "aliases": [
+        "alternate phone",
+        "secondary phone",
+        "alternate mobile",
+        "other phone"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "contact.whatsapp_number",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "tel",
+        "text"
+      ],
+      "aliases": [
+        "whatsapp",
+        "whatsapp number",
+        "whatsapp no"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "contact.city",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "city",
+        "current city",
+        "current location",
+        "location",
+        "present city"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.current_location",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "current location",
+        "present address",
+        "current address"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.country",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "country",
+        "nationality",
+        "residing country"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.state",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "state",
+        "province"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.zip",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "text",
+        "number"
+      ],
+      "aliases": [
+        "zip",
+        "zip code",
+        "postal code",
+        "pincode",
+        "pin code"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "contact.linkedin_url",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "url",
+        "text"
+      ],
+      "aliases": [
+        "linkedin",
+        "linkedin url",
+        "linkedin profile",
+        "linkedin link"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "contact.github_url",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "url",
+        "text"
+      ],
+      "aliases": [
+        "github",
+        "github url",
+        "github profile",
+        "github link",
+        "git profile"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "contact.portfolio_url",
+      "category": "contact",
+      "sensitivity": "LOW",
+      "kinds": [
+        "url",
+        "text"
+      ],
+      "aliases": [
+        "portfolio",
+        "portfolio url",
+        "personal website",
+        "personal site"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "employment.current_employer",
+      "category": "employment",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "current employer",
+        "current company",
+        "present company",
+        "present employer",
+        "current organization"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "employment.current_designation",
+      "category": "employment",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "current designation",
+        "current title",
+        "current role",
+        "position applied",
+        "designation"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "employment.reason_for_job_change",
+      "category": "employment",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text"
+      ],
+      "aliases": [
+        "why are you looking for",
+        "reason for job change",
+        "reason for change",
+        "reason for leaving",
+        "why do you want to leave",
+        "reason to change",
+        "reason for switching",
+        "looking for a new opportunity",
+        "why are you looking"
+      ],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "employment.total_experience_years",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "select",
+        "number",
+        "text",
+        "radio"
+      ],
+      "aliases": [
+        "total experience",
+        "total years of experience",
+        "years of experience",
+        "overall experience",
+        "work experience",
+        "experience in years",
+        "total work experience"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "employment.total_experience_months",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "select",
+        "number",
+        "text"
+      ],
+      "aliases": [
+        "experience months",
+        "total months of experience"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "experience.technology_years",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "select",
+        "number",
+        "text"
+      ],
+      "aliases": [
+        "experience in",
+        "years of experience in",
+        "experience with",
+        "expertise in"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "experience.skills",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text",
+        "checkbox"
+      ],
+      "aliases": [
+        "skills",
+        "key skills",
+        "technical skills",
+        "skill set",
+        "primary skills"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "experience.current_project",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text"
+      ],
+      "aliases": [
+        "about your current project",
+        "brief about project",
+        "current project",
+        "current project details",
+        "project details"
+      ],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "experience.projects",
+      "category": "experience",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text"
+      ],
+      "aliases": [
+        "key projects",
+        "major projects",
+        "project experience",
+        "project summary",
+        "projects",
+        "projects worked on",
+        "work highlights"
+      ],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "compensation.current_salary",
+      "category": "compensation",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "number",
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "current ctc",
+        "current salary",
+        "present ctc",
+        "present salary",
+        "current compensation",
+        "current annual salary",
+        "current package",
+        "fixed salary",
+        "gross salary",
+        "current income"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "compensation.expected_salary",
+      "category": "compensation",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "number",
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "expected ctc",
+        "expected salary",
+        "expected compensation",
+        "expected package",
+        "salary expectation",
+        "salary expectations",
+        "expected annual salary",
+        "desired salary",
+        "current & expected",
+        "what is your expectation"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "compensation.notice_period",
+      "category": "compensation",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "select",
+        "radio",
+        "number",
+        "text"
+      ],
+      "aliases": [
+        "notice period",
+        "notice",
+        "current notice period",
+        "notice period in days",
+        "notice period in months"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "compensation.notice_period_negotiable",
+      "category": "compensation",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "notice negotiable",
+        "negotiable notice period",
+        "can notice be negotiable"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "availability.joining_date",
+      "category": "availability",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "date",
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "joining date",
+        "expected joining date",
+        "date of joining",
+        "availability to join",
+        "when can you join",
+        "joining time"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "availability.immediate_join",
+      "category": "availability",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "immediately available",
+        "immediate joiner",
+        "can join immediately",
+        "available immediately",
+        "ready to join immediately"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "preferences.remote",
+      "category": "preferences",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "work from home",
+        "remote work",
+        "remote",
+        "hybrid work",
+        "work mode"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "preferences.relocation",
+      "category": "preferences",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "relocate",
+        "relocation",
+        "willing to relocate",
+        "ready to relocate",
+        "willing to move"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "preferences.preferred_location",
+      "category": "preferences",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "preferred location",
+        "preferred work location",
+        "location preference"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "preferences.willing_to_travel",
+      "category": "preferences",
+      "sensitivity": "STRATEGIC",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "travel",
+        "willing to travel",
+        "ready to travel",
+        "travel requirements",
+        "travelling"
+      ],
+      "fill_policy": "policy"
+    },
+    {
+      "id": "preferences.work_shift",
+      "category": "preferences",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "radio",
+        "select"
+      ],
+      "aliases": [
+        "shift",
+        "work shift",
+        "day shift",
+        "shift preference"
+      ],
+      "fill_policy": "confirm"
+    },
+    {
+      "id": "education.highest_degree",
+      "category": "education",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "select",
+        "text"
+      ],
+      "aliases": [
+        "highest qualification",
+        "highest education",
+        "qualification",
+        "education",
+        "educational qualification",
+        "degree"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "education.specialization",
+      "category": "education",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "specialization",
+        "branch",
+        "field of study",
+        "stream",
+        "discipline"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "education.institution",
+      "category": "education",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "institution",
+        "university",
+        "college",
+        "school name",
+        "institute"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "education.passing_year",
+      "category": "education",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "select",
+        "number",
+        "text"
+      ],
+      "aliases": [
+        "passing year",
+        "year of passing",
+        "graduation year",
+        "year of graduation",
+        "completed in"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "education.certifications",
+      "category": "education",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text",
+        "checkbox"
+      ],
+      "aliases": [
+        "certifications",
+        "certificates",
+        "professional certifications"
+      ],
+      "fill_policy": "auto"
+    },
+    {
+      "id": "legal.work_authorization",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox",
+        "text"
+      ],
+      "aliases": [
+        "work authorization",
+        "work authorisation",
+        "authorized to work",
+        "right to work",
+        "legally authorized",
+        "eligible to work"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.visa_status",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "select",
+        "radio",
+        "text"
+      ],
+      "aliases": [
+        "visa",
+        "visa status",
+        "work visa",
+        "visa type",
+        "visa sponsorship"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.requires_sponsorship",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "sponsorship",
+        "visa sponsorship required",
+        "need sponsorship",
+        "require sponsorship"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.declaration",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "checkbox",
+        "radio"
+      ],
+      "aliases": [
+        "declare",
+        "declaration",
+        "confirm the information",
+        "information provided is",
+        "i agree",
+        "consent",
+        "terms and conditions",
+        "authorize"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.dob",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "date",
+        "text"
+      ],
+      "aliases": [
+        "date of birth",
+        "dob",
+        "birth date",
+        "birthday"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.pan",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "text"
+      ],
+      "aliases": [
+        "pan",
+        "pan number",
+        "pan card"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.aadhaar",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "text",
+        "number"
+      ],
+      "aliases": [
+        "aadhaar",
+        "aadhar",
+        "aadhaar number"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.gender",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "select",
+        "radio"
+      ],
+      "aliases": [
+        "gender",
+        "sex"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "legal.nationality",
+      "category": "legal",
+      "sensitivity": "HIGH_RISK",
+      "kinds": [
+        "text",
+        "select"
+      ],
+      "aliases": [
+        "nationality",
+        "citizenship"
+      ],
+      "fill_policy": "never"
+    },
+    {
+      "id": "question.open_ended",
+      "category": "question",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text"
+      ],
+      "aliases": [],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "question.why_us",
+      "category": "question",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "textarea",
+        "text"
+      ],
+      "aliases": [
+        "interest in this role",
+        "motivation for applying",
+        "role interest",
+        "what motivates you",
+        "why are you interested",
+        "why are you interested in this",
+        "why do you want to join",
+        "why our company",
+        "why should we hire",
+        "why this company",
+        "why this position",
+        "why this role",
+        "why us"
+      ],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "question.availability_screening",
+      "category": "question",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [
+        "available to join",
+        "can you join",
+        "when can you start",
+        "are you available",
+        "ready to join"
+      ],
+      "fill_policy": "answer"
+    },
+    {
+      "id": "question.yes_no",
+      "category": "question",
+      "sensitivity": "NORMAL",
+      "kinds": [
+        "radio",
+        "select",
+        "checkbox"
+      ],
+      "aliases": [],
+      "fill_policy": "answer"
+    }
   ]
 }
