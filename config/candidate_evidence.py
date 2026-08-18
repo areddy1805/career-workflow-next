@@ -49,7 +49,7 @@ CANDIDATE_EVIDENCE = {
         "current_location": "Pune",
         "preferred_location": "Pune",
         "notice_period_days": 30,
-        "current_ctc_lpa": 16,
+        "current_ctc_lpa": 17.2,
         "expected_ctc_lpa": 26,
     },
     # ==========================================================================

@@ -167,7 +167,7 @@ facts:
     tier: 2
     status: "STRUCTURED_UNVERIFIED"
     sensitivity: "STRATEGIC"
-    note: "candidate_profile current_ctc_inr=1600000 (16 LPA)"
+    note: "candidate_profile current_ctc_inr=1720000 (17.2 LPA)"
   expected_ctc_inr:
     value: null
     source: "profile"
